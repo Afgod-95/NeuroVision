@@ -6,6 +6,7 @@ import {
     validateRegisterFields,
     createUser
  } from '../../helpers/userHelpers';
+import { comparePassword, hashPassword } from '../../utils/encryptedPassword';
 
 
 //register user endpoint
@@ -121,15 +122,17 @@ const loginUser = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Invalid email or password' });
     }
 
-    if (user.password !== password) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+    const isPasswordValid = await comparePassword(password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid password' });
     }
 
-    if (!user.email_verified) {
+    if (!user.is_email_verified) {
       return res.status(403).json({ error: 'Email not verified' });
     }
-
     res.status(200).json({ message: 'Login successful', user });
+
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -195,9 +198,11 @@ const resetUserPassword = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'New password is required' });
     }
 
+    const hashedPassword = await hashPassword(newPassword)
+
     const { data, error } = await supabase
       .from('users')
-      .update({ password: newPassword })
+      .update({ password: hashedPassword })
       .eq('id', id)
       .single();
 

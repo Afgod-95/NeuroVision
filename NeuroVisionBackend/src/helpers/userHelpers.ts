@@ -1,5 +1,6 @@
 import supabase from "../lib/supabase";
 import { Response } from "express";
+import { hashPassword } from "../utils/encryptedPassword";
 
 // Helper to check required fields
 const validateRegisterFields = (username: string, email: string, password: string, res: Response) => {
@@ -42,9 +43,11 @@ const checkUserExists = async (email: string, res: Response) => {
 
 // Helper to create user
 const createUser = async (username: string, email: string, password: string, res: Response) => {
+  
+  const hashedPassword = await hashPassword({ password });
   const { data: newUser, error: insertError, } = await supabase
     .from('users')
-    .insert([{ username, email, password }])
+    .insert([{ username, email, password: hashedPassword }])
     .select()
     .single();
 
