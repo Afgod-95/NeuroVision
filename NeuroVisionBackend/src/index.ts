@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import router from './routes/router';
 
 
+
 // Create an Express app
 const app = express();
 
@@ -12,7 +13,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(express.static('src'));
 app.use(router)
-
 
 // Main route
 app.get('/', (req: Request, res: Response) => {
@@ -50,6 +50,7 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

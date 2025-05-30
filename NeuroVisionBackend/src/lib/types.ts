@@ -4,6 +4,6 @@ export type User = {
   username: string;
   email: string;
   password: string;
-  phone_verified: boolean;
+  is_email_verified: boolean;
   created_at: string;
 };

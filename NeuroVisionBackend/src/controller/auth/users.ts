@@ -19,14 +19,22 @@ const registerUser = async (req: Request, res: Response) => {
     if (userExistsResult.error || userExistsResult.exists) return;
 
     const newUser = await createUser(username, email, password, res);
-    if (!newUser) return;
+    
+    if (!newUser) {
+        return res.status(500).json({ error: 'Failed to create user' });
+    };
 
     const otpResult = await sendOtp(newUser);
 
-    if (!otpResult.success) {
+    if (otpResult.error) {
+        console.log(otpResult)
       return res.status(500).json({ error: 'Failed to send OTP', details: otpResult.error });
     }
 
+    if(otpResult.success){
+        return res.status(201).json({ message: 'User created successfully', otp: otpResult });
+    }
+    
     return res.status(201).json({
       message: 'User created successfully. OTP sent to your email.',
       userId: newUser.id,
@@ -67,7 +75,6 @@ const verifyEmailOtp = async (req: Request, res: Response) => {
       .from('otp_verifications')
       .update({
         is_verified: true,
-        verified_at: new Date().toISOString(),
       })
       .eq('id', otpRecord.id);
 
@@ -79,7 +86,7 @@ const verifyEmailOtp = async (req: Request, res: Response) => {
     // 3. Update user's email_verified status
     const { error: userUpdateError } = await supabase
       .from('users')
-      .update({ email_verified: true })
+      .update({ is_email_verified: true })
       .eq('id', userId);
 
     if (userUpdateError) {

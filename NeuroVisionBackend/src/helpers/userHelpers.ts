@@ -42,7 +42,7 @@ const checkUserExists = async (email: string, res: Response) => {
 
 // Helper to create user
 const createUser = async (username: string, email: string, password: string, res: Response) => {
-  const { data: newUser, error: insertError } = await supabase
+  const { data: newUser, error: insertError, } = await supabase
     .from('users')
     .insert([{ username, email, password }])
     .select()

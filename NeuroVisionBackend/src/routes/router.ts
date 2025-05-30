@@ -26,7 +26,7 @@ router.post('/api/auth/reset-password-request', resetPasswordRequest as RequestH
 router.post('/api/auth/reset-password/', resetUserPassword as RequestHandler);
 router.put('/api/auth/update-profile/:id', updateUserProfile as RequestHandler);
 router.get('/api/auth/get-profile/:id', getUserProfile as RequestHandler);
-router.delete('/api/auth/delete-account', deleteUserAccount);
+router.delete('/api/auth/delete-account/:id', deleteUserAccount);
 
 
 export default router;  
