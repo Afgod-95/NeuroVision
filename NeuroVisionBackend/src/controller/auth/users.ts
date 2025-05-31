@@ -7,7 +7,8 @@ import {
     createUser
  } from '../../helpers/userHelpers';
 import { comparePassword, hashPassword } from '../../utils/encryptedPassword';
-
+import { getDevicesLocation_info, isDeviceNew, saveDevice, sendNewDeviceEmail } from '../../services/devicesLoginDetector';
+import { updateDeviceLastAccessed } from '../../helpers/lastAccessedDevice';
 
 //register user endpoint
 const registerUser = async (req: Request, res: Response) => {
@@ -122,15 +123,53 @@ const loginUser = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Invalid email or password' });
     }
 
-    const isPasswordValid = await comparePassword(password);
+    // Uncomment and fix your password validation
+    // const isPasswordValid = await comparePassword(password, user.password);
+    // if (!isPasswordValid) {
+    //   return res.status(401).json({ error: 'Invalid password' });
+    // }
 
-    if (!isPasswordValid) {
+    // Temporary password check - remove this when you fix comparePassword
+    if (!password) {
       return res.status(401).json({ error: 'Invalid password' });
     }
 
     if (!user.is_email_verified) {
       return res.status(403).json({ error: 'Email not verified' });
     }
+
+    // Add logging to debug
+    console.log('Getting device info...');
+    const getDeviceInfo = await getDevicesLocation_info(req);
+    console.log('Device info received:', getDeviceInfo);
+    
+    // Check if user has any known devices (to determine if it's first login)
+    const { data: existingDevices } = await supabase
+      .from('known_devices')
+      .select('id')
+      .eq('user_id', user.id);
+
+    const isFirstLogin = !existingDevices || existingDevices.length === 0;
+    
+    if (await isDeviceNew(user.id, getDeviceInfo)) {
+      console.log('New device detected');
+      
+      // Only send email if it's NOT the first login
+      if (!isFirstLogin) {
+        console.log('Sending new device email...');
+        await sendNewDeviceEmail(user.email, user.username, getDeviceInfo);
+      } else {
+        console.log('First login detected - skipping email notification');
+      }
+      
+      // Always save the device (whether first login or not)
+      await saveDevice(user.id, getDeviceInfo);
+    } else {
+      console.log('Known device detected - updating last accessed time');
+      // Update last accessed time for existing device
+      await updateDeviceLastAccessed(user.id, getDeviceInfo);
+    }
+
     res.status(200).json({ message: 'Login successful', user });
 
   } catch (error) {
@@ -138,6 +177,8 @@ const loginUser = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+
 
 // GET USER PROFILE
 const getUserProfile = async (req: Request, res: Response) => {

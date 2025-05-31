@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import router from './routes/router';
+import { comparePassword, hashPassword } from './utils/encryptedPassword';
 
 
 
@@ -21,7 +22,6 @@ app.get('/', (req: Request, res: Response) => {
     timestamp: new Date().toISOString()
   });
 });
-
 
 
 // Start server with proper error handling

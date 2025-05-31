@@ -4,7 +4,7 @@ import { generateOtp } from "../utils/otp";
 import supabase from "../lib/supabase";
 
 //node mailer setup
-const transporter = nodemailer.createTransport({
+export const transporter = nodemailer.createTransport({
     service: 'gmail',
     host: 'smtp.gmail.com',
     port: 587,
@@ -42,7 +42,7 @@ const sendOtp = async (user: User) => {
         subject: 'OTP Verification',
         html: `
         <p>Hello ${user.username},</p>
-        <p>Your verification code is:</p>
+        <p>Your NeuroVision verification code is:</p>
         <h2>${otp}</h2>
         <p>This code will expire in 10 minutes.</p>
     `,
