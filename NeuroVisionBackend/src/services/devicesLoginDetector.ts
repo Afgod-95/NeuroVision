@@ -51,8 +51,8 @@ const getDevicesLocation_info = async (req: Request): Promise<DeviceInfo> => {
         return {
             ip_address: ip,
             os: `${result.os.name || 'Unknown'} ${result.os.version || ''}`.trim(),
-            browser: `${result.browser.name || 'Unknown'} ${result.browser.version || ''}`.trim(),
-            device_name: result.device.model || result.device.type || 'Unknown',
+            browser: req.body.deviceData?.browser || `${result.browser.name || 'Unknown'} ${result.browser.version || ''}`.trim(),
+            device_name: req.body.deviceData?.device_name || result.device.model || result.device.type || 'Unknown',
             city: locationData.city || null,
             region: locationData.regionName || null,
             country: locationData.country || null,

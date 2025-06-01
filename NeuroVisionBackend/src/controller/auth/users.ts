@@ -34,13 +34,12 @@ const registerUser = async (req: Request, res: Response) => {
     }
 
     if(otpResult.success){
-        return res.status(201).json({ message: 'User created successfully', otp: otpResult });
+      return res.status(201).json({ message: 'User created successfully', otp: otpResult });
     }
     
     return res.status(201).json({
-      message: 'User created successfully. OTP sent to your email.',
+      message: 'User created successfully. 6 digit otp has been sent to your mail.',
       userId: newUser.id,
-      newUser: newUser
     });
 
   } catch (error) {
@@ -48,6 +47,7 @@ const registerUser = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
 
 //verify user email
 const verifyEmailOtp = async (req: Request, res: Response) => {
@@ -123,13 +123,13 @@ const loginUser = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Invalid email or password' });
     }
 
-    // Uncomment and fix your password validation
-    // const isPasswordValid = await comparePassword(password, user.password);
-    // if (!isPasswordValid) {
-    //   return res.status(401).json({ error: 'Invalid password' });
-    // }
+    
+    const isPasswordValid = await comparePassword({ password, hashedPassword: user.password });
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
 
-    // Temporary password check - remove this when you fix comparePassword
+    // Temporary password check
     if (!password) {
       return res.status(401).json({ error: 'Invalid password' });
     }
@@ -143,7 +143,7 @@ const loginUser = async (req: Request, res: Response) => {
     const getDeviceInfo = await getDevicesLocation_info(req);
     console.log('Device info received:', getDeviceInfo);
     
-    // Check if user has any known devices (to determine if it's first login)
+    // Check if user has any known devices
     const { data: existingDevices } = await supabase
       .from('known_devices')
       .select('id')

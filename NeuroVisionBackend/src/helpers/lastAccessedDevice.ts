@@ -1,14 +1,7 @@
 
 import supabase from "../lib/supabase";
+import { DeviceInfo } from "../services/devicesLoginDetector";
 
-
-// Define DeviceInfo type if not imported from elsewhere
-type DeviceInfo = {
-  last_accessed_at: string | Date;
-  ip_address: string;
-  os: string;
-  browser: string;
-};
 
 // Helper function to update last accessed time for existing devices
 const updateDeviceLastAccessed = async (userId: number, device: DeviceInfo) => {
