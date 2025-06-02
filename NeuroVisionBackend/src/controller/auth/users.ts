@@ -40,6 +40,7 @@ const registerUser = async (req: Request, res: Response) => {
       `,
       otp: otpResult,
       userId: newUser.id,
+      email: newUser.email
     });
     }
   
@@ -48,6 +49,49 @@ const registerUser = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+
+
+//resend otp 
+const resendOtp = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(500).json({
+        error: "Email not found"
+      })
+    }
+    
+    // Fetch the full user object by email
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error || !user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const otpResult = await sendOtp(user);
+
+    if (otpResult.error) {
+        console.log(otpResult)
+      return res.status(500).json({ error: 'Failed to send OTP', details: otpResult.error });
+    }
+
+    if(otpResult.success){
+      return res.status(201).json({
+      message: `A 6 digit otp has been sent to your mail. Please re-check and verify again.`,
+      otp: otpResult,
+    });
+    }
+
+  } catch (error) {
+    console.error('Error resending otp:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
 
 
 //verify user email
@@ -340,6 +384,7 @@ export {
   registerUser,
   loginUser,
   verifyEmailOtp,
+  resendOtp,
   logoutUser,
   resetUserPassword,
   deleteUserAccount,

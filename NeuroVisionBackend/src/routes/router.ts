@@ -8,7 +8,8 @@ import {
    resetPasswordRequest,
    deleteUserAccount,
    updateUserProfile,
-   resetUserPassword
+   resetUserPassword,
+   resendOtp
 
  } from '../controller/auth/users';
  import { RequestHandler } from 'express';
@@ -19,7 +20,8 @@ const router = express.Router();
 // Ensure registerUser is a function: (req: Request, res: Response) => Promise<Response>
 // If not, update the import or export in ../controller/auth/users accordingly.
 router.post('/api/auth/register', registerUser as RequestHandler);
-router.post('/api/auth/verify-email-otp', verifyEmailOtp as RequestHandler);
+router.post('/api/auth/verify-email', verifyEmailOtp as RequestHandler);
+router.post('/api/auth/resend-otp', resendOtp as RequestHandler);
 router.post('/api/auth/login', loginUser as RequestHandler);
 router.post('/api/auth/logout', logoutUser);
 router.post('/api/auth/reset-password-request', resetPasswordRequest as RequestHandler);
