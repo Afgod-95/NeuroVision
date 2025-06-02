@@ -34,14 +34,15 @@ const registerUser = async (req: Request, res: Response) => {
     }
 
     if(otpResult.success){
-      return res.status(201).json({ message: 'User created successfully', otp: otpResult });
-    }
-    
-    return res.status(201).json({
-      message: 'User created successfully. 6 digit otp has been sent to your mail.',
+      return res.status(201).json({
+      message: `User created successfully. \n
+        A 6 digit otp has been sent to your mail. Please check and verify.
+      `,
+      otp: otpResult,
       userId: newUser.id,
     });
-
+    }
+  
   } catch (error) {
     console.error('Error registering user:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -96,7 +97,7 @@ const verifyEmailOtp = async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Failed to update user verification status' });
     }
 
-    res.status(200).json({ message: 'Email verified successfully' });
+    res.status(200).json({ message: 'Email verified successfully.' });
 
   } catch (error) {
     console.error('Error verifying OTP:', error);
