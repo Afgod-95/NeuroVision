@@ -40,3 +40,7 @@ app-example
 
 #env files
 .env
+
+#google services  and google plist files
+google-services.json
+GoogleService-Info.plist
