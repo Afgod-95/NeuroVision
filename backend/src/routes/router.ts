@@ -34,7 +34,7 @@ router.delete('/api/auth/delete-account/:id', deleteUserAccount);
 
 
 //TRANSCRIBE AUDIO 
-router.get('/api/user/transcribe-audio', async (req: Request, res: Response) => {
+router.post('/api/user/transcribe-audio', async (req: Request, res: Response) => {
     try {
         await transcribeAudio(req, res);
     } catch (error) {
