@@ -13,6 +13,8 @@ import {
 
  } from '../controller/auth/users';
  import { RequestHandler } from 'express';
+import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
+import { getMessages } from '../controller/messages/messages';
 
 const router = express.Router();
 
@@ -31,4 +33,18 @@ router.get('/api/auth/get-profile/:id', getUserProfile as RequestHandler);
 router.delete('/api/auth/delete-account/:id', deleteUserAccount);
 
 
+//TRANSCRIBE AUDIO 
+router.post('/api/user/transcribe-audio', async (req: Request, res: Response) => {
+    try {
+        await transcribeAudio(req, res);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
+//get messages 
+router.get('/api/messages/:id', async (req: Request, res: Response) => {
+    await getMessages(req, res);
+});
 export default router;  
