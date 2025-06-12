@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import router from './routes/router';
-import { comparePassword, hashPassword } from './utils/encryptedPassword';
-
+import cors from 'cors';
 
 
 // Create an Express app
@@ -10,24 +9,26 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+}));
 
 app.use(express.static('public'));
 app.use(express.static('src'));
 app.use(router)
 
-// Main route
-app.get('/', (req: Request, res: Response) => {
-  res.json({
-    message: 'Hello World!',
-    timestamp: new Date().toISOString()
-  });
+/// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+
 
 
 // Start server with proper error handling
 const startServer = async () => {
   try {
-    const PORT = process.env.PORT || 3000;
+    const PORT = process.env.PORT || 5000;
     
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);

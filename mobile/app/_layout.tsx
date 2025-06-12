@@ -9,6 +9,9 @@ import { Provider, useSelector } from "react-redux";
 import { RootState, store } from "@/src/redux/store";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Constants from "expo-constants";
+import { Buffer } from 'buffer';
+global.Buffer = global.Buffer || Buffer;
+
 // Axios config
 axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl || 'https://neurovision-uscp.onrender.com';
 axios.defaults.headers.post['Content-Type'] = 'application/json';

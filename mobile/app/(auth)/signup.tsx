@@ -11,7 +11,7 @@ import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-nat
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import { useSignupMutation } from '@/src/hooks/AuthMutation';
+import { useSignupMutation } from '@/src/hooks/auth/AuthMutation';
 
 const { width } = Dimensions.get('screen');
 

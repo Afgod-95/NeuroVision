@@ -42,5 +42,6 @@ app-example
 .env
 
 # Firebase config files (if placed in the root)
-./google-services.json
-./GoogleService-Info.plist
+google-services.json
+GoogleService-Info.plist
+

@@ -15,6 +15,7 @@ import {
  import { RequestHandler } from 'express';
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
 import { getMessages } from '../controller/messages/messages';
+import { sendMessage } from '../controller/chats/chats';
 
 const router = express.Router();
 
@@ -47,4 +48,8 @@ router.post('/api/user/transcribe-audio', async (req: Request, res: Response) =>
 router.get('/api/messages/:id', async (req: Request, res: Response) => {
     await getMessages(req, res);
 });
+
+//chat send messages
+router.post('/api/chat/send-message', sendMessage as RequestHandler);
+
 export default router;  

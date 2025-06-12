@@ -1,6 +1,6 @@
 import OTPInput from '@/src/components/textInputs/OtpInput'
 import { Colors } from '@/src/constants/Colors'
-import { useResendOtpMutation, useVerifyEmailMutation } from '@/src/hooks/AuthMutation'
+import { useVerifyEmailMutation, useResendOtpMutation } from '@/src/hooks/auth/AuthMutation'
 import { router, useLocalSearchParams } from 'expo-router'
 import React, { useCallback } from 'react'
 import {

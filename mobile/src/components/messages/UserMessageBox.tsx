@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   GestureResponderEvent,
   TouchableOpacity,
   Dimensions,
+  Image,
+  Modal,
 } from 'react-native';
 import { Colors } from '@/src/constants/Colors';
 import Animated, {
@@ -23,25 +25,123 @@ import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
 import { useMessageOptions } from '@/src/hooks/UserMessageOptions';
 import { useDispatch } from 'react-redux';
 import { setShowOptions } from '@/src/redux/slices/messageOptionsSlice';
+import { useAudioPlayer, AudioSource } from 'expo-audio';
+import { AudioPlayer } from '../audio/AudioPlayer';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Define message content types
+export interface MessageContent {
+  type: 'text' | 'audio' | 'image' | 'mixed';
+  text?: string;
+  audioUrl?: string;
+  audioName?: string;
+  audioDuration?: number;
+  imageUrl?: string;
+  imageName?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+}
+
 type MessagesProps = {
   message: string;
-  messageId: string,
+  messageId: string;
   userMessage: boolean;
+  messageContent?: MessageContent; // New prop for rich content
   copyMessage?: () => void;
   editMessage?: () => void;
+};
+
+
+
+const ImageViewer = ({ 
+  imageUrl, 
+  imageName,
+  imageWidth,
+  imageHeight 
+}: { 
+  imageUrl: string; 
+  imageName?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+}) => {
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [imageDimensions, setImageDimensions] = useState({ width: 200, height: 150 });
+
+  React.useEffect(() => {
+    if (imageWidth && imageHeight) {
+      // Calculate display size while maintaining aspect ratio
+      const maxWidth = 250;
+      const maxHeight = 200;
+      const aspectRatio = imageWidth / imageHeight;
+      
+      let displayWidth = maxWidth;
+      let displayHeight = maxWidth / aspectRatio;
+      
+      if (displayHeight > maxHeight) {
+        displayHeight = maxHeight;
+        displayWidth = maxHeight * aspectRatio;
+      }
+      
+      setImageDimensions({ width: displayWidth, height: displayHeight });
+    }
+  }, [imageWidth, imageHeight]);
+
+  return (
+    <>
+      <TouchableOpacity onPress={() => setIsModalVisible(true)}>
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: imageUrl }}
+            style={[styles.messageImage, imageDimensions]}
+            resizeMode="cover"
+          />
+          {imageName && (
+            <Text style={styles.imageName} numberOfLines={1}>
+              {imageName}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+
+      <Modal
+        visible={isModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setIsModalVisible(false)}
+          />
+          <View style={styles.modalContainer}>
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setIsModalVisible(false)}
+            >
+              <Feather name="x" size={24} color={Colors.dark.txtPrimary} />
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </Modal>
+    </>
+  );
 };
 
 const UserMessageBox = ({
   message,
   messageId,
   userMessage,
+  messageContent,
   copyMessage,
   editMessage,
 }: MessagesProps) => {
-
   //getting user profile
   const { user: userCredentials } = useSelector((state: RootState) => state.user);
   const { isEdited } = useSelector((state: RootState) => state.messageOptions);
@@ -50,16 +150,88 @@ const UserMessageBox = ({
     handlePressOut,
     handleLongPress,
     animatedStyle
-
   } = useMessageOptions();
+
+  const renderMessageContent = () => {
+    if (!messageContent) {
+      // Fallback to text message
+      return <Text style={styles.messageText}>{message}</Text>;
+    }
+
+    switch (messageContent.type) {
+      case 'text':
+        return <Text style={styles.messageText}>{messageContent.text || message}</Text>;
+      
+      case 'audio':
+        return (
+          <View>
+            {messageContent.text && (
+              <Text style={[styles.messageText, { marginBottom: 8 }]}>
+                {messageContent.text}
+              </Text>
+            )}
+            <AudioPlayer
+              audioUrl={messageContent.audioUrl!}
+              audioDuration={messageContent.audioDuration}
+              audioName={messageContent.audioName}
+            />
+          </View>
+        );
+      
+      case 'image':
+        return (
+          <View>
+            {messageContent.text && (
+              <Text style={[styles.messageText, { marginBottom: 8 }]}>
+                {messageContent.text}
+              </Text>
+            )}
+            <ImageViewer
+              imageUrl={messageContent.imageUrl!}
+              imageName={messageContent.imageName}
+              imageWidth={messageContent.imageWidth}
+              imageHeight={messageContent.imageHeight}
+            />
+          </View>
+        );
+      
+      case 'mixed':
+        return (
+          <View>
+            {messageContent.text && (
+              <Text style={[styles.messageText, { marginBottom: 8 }]}>
+                {messageContent.text}
+              </Text>
+            )}
+            {messageContent.imageUrl && (
+              <View style={{ marginBottom: 8 }}>
+                <ImageViewer
+                  imageUrl={messageContent.imageUrl}
+                  imageName={messageContent.imageName}
+                  imageWidth={messageContent.imageWidth}
+                  imageHeight={messageContent.imageHeight}
+                />
+              </View>
+            )}
+            {messageContent.audioUrl && (
+              <AudioPlayer
+                audioUrl={messageContent.audioUrl}
+                audioDuration={messageContent.audioDuration}
+                audioName={messageContent.audioName}
+              />
+            )}
+          </View>
+        );
+      
+      default:
+        return <Text style={styles.messageText}>{message}</Text>;
+    }
+  };
   
   return (
     <>
-
       {/* User message */}
-      <Animated.View
-        style={[animatedStyle]}
-      >
+      <Animated.View style={[animatedStyle]}>
         <Pressable
           onLongPress={(e) => handleLongPress(e, message)}
           onPressIn={handlePressIn}
@@ -67,21 +239,18 @@ const UserMessageBox = ({
           style={[
             styles.messageContainer,
             { alignSelf: userMessage ? 'flex-end' : 'flex-start' },
+            messageContent?.type === 'image' && styles.imageMessageContainer,
           ]}
         >
-          <Text style={styles.messageText}>{message}</Text>
+          {renderMessageContent()}
         </Pressable>
-         {isEdited && (
-            <Text style = {styles.editedMessage}>Edited</Text>
-          )}
-
+        {isEdited && (
+          <Text style={styles.editedMessage}>Edited</Text>
+        )}
       </Animated.View>
-
-
     </>
   );
 };
-
 
 export const MessagePreview = ({
   copyMessage,
@@ -91,7 +260,6 @@ export const MessagePreview = ({
   const { showOptions, touchPos, showAbove, message } = useSelector(
     (state: RootState) => state.messageOptions
   );
-
 
   return (
     <>
@@ -150,11 +318,11 @@ export const MessagePreview = ({
                 <View style={styles.optionBox}>
                   <Pressable onPress={copyMessage} style={styles.optionButton}>
                     <Text style={styles.optionText}>Copy</Text>
-                    <Feather name = 'copy' color = {Colors.dark.txtPrimary} size = {20}/>
+                    <Feather name="copy" color={Colors.dark.txtPrimary} size={20} />
                   </Pressable>
                   <Pressable onPress={editMessage} style={styles.optionButton}>
                     <Text style={styles.optionText}>Edit</Text>
-                     <Feather name = 'edit-2' color = {Colors.dark.txtPrimary} size = {20}/>
+                    <Feather name="edit-2" color={Colors.dark.txtPrimary} size={20} />
                   </Pressable>
                 </View>
               </>
@@ -165,8 +333,6 @@ export const MessagePreview = ({
     </>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   messageContainer: {
@@ -180,6 +346,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 8,
+  },
+  imageMessageContainer: {
+    padding: 5,
+    maxWidth: 320,
   },
   popupContainer: {
     position: 'absolute',
@@ -224,23 +394,19 @@ const styles = StyleSheet.create({
     color: Colors.dark.txtPrimary,
     fontSize: 18,
   },
-
   editedMessage: {
     color: Colors.dark.txtPrimary,
     fontSize: 13,
     alignSelf: 'flex-end',
     marginTop: 3,
-    marginBottom: 3
+    marginBottom: 3,
   },
-
   userCont: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
   },
-
-
   userAccountButton: {
     width: 40,
     height: 40,
@@ -248,11 +414,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   userText: {
     color: Colors.dark.txtPrimary,
     fontSize: 14,
     fontFamily: 'Manrope-ExtraBold',
+  },
+
+  // Image Viewer Styles
+  imageContainer: {
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  messageImage: {
+    borderRadius: 8,
+  },
+  imageName: {
+    color: Colors.dark.txtSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  fullScreenImage: {
+    width: SCREEN_WIDTH - 40,
+    height: SCREEN_HEIGHT - 100,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

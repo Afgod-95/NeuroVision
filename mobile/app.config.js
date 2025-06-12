@@ -41,6 +41,12 @@ export default {
         }
       ],
       [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      [
         "expo-audio",
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
@@ -66,6 +72,11 @@ export default {
 
       //backed url 
       baseBackendUrl: process.env.BASE_BACKEND_URL,
+
+      //supabase 
+      supabaseUrl: process.env.SUPABASE_URL,
+      supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY,
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
     },
   }
 };
