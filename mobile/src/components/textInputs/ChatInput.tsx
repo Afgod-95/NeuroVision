@@ -31,9 +31,8 @@ import Animated, {
 import { useDispatch } from 'react-redux';
 import { resetOptions } from '@/src/redux/slices/messageOptionsSlice';
 import { MaterialIcons } from '@expo/vector-icons';
-import { uploadAudioFile } from '@/src/constants/audio/AudioService';
+import { deleteAudioFile, uploadAudioFile } from '@/src/constants/audio/AudioService';
 import * as DocumentPicker from 'expo-document-picker';
-import { useAudioTranscribeMutation } from '@/src/services/audio/AudioTranscription';
 import axios from 'axios';
 
 const SCREEN_WIDTH = Dimensions.get('screen').width;
@@ -86,7 +85,6 @@ const ChatInput = ({
   const progressValue = useSharedValue(0);
   const pulseValue = useSharedValue(1);
 
-  const audioTranscribeMutation = useAudioTranscribeMutation();
 
   // Utility functions
   const formatFileSize = useCallback((bytes: number): string => {
@@ -150,160 +148,191 @@ const ChatInput = ({
     }
   }, []);
 
-  // Audio upload handler
-  const handleUpload = useCallback(async () => {
+  
+//Store the file path along with the audio URL
+const [audioFilePath, setAudioFilePath] = useState('');
+
+// Update the handleUpload function to store the file path
+const handleUpload = useCallback(async () => {
+  try {
+    if (!userCredentials?.id) {
+      Alert.alert('Error', 'User credentials not found');
+      return;
+    }
+
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'audio/*',
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const file = result.assets[0];
+    
+    // Validate file size (e.g., max 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size && file.size > maxSize) {
+      Alert.alert('File Too Large', 'Please select an audio file smaller than 50MB.');
+      return;
+    }
+
+    setAudioUpload({
+      isUploading: true,
+      fileName: file.name,
+      progress: 0,
+      fileSize: file.size ? formatFileSize(file.size) : undefined
+    });
+
+    setIsMoreMenuVisible(false);
+    simulateUploadProgress();
+
     try {
-      if (!userCredentials?.id) {
-        Alert.alert('Error', 'User credentials not found');
-        return;
-      }
-
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'audio/*',
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets[0]) return;
-
-      const file = result.assets[0];
+      const uploadResult = await uploadAudioFile(userCredentials.id, file);
+      console.log('Audio uploaded successfully:', uploadResult);
       
-      // Validate file size (e.g., max 50MB)
-      const maxSize = 50 * 1024 * 1024; // 50MB
-      if (file.size && file.size > maxSize) {
-        Alert.alert('File Too Large', 'Please select an audio file smaller than 50MB.');
-        return;
-      }
+      const uploadUrl = uploadResult.signedUrl;
+      const filePath = uploadResult.id; // This is the file path
+      
+      setAudioUrl(uploadUrl);
+      setAudioFilePath(filePath); // Store the file path
 
-      setAudioUpload({
-        isUploading: true,
+      // Complete upload
+      setAudioUpload(prev => prev ? { ...prev, progress: 100, isUploading: false } : null);
+      resetAnimations();
+
+      // Get transcription
+      const transcription = await transcribeAudio(uploadUrl, userCredentials.id.toString());
+
+      const uploadedFile: UploadedAudioFile = {
+        id: uploadResult?.id || Date.now().toString(),
         fileName: file.name,
-        progress: 0,
-        fileSize: file.size ? formatFileSize(file.size) : undefined
-      });
+        fileSize: file.size ? formatFileSize(file.size) : undefined,
+        uploadResult: uploadResult,
+        uri: file.uri,
+        transcription: transcription || undefined
+      };
 
-      setIsMoreMenuVisible(false);
-      simulateUploadProgress();
+      setUploadedAudio(uploadedFile);
 
-      try {
-        const uploadResult = await uploadAudioFile(userCredentials.id, file);
-        console.log('Audio uploaded successfully:', uploadResult);
+      // Clear upload state
+      setTimeout(() => {
+        setAudioUpload(null);
+        progressValue.value = 0;
+      }, 1500);
+
+    } catch (uploadError: any) {
+      console.error('Upload error:', uploadError);
+      
+      // Handle duplicate file 
+      if (uploadError.message?.includes('already exists')) {
+        setAudioUpload(prev => prev ? {
+          ...prev,
+          progress: 100,
+          isUploading: false
+        } : null);
         
-        const uploadUrl = uploadResult.signedUrl;
-        setAudioUrl(uploadUrl);
-
-        // Complete upload
-        setAudioUpload(prev => prev ? { ...prev, progress: 100, isUploading: false } : null);
-        resetAnimations();
-
-        // Get transcription
-        const transcription = await transcribeAudio(uploadUrl, userCredentials.id.toString());
-
         const uploadedFile: UploadedAudioFile = {
-          id: uploadResult?.id || Date.now().toString(),
+          id: Date.now().toString(),
           fileName: file.name,
           fileSize: file.size ? formatFileSize(file.size) : undefined,
-          uploadResult: uploadResult,
-          uri: file.uri,
-          transcription: transcription || undefined
+          uri: file.uri
         };
-
         setUploadedAudio(uploadedFile);
-
-        // Clear upload state
+        
         setTimeout(() => {
           setAudioUpload(null);
           progressValue.value = 0;
         }, 1500);
-
-      } catch (uploadError: any) {
-        console.error('Upload error:', uploadError);
+      } else {
+        // Show error
+        setAudioUpload(prev => prev ? {
+          ...prev,
+          isUploading: false,
+          progress: 0,
+          error: 'Upload failed. Please try again.'
+        } : null);
         
-        if (uploadError.message?.includes('already exists')) {
-          // Handle duplicate file
-          setAudioUpload(prev => prev ? {
-            ...prev,
-            progress: 100,
-            isUploading: false
-          } : null);
-          
-          const uploadedFile: UploadedAudioFile = {
-            id: Date.now().toString(),
-            fileName: file.name,
-            fileSize: file.size ? formatFileSize(file.size) : undefined,
-            uri: file.uri
-          };
-          setUploadedAudio(uploadedFile);
-          
-          setTimeout(() => {
-            setAudioUpload(null);
-            progressValue.value = 0;
-          }, 1500);
-        } else {
-          // Show error
-          setAudioUpload(prev => prev ? {
-            ...prev,
-            isUploading: false,
-            progress: 0,
-            error: 'Upload failed. Please try again.'
-          } : null);
-          
-          setTimeout(() => {
-            setAudioUpload(null);
-            progressValue.value = 0;
-          }, 3000);
-        }
-        resetAnimations();
+        setTimeout(() => {
+          setAudioUpload(null);
+          progressValue.value = 0;
+        }, 3000);
       }
-    } catch (error) {
-      console.error('File picker error:', error);
-      Alert.alert('Error', 'Failed to select audio file.');
-      setAudioUpload(null);
       resetAnimations();
     }
-  }, [userCredentials, formatFileSize, simulateUploadProgress, resetAnimations, transcribeAudio]);
-
-  // Message sending
-  const handleSendMessage = useCallback(async () => {
-    const hasMessage = message.trim();
-    const hasAudio = uploadedAudio;
-    
-    if (!hasMessage && !hasAudio) return;
-
-    try {
-      // If there's audio but no transcription yet, handle it
-      if (hasAudio && !hasAudio.transcription && audioUrl && userCredentials?.id) {
-        const transcription = await transcribeAudio(audioUrl, userCredentials?.id?.toString());
-        if (transcription) {
-          const updatedAudio = { ...hasAudio, transcription };
-          setUploadedAudio(updatedAudio);
-          onSendMessage?.(message, updatedAudio);
-        } else {
-          onSendMessage?.(message, hasAudio);
-        }
-      } else {
-        onSendMessage?.(message, hasAudio || undefined);
-      }
-
-      // Clear inputs
-      setMessage('');
-      setUploadedAudio(null);
-      setAudioUrl('');
-    } catch (error) {
-      console.error('Send message error:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
-    }
-  }, [message, uploadedAudio, audioUrl, userCredentials, transcribeAudio, onSendMessage, setMessage]);
-
-  // Cancel/Remove handlers
-  const handleCancelUpload = useCallback(() => {
+  } catch (error) {
+    console.error('File picker error:', error);
+    Alert.alert('Error', 'Failed to select audio file.');
     setAudioUpload(null);
     resetAnimations();
-  }, [resetAnimations]);
+  }
+}, [userCredentials, formatFileSize, simulateUploadProgress, resetAnimations, transcribeAudio]);
 
-  const handleRemoveUploadedAudio = useCallback(() => {
+// 3. Fix the handleCancelUpload function
+const handleCancelUpload = useCallback(async () => {
+  try {
+    if (audioFilePath) {
+      await deleteAudioFile(audioFilePath); 
+    }
+  } catch (error) {
+    console.error('Error deleting audio file:', error);
+    // Don't show alert here as deleteAudioFile already shows one
+  } finally {
+    setAudioUpload(null);
+    setAudioFilePath('');
+    resetAnimations();
+  }
+}, [audioFilePath, resetAnimations]);
+
+//handleRemoveUploadedAudio function
+const handleRemoveUploadedAudio = useCallback(async () => {
+  try {
+    if (audioFilePath) {
+      await deleteAudioFile(audioFilePath); 
+    } else if (uploadedAudio?.uploadResult?.id) {
+      await deleteAudioFile(uploadedAudio.uploadResult.id); 
+    }
+  } catch (error) {
+    console.error('Error deleting uploaded audio:', error);
+    // Don't show alert here as deleteAudioFile already shows one
+  } finally {
     setUploadedAudio(null);
     setAudioUrl('');
-  }, []);
+    setAudioFilePath('');
+  }
+}, [audioFilePath, uploadedAudio]);
+
+// 5. Clear file path when sending message
+const handleSendMessage = useCallback(async () => {
+  const hasMessage = message.trim();
+  const hasAudio = uploadedAudio;
+  
+  if (!hasMessage && !hasAudio) return;
+
+  try {
+    // If there's audio but no transcription yet, handle it
+    if (hasAudio && !hasAudio.transcription && audioUrl && userCredentials?.id) {
+      const transcription = await transcribeAudio(audioUrl, userCredentials?.id?.toString());
+      if (transcription) {
+        const updatedAudio = { ...hasAudio, transcription };
+        setUploadedAudio(updatedAudio);
+        onSendMessage?.(message, updatedAudio);
+      } else {
+        onSendMessage?.(message, hasAudio);
+      }
+    } else {
+      onSendMessage?.(message, hasAudio || undefined);
+    }
+
+    // Clear inputs
+    setMessage('');
+    setUploadedAudio(null);
+    setAudioUrl('');
+    setAudioFilePath(''); // Clear file path
+  } catch (error) {
+    console.error('Send message error:', error);
+    Alert.alert('Error', 'Failed to send message. Please try again.');
+  }
+}, [message, uploadedAudio, audioUrl, userCredentials, transcribeAudio, onSendMessage, setMessage]);
 
   const handleMicPress = useCallback(() => {
     setIsRecording(!isRecording);
@@ -518,11 +547,13 @@ const ChatInput = ({
         </View>
 
         <View style={styles.iconsContainer}>
-          <Pressable onPress={handleMoreMenu} disabled={isTranscribing}>
+          <Pressable onPress={handleMoreMenu} disabled={isTranscribing}
+            style = {{ }}
+          >
             <AntDesign 
-              name="pluscircleo" 
-              size={30}
-              color={isMorePressed ? Colors.dark.txtSecondary : '#d2d2d2'}
+              name="plus" 
+              size={24}
+              color={ Colors.dark.txtPrimary }
             />
           </Pressable>
           
@@ -551,7 +582,6 @@ const ChatInput = ({
                 {
                   borderWidth: canSendMessage ? 0 : 1,
                   borderColor: Colors.dark.borderColor,
-                  opacity: canSendMessage ? 1 : 0.5
                 }
               ]}
               onPress={handleSendMessage}
@@ -560,7 +590,7 @@ const ChatInput = ({
             >
               <Ionicons
                 name="send"
-                size={20}
+                size={17}
                 color={canSendMessage ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
               />
             </TouchableOpacity>
@@ -626,8 +656,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     backgroundColor: Colors.dark.bgPrimary,
-    borderTopRightRadius: 20,
-    borderTopLeftRadius: 20,
+    borderRadius: 20,
     paddingHorizontal: 12,
     width: SCREEN_WIDTH - 20,
     height: 40,

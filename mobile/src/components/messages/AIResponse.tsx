@@ -7,7 +7,6 @@ import {
   ScrollView,
   Animated,
   Alert,
-  Clipboard,
   Share,
   Dimensions,
   ActivityIndicator,
@@ -19,6 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
 import { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import * as Clipboard from 'expo-clipboard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

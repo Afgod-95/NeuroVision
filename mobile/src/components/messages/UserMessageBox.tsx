@@ -9,13 +9,13 @@ import {
   Dimensions,
   Image,
   Modal,
+  Alert
 } from 'react-native';
 import { Colors } from '@/src/constants/Colors';
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
   FadeInUp,
+  FadeOut,
+  FadeInDown,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import Feather from '@expo/vector-icons/Feather';
@@ -27,6 +27,7 @@ import { useDispatch } from 'react-redux';
 import { setShowOptions } from '@/src/redux/slices/messageOptionsSlice';
 import { useAudioPlayer, AudioSource } from 'expo-audio';
 import { AudioPlayer } from '../audio/AudioPlayer';
+import * as Clipboard from 'expo-clipboard';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -47,20 +48,20 @@ type MessagesProps = {
   message: string;
   messageId: string;
   userMessage: boolean;
-  messageContent?: MessageContent; // New prop for rich content
+  messageContent?: MessageContent;
   copyMessage?: () => void;
   editMessage?: () => void;
 };
 
 
 
-const ImageViewer = ({ 
-  imageUrl, 
+const ImageViewer = ({
+  imageUrl,
   imageName,
   imageWidth,
-  imageHeight 
-}: { 
-  imageUrl: string; 
+  imageHeight
+}: {
+  imageUrl: string;
   imageName?: string;
   imageWidth?: number;
   imageHeight?: number;
@@ -68,21 +69,23 @@ const ImageViewer = ({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [imageDimensions, setImageDimensions] = useState({ width: 200, height: 150 });
 
+
+
   React.useEffect(() => {
     if (imageWidth && imageHeight) {
       // Calculate display size while maintaining aspect ratio
       const maxWidth = 250;
       const maxHeight = 200;
       const aspectRatio = imageWidth / imageHeight;
-      
+
       let displayWidth = maxWidth;
       let displayHeight = maxWidth / aspectRatio;
-      
+
       if (displayHeight > maxHeight) {
         displayHeight = maxHeight;
         displayWidth = maxHeight * aspectRatio;
       }
-      
+
       setImageDimensions({ width: displayWidth, height: displayHeight });
     }
   }, [imageWidth, imageHeight]);
@@ -161,7 +164,7 @@ const UserMessageBox = ({
     switch (messageContent.type) {
       case 'text':
         return <Text style={styles.messageText}>{messageContent.text || message}</Text>;
-      
+
       case 'audio':
         return (
           <View>
@@ -177,7 +180,7 @@ const UserMessageBox = ({
             />
           </View>
         );
-      
+
       case 'image':
         return (
           <View>
@@ -194,7 +197,7 @@ const UserMessageBox = ({
             />
           </View>
         );
-      
+
       case 'mixed':
         return (
           <View>
@@ -222,16 +225,21 @@ const UserMessageBox = ({
             )}
           </View>
         );
-      
+
       default:
         return <Text style={styles.messageText}>{message}</Text>;
     }
   };
-  
+
   return (
-    <>
-      {/* User message */}
-      <Animated.View style={[animatedStyle]}>
+    <Animated.View
+      entering={FadeInDown.duration(300)}
+      exiting={FadeOut.duration(200)}
+    >
+      <Animated.View
+       
+        style={[animatedStyle]}
+      >
         <Pressable
           onLongPress={(e) => handleLongPress(e, message)}
           onPressIn={handlePressIn}
@@ -244,22 +252,41 @@ const UserMessageBox = ({
         >
           {renderMessageContent()}
         </Pressable>
+
         {isEdited && (
-          <Text style={styles.editedMessage}>Edited</Text>
+          <Animated.View
+            entering={FadeInDown.duration(300)}
+            exiting={FadeOut.duration(200)}
+          >
+            <Text style={styles.editedMessage}>Edited</Text>
+          </Animated.View>
+
         )}
       </Animated.View>
-    </>
+    </Animated.View>
+
   );
 };
 
 export const MessagePreview = ({
-  copyMessage,
   editMessage,
 }: MessagesProps) => {
   const dispatch = useDispatch();
   const { showOptions, touchPos, showAbove, message } = useSelector(
     (state: RootState) => state.messageOptions
   );
+
+  const [mainCopied, setMainCopied] = useState(false);
+
+  const handleCopy = async (text: string) => {
+    try {
+      await Clipboard.setStringAsync(text);
+      setMainCopied(true);
+      setTimeout(() => setMainCopied(false), 2000);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to copy content');
+    }
+  };
 
   return (
     <>
@@ -295,10 +322,21 @@ export const MessagePreview = ({
             {showAbove ? (
               <>
                 <View style={styles.optionBox}>
-                  <Pressable onPress={copyMessage} style={styles.optionButton}>
-                    <Text style={styles.optionText}>Copy</Text>
+                  <Pressable
+                    onPress={() => handleCopy(message ?? '')}
+                    style={[styles.optionButton, mainCopied && styles.copiedButton]}
+                  >
+                    <Feather
+                      name={mainCopied ? "check" : "copy"}
+                      size={16}
+                      color={mainCopied ? "#22c55e" : Colors.dark.txtSecondary}
+                    />
+                    <Text style={[styles.optionText, mainCopied && styles.copiedText]}>
+                      {mainCopied ? 'Copied!' : 'Copy'}
+                    </Text>
                   </Pressable>
                   <Pressable onPress={editMessage} style={styles.optionButton}>
+                    <Feather name="edit-2" size={20} color={Colors.dark.txtPrimary} />
                     <Text style={styles.optionText}>Edit</Text>
                   </Pressable>
                 </View>
@@ -316,13 +354,22 @@ export const MessagePreview = ({
                   </Text>
                 </View>
                 <View style={styles.optionBox}>
-                  <Pressable onPress={copyMessage} style={styles.optionButton}>
-                    <Text style={styles.optionText}>Copy</Text>
-                    <Feather name="copy" color={Colors.dark.txtPrimary} size={20} />
+                  <Pressable
+                    onPress={() => handleCopy(message ?? '')}
+                    style={[styles.optionButton, mainCopied && styles.copiedButton]}
+                  >
+                    <Feather
+                      name={mainCopied ? "check" : "copy"}
+                      size={16}
+                      color={mainCopied ? "#22c55e" : Colors.dark.txtSecondary}
+                    />
+                    <Text style={[styles.optionText, mainCopied && styles.copiedText]}>
+                      {mainCopied ? 'Copied!' : 'Copy'}
+                    </Text>
                   </Pressable>
                   <Pressable onPress={editMessage} style={styles.optionButton}>
+                    <Feather name="edit-2" size={20} color={Colors.dark.txtSecondary} />
                     <Text style={styles.optionText}>Edit</Text>
-                    <Feather name="edit-2" color={Colors.dark.txtPrimary} size={20} />
                   </Pressable>
                 </View>
               </>
@@ -333,6 +380,7 @@ export const MessagePreview = ({
     </>
   );
 };
+
 
 const styles = StyleSheet.create({
   messageContainer: {
@@ -376,7 +424,6 @@ const styles = StyleSheet.create({
   optionBox: {
     backgroundColor: Colors.dark.bgSecondary,
     borderRadius: 10,
-    paddingVertical: 10,
     minWidth: 150,
     maxWidth: 280,
     alignSelf: 'flex-end',
@@ -388,7 +435,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 15,
+    paddingBlock: 10,
+    paddingTop: 10,
   },
   optionText: {
     color: Colors.dark.txtPrimary,
@@ -454,6 +503,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  copiedButton: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  copiedText: {
+    color: '#22c55e',
+    fontSize: 14
   },
 });
 

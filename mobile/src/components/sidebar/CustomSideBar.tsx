@@ -186,12 +186,12 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                 <View style={styles.bottom}>
                     <TouchableOpacity style={styles.bottomContent}>
                         <TouchableOpacity style={styles.userCont}>
-                            <LinearGradient
-                                colors={['#9747FF', '#410099']}
+                            <View
+                              
                                 style={styles.userAccountButton}
                             >
                                 <Text style={styles.userText}>{userInitials}</Text>
-                            </LinearGradient>
+                            </View>
                             <Text style={styles.userText}>{username}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style = {{opacity: 0.5 }}>
@@ -260,6 +260,7 @@ const styles = StyleSheet.create({
     userAccountButton: {
         width: 40,
         height: 40,
+        backgroundColor: Colors.dark.button,
         borderRadius: 50,
         alignItems: 'center',
         justifyContent: 'center',

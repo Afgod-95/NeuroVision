@@ -13,12 +13,10 @@ import {
   Platform,
   FlatList
 } from 'react-native';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Colors } from '@/src/constants/Colors';
 import ChatInput from '@/src/components/textInputs/ChatInput';
 import CustomSideBar from '@/src/components/sidebar/CustomSideBar';
-import { useDispatch } from 'react-redux';
-import { logout } from '@/src/redux/slices/authSlice';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
@@ -67,13 +65,16 @@ const Index = () => {
   const [isAIResponding, setIsAIResponding] = useState<boolean>(false);
   const [conversationId, setConversationId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
-  
+
   const realtimeChannelRef = useRef<any>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const { user: userDetails } = useSelector((state: RootState) => state.user);
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
   const queryClient = useQueryClient();
+
+  const MemoizedUserMessageBox = React.memo(UserMessageBox);
+  const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse);  
 
   // Generate or get conversation ID
   useEffect(() => {
@@ -85,7 +86,116 @@ const Index = () => {
     }
   }, [userDetails?.id]);
 
-  // Fetch initial messages from Supabase
+  // Initialize with sample messages for demonstration
+  useEffect(() => {
+    if (conversationId && userDetails?.id) {
+      // Add sample messages immediately for demo purposes
+      const sampleMessages: Message[] = [
+        {
+          id: 'sample-1',
+          conversation_id: conversationId,
+          user_id: userDetails.id,
+          sender: 'user',
+          text: 'Hello! Can you help me understand how React Native navigation works?',
+          created_at: new Date(Date.now() - 300000).toISOString(), // 5 minutes ago
+          timestamp: new Date(Date.now() - 300000).toISOString(),
+          user: true,
+          content: {
+            type: 'text',
+            text: 'Hello! Can you help me understand how React Native navigation works?'
+          }
+        },
+        {
+          id: 'sample-2',
+          conversation_id: conversationId,
+          user_id: userDetails.id,
+          sender: 'assistant',
+          text: 'Absolutely! React Navigation is the most popular navigation library for React Native. Here are the key concepts:\n\n**Stack Navigation**: Like a stack of cards, you can push and pop screens. Perfect for flows like login → home → details.\n\n**Tab Navigation**: Bottom or top tabs for switching between main sections of your app.\n\n**Drawer Navigation**: Side menu that slides in from the edge.\n\n**Nested Navigation**: You can combine different navigators, like having tabs inside a stack.\n\nWould you like me to explain any of these in more detail or show you some code examples?',
+          created_at: new Date(Date.now() - 240000).toISOString(), // 4 minutes ago
+          timestamp: new Date(Date.now() - 240000).toISOString(),
+          user: false,
+          content: {
+            type: 'text',
+            text: 'Absolutely! React Navigation is the most popular navigation library for React Native. Here are the key concepts:\n\n**Stack Navigation**: Like a stack of cards, you can push and pop screens. Perfect for flows like login → home → details.\n\n**Tab Navigation**: Bottom or top tabs for switching between main sections of your app.\n\n**Drawer Navigation**: Side menu that slides in from the edge.\n\n**Nested Navigation**: You can combine different navigators, like having tabs inside a stack.\n\nWould you like me to explain any of these in more detail or show you some code examples?'
+          }
+        },
+        {
+          id: 'sample-3',
+          conversation_id: conversationId,
+          user_id: userDetails.id,
+          sender: 'user',
+          text: 'That\'s really helpful! Could you show me a basic stack navigation example?',
+          created_at: new Date(Date.now() - 180000).toISOString(), // 3 minutes ago
+          timestamp: new Date(Date.now() - 180000).toISOString(),
+          user: true,
+          content: {
+            type: 'text',
+            text: 'That\'s really helpful! Could you show me a basic stack navigation example?'
+          }
+        },
+        {
+          id: 'sample-4',
+          conversation_id: conversationId,
+          user_id: userDetails.id,
+          sender: 'assistant',
+          text: 'Sure! Here\'s a basic stack navigation setup:\n\n```javascript\nimport { NavigationContainer } from \'@react-navigation/native\';\nimport { createNativeStackNavigator } from \'@react-navigation/native-stack\';\n\nconst Stack = createNativeStackNavigator();\n\nfunction App() {\n  return (\n    <NavigationContainer>\n      <Stack.Navigator initialRouteName="Home">\n        <Stack.Screen name="Home" component={HomeScreen} />\n        <Stack.Screen name="Details" component={DetailsScreen} />\n      </Stack.Navigator>\n    </NavigationContainer>\n  );\n}\n```\n\nTo navigate between screens:\n```javascript\n// In your component\nfunction HomeScreen({ navigation }) {\n  return (\n    <Button\n      title="Go to Details"\n      onPress={() => navigation.navigate(\'Details\')}\n    />\n  );\n}\n```\n\nThe key methods are:\n- `navigation.navigate()` - Go to a screen\n- `navigation.goBack()` - Go back\n- `navigation.push()` - Push a new instance\n\nWant to see how to pass parameters between screens?',
+          created_at: new Date(Date.now() - 120000).toISOString(), // 2 minutes ago
+          timestamp: new Date(Date.now() - 120000).toISOString(),
+          user: false,
+          content: {
+            type: 'text',
+            text: 'Sure! Here\'s a basic stack navigation setup:\n\n```javascript\nimport { NavigationContainer } from \'@react-navigation/native\';\nimport { createNativeStackNavigator } from \'@react-navigation/native-stack\';\n\nconst Stack = createNativeStackNavigator();\n\nfunction App() {\n  return (\n    <NavigationContainer>\n      <Stack.Navigator initialRouteName="Home">\n        <Stack.Screen name="Home" component={HomeScreen} />\n        <Stack.Screen name="Details" component={DetailsScreen} />\n      </Stack.Navigator>\n    </NavigationContainer>\n  );\n}\n```\n\nTo navigate between screens:\n```javascript\n// In your component\nfunction HomeScreen({ navigation }) {\n  return (\n    <Button\n      title="Go to Details"\n      onPress={() => navigation.navigate(\'Details\')}\n    />\n  );\n}\n```\n\nThe key methods are:\n- `navigation.navigate()` - Go to a screen\n- `navigation.goBack()` - Go back\n- `navigation.push()` - Push a new instance\n\nWant to see how to pass parameters between screens?'
+          }
+        },
+        {
+          id: 'sample-5',
+          conversation_id: conversationId,
+          user_id: userDetails.id,
+          sender: 'user',
+          text: 'Yes, please! How do I pass data between screens?',
+          created_at: new Date(Date.now() - 60000).toISOString(), // 1 minute ago
+          timestamp: new Date(Date.now() - 60000).toISOString(),
+          user: true,
+          content: {
+            type: 'text',
+            text: 'Yes, please! How do I pass data between screens?'
+          }
+        },
+        {
+          id: 'sample-6',
+          conversation_id: conversationId,
+          user_id: userDetails.id,
+          sender: 'assistant',
+          text: 'Great question! Here\'s how to pass parameters between screens:\n\n**Sending parameters:**\n```javascript\nnavigation.navigate(\'Details\', {\n  itemId: 86,\n  itemName: \'First Item\',\n  user: { name: \'John\', age: 30 }\n});\n```\n\n**Receiving parameters:**\n```javascript\nfunction DetailsScreen({ route, navigation }) {\n  const { itemId, itemName, user } = route.params;\n  \n  return (\n    <View>\n      <Text>Item ID: {itemId}</Text>\n      <Text>Item Name: {itemName}</Text>\n      <Text>User: {user.name}</Text>\n    </View>\n  );\n}\n```\n\n**Pro tips:**\n- Always provide default values: `const { itemId = 0 } = route.params || {};`\n- For complex data, consider using global state (Redux, Context)\n- You can update params: `navigation.setParams({ itemName: \'Updated\' })`\n\n**Going back with data:**\n```javascript\nnavigation.navigate(\'Home\', { result: \'success\' });\n```\n\nThis covers the basics! Any specific navigation scenario you\'d like help with?',
+          created_at: new Date(Date.now() - 30000).toISOString(), // 30 seconds ago
+          timestamp: new Date(Date.now() - 30000).toISOString(),
+          user: false,
+          content: {
+            type: 'text',
+            text: 'Great question! Here\'s how to pass parameters between screens:\n\n**Sending parameters:**\n```javascript\nnavigation.navigate(\'Details\', {\n  itemId: 86,\n  itemName: \'First Item\',\n  user: { name: \'John\', age: 30 }\n});\n```\n\n**Receiving parameters:**\n```javascript\nfunction DetailsScreen({ route, navigation }) {\n  const { itemId, itemName, user } = route.params;\n  \n  return (\n    <View>\n      <Text>Item ID: {itemId}</Text>\n      <Text>Item Name: {itemName}</Text>\n      <Text>User: {user.name}</Text>\n    </View>\n  );\n}\n```\n\n**Pro tips:**\n- Always provide default values: `const { itemId = 0 } = route.params || {};`\n- For complex data, consider using global state (Redux, Context)\n- You can update params: `navigation.setParams({ itemName: \'Updated\' })`\n\n**Going back with data:**\n```javascript\nnavigation.navigate(\'Home\', { result: \'success\' });\n```\n\nThis covers the basics! Any specific navigation scenario you\'d like help with?'
+          }
+        }
+      ];
+
+      setMessages(sampleMessages);
+      setLoading(false);
+    }
+  }, [conversationId, userDetails?.id]);
+
+  // Replace your current onContentSizeChange
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, []);
+
+  // Use this in useEffect instead
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages.length, scrollToBottom]);
+
+  // Fetch initial messages from Supabase (commented out for demo, but keep for production)
+  /*
   useEffect(() => {
     const fetchInitialMessages = async () => {
       if (!conversationId || !userDetails?.id) return;
@@ -132,6 +242,7 @@ const Index = () => {
 
     fetchInitialMessages();
   }, [conversationId, userDetails?.id]);
+  */
 
   // Set up realtime subscription
   useEffect(() => {
@@ -155,9 +266,9 @@ const Index = () => {
         },
         (payload: any) => {
           console.log('New message received via realtime:', payload.new);
-          
+
           const newMessage = payload.new as SupabaseMessage;
-          
+
           // Don't add the message if it's from the current user and already exists locally
           // This prevents duplicate messages when user sends
           const transformedMessage: Message = {
@@ -182,13 +293,13 @@ const Index = () => {
             // Check if message already exists to prevent duplicates
             const exists = prev.some(msg => msg.id === transformedMessage.id);
             if (exists) return prev;
-            
+
             // Remove any loading messages if this is an AI response
             if (newMessage.sender === 'assistant') {
               const withoutLoading = prev.filter(msg => !msg.isLoading);
               return [...withoutLoading, transformedMessage];
             }
-            
+
             return [...prev, transformedMessage];
           });
 
@@ -208,7 +319,7 @@ const Index = () => {
         },
         (payload: any) => {
           console.log('Message updated via realtime:', payload.new);
-          
+
           const updatedMessage = payload.new as SupabaseMessage;
           const transformedMessage: Message = {
             id: updatedMessage.id,
@@ -250,7 +361,7 @@ const Index = () => {
 
   // Function to save message to Supabase
   const saveMessageToSupabase = async (
-    messageText: string, 
+    messageText: string,
     sender: 'user' | 'assistant' | 'system',
     messageContent?: MessageContent
   ) => {
@@ -310,7 +421,7 @@ const Index = () => {
       if (audioFile && userDetails?.id) {
         try {
           console.log('Starting audio transcription...');
-          
+
           if (!audioFile.uploadResult?.signedUrl) {
             throw new Error('No audio URL available for transcription');
           }
@@ -378,7 +489,7 @@ const Index = () => {
           timestamp: new Date().toISOString(),
           sender: 'assistant'
         };
-        
+
         setMessages(prev => {
           const withoutLoading = prev.filter(msg => !msg.isLoading);
           return [...withoutLoading, errorMessage];
@@ -525,6 +636,7 @@ const Index = () => {
                   </View>
                 </View>
               ) : (
+                
                 <FlatList
                   ref={flatListRef}
                   data={messages}
@@ -533,20 +645,28 @@ const Index = () => {
                     paddingHorizontal: 16,
                     paddingBottom: 100
                   }}
+                  // Add these performance optimizations
+                  removeClippedSubviews={true}
+                  maxToRenderPerBatch={10}
+                  updateCellsBatchingPeriod={50}
+                  initialNumToRender={10}
+                  windowSize={10}
+                  decelerationRate="normal"
+                  scrollEventThrottle={16}
                   onContentSizeChange={() => {
                     // Auto-scroll to bottom when content changes
                     flatListRef.current?.scrollToEnd({ animated: true });
                   }}
                   renderItem={({ item }) =>
                     item.user ? (
-                      <UserMessageBox
+                      <MemoizedUserMessageBox
                         message={item.text}
                         messageId={item.id}
                         userMessage={true}
                         messageContent={item.content}
                       />
                     ) : (
-                      <AdvancedAIResponse
+                      <MemoizedAdvancedAIResponse
                         message={item.text}
                         loading={item.isLoading || false}
                         onRegenerate={() => {
@@ -596,6 +716,7 @@ const Index = () => {
     </>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

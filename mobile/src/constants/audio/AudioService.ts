@@ -57,9 +57,26 @@ export const uploadAudioFile = async (
   }
 };
 
-// Delete audio file from Supabase storage
-export const deleteAudioFile = async (filePath: string) => {
+// Enhanced deleteAudioFile function that can handle both file paths and URLs
+export const deleteAudioFile = async (filePathOrUrl: string) => {
   try {
+    let filePath = filePathOrUrl;
+    
+    // If it's a signed URL, extract the file path
+    if (filePathOrUrl.includes('supabase') && filePathOrUrl.includes('sign')) {
+      // Extract file path from signed URL
+      const urlParts = filePathOrUrl.split('/');
+      const objectIndex = urlParts.findIndex(part => part === 'object');
+      if (objectIndex !== -1 && urlParts[objectIndex + 2]) {
+        // The path is usually after 'object/sign/user-audio/'
+        filePath = decodeURIComponent(urlParts.slice(objectIndex + 3).join('/'));
+      } else {
+        throw new Error('Could not extract file path from URL');
+      }
+    }
+    
+    console.log('Attempting to delete file at path:', filePath);
+    
     const { data, error } = await supabase.storage
       .from('user-audio')
       .remove([filePath]);
