@@ -10,6 +10,7 @@ import {
   Share,
   Dimensions,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import Octicons from '@expo/vector-icons/Octicons';
@@ -17,7 +18,6 @@ import { Colors } from '@/src/constants/Colors';
 import { Feather } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
-import { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -47,8 +47,8 @@ const AdvancedAIResponse = ({
 }: AIResponseProps) => {
   const [isLiked, setIsLiked] = useState<'like' | 'dislike' | null>(null);
   const [showActions, setShowActions] = useState(false);
-  const [copiedStates, setCopiedStates] = useState<{[key: string]: boolean}>({});
-  const [expandedBlocks, setExpandedBlocks] = useState<{[key: string]: boolean}>({});
+  const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({});
+  const [expandedBlocks, setExpandedBlocks] = useState<{ [key: string]: boolean }>({});
   const [showMetadata, setShowMetadata] = useState(false);
   const [mainCopied, setMainCopied] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -78,7 +78,7 @@ const AdvancedAIResponse = ({
   const handleCopy = async (text: string, blockId?: string) => {
     try {
       await Clipboard.setString(text);
-      
+
       if (blockId) {
         setCopiedStates(prev => ({ ...prev, [blockId]: true }));
         setTimeout(() => {
@@ -90,7 +90,7 @@ const AdvancedAIResponse = ({
           setMainCopied(false);
         }, 2000);
       }
-      
+
       // No alert needed - visual feedback is sufficient
     } catch (error) {
       Alert.alert('Error', 'Failed to copy content');
@@ -112,7 +112,7 @@ const AdvancedAIResponse = ({
     const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
     const blocks = [];
     let match;
-    
+
     while ((match = codeBlockRegex.exec(text)) !== null) {
       blocks.push({
         id: `code-${blocks.length}`,
@@ -121,15 +121,16 @@ const AdvancedAIResponse = ({
         fullMatch: match[0],
       });
     }
-    
+
     return blocks;
   };
+
 
   const CodeBlock = ({ code, language, blockId }: { code: string; language: string; blockId: string }) => {
     const isCopied = copiedStates[blockId];
     const isExpanded = expandedBlocks[blockId];
     const shouldTruncate = code.split('\n').length > 10;
-    const displayCode = shouldTruncate && !isExpanded 
+    const displayCode = shouldTruncate && !isExpanded
       ? code.split('\n').slice(0, 10).join('\n') + '\n...'
       : code;
 
@@ -145,10 +146,10 @@ const AdvancedAIResponse = ({
                 style={styles.codeActionButton}
                 onPress={() => setExpandedBlocks(prev => ({ ...prev, [blockId]: !isExpanded }))}
               >
-                <Feather 
-                  name={isExpanded ? "chevron-up" : "chevron-down"} 
-                  size={14} 
-                  color="#888" 
+                <Feather
+                  name={isExpanded ? "chevron-up" : "chevron-down"}
+                  size={14}
+                  color="#6b7280"
                 />
                 <Text style={styles.codeActionText}>
                   {isExpanded ? 'Collapse' : 'Expand'}
@@ -159,10 +160,10 @@ const AdvancedAIResponse = ({
               style={[styles.codeActionButton, isCopied && styles.copiedButton]}
               onPress={() => handleCopy(code, blockId)}
             >
-              <Feather 
-                name={isCopied ? "check" : "copy"} 
-                size={14} 
-                color={isCopied ? "#22c55e" : "#888"} 
+              <Feather
+                name={isCopied ? "check" : "copy"}
+                size={14}
+                color={isCopied ? "#10b981" : "#6b7280"}
               />
               <Text style={[styles.codeActionText, isCopied && styles.copiedText]}>
                 {isCopied ? 'Copied' : 'Copy'}
@@ -170,37 +171,34 @@ const AdvancedAIResponse = ({
             </TouchableOpacity>
           </View>
         </View>
-        <ScrollView 
-          horizontal 
-          style={styles.codeScrollView}
-          showsHorizontalScrollIndicator={false}
-        >
+        {/* code text */}
+        <View style={styles.codeContainer}>
           <Text style={styles.codeText}>{displayCode}</Text>
-        </ScrollView>
+        </View>
       </View>
     );
   };
 
   const renderCustomMarkdown = (text: string) => {
     const codeBlocks = extractCodeBlocks(text);
-    
+
     if (codeBlocks.length === 0) {
       return <Markdown style={markdownStyles}>{text}</Markdown>;
     }
 
     let processedText = text;
     const components = [];
-    
+
     codeBlocks.forEach((block, index) => {
       const placeholder = `__CODE_BLOCK_${index}__`;
       processedText = processedText.replace(block.fullMatch, placeholder);
     });
 
     const parts = processedText.split(/(__CODE_BLOCK_\d+__)/);
-    
+
     return parts.map((part, index) => {
       const codeBlockMatch = part.match(/__CODE_BLOCK_(\d+)__/);
-      
+
       if (codeBlockMatch) {
         const blockIndex = parseInt(codeBlockMatch[1]);
         const block = codeBlocks[blockIndex];
@@ -213,7 +211,7 @@ const AdvancedAIResponse = ({
           />
         );
       }
-      
+
       return part ? <Markdown key={index} style={markdownStyles}>{part}</Markdown> : null;
     });
   };
@@ -222,18 +220,6 @@ const AdvancedAIResponse = ({
     return (
       <View style={styles.container}>
         <View style={styles.messageContainer}>
-          {/*
-            <View style={styles.header}>
-              <View style={styles.aiAvatar}>
-                <Feather name="cpu" size={20} color="#fff" />
-              </View>
-              <View style={styles.headerInfo}>
-                <Text style={styles.aiName}>Claude</Text>
-                <Text style={styles.modelName}>{model}</Text>
-              </View>
-            </View>
-          */}
-          
           <View style={styles.loadingContainer}>
             <View style={styles.typingIndicator}>
               <View style={[styles.typingDot, { animationDelay: '0ms' }]} />
@@ -258,24 +244,6 @@ const AdvancedAIResponse = ({
       ]}
     >
       <View style={styles.messageContainer}>
-        {/* Header 
-        <View style={styles.header}>
-          <View style={styles.aiAvatar}>
-            <MaterialIcons name="smart-toy" size={20} color="#fff" />
-          </View>
-          <View style={styles.headerInfo}>
-            <Text style={styles.aiName}>Claude</Text>
-            <Text style={styles.modelName}>{model}</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.metadataToggle}
-            onPress={() => setShowMetadata(!showMetadata)}
-          >
-            <Feather name="info" size={16} color={Colors.dark.txtSecondary} />
-          </TouchableOpacity>
-        </View>
-        */}
-
         {/* Metadata */}
         {showMetadata && (
           <View style={styles.metadata}>
@@ -286,12 +254,13 @@ const AdvancedAIResponse = ({
           </View>
         )}
 
-        {/* Content */}
-        <View style={styles.contentContainer}>
-          <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Content - Fixed: Removed nested ScrollView */}
+        <Pressable>
+          <View style={styles.contentContainer}>
             {renderCustomMarkdown(message)}
-          </ScrollView>
-        </View>
+          </View>
+        </Pressable>
+
 
         {/* Action Bar */}
         <View style={styles.actionBar}>
@@ -300,10 +269,10 @@ const AdvancedAIResponse = ({
               style={[styles.actionButton, isLiked === 'like' && styles.likedButton]}
               onPress={() => handleLike('like')}
             >
-              <Octicons 
-                name="thumbsup" 
-                size={16} 
-                color={isLiked === 'like' ? '#22c55e' : Colors.dark.txtSecondary} 
+              <Octicons
+                name="thumbsup"
+                size={16}
+                color={isLiked === 'like' ? '#22c55e' : Colors.dark.txtSecondary}
               />
             </TouchableOpacity>
 
@@ -311,9 +280,9 @@ const AdvancedAIResponse = ({
               style={[styles.actionButton, isLiked === 'dislike' && styles.dislikedButton]}
               onPress={() => handleLike('dislike')}
             >
-              <Octicons 
-                name="thumbsdown" 
-                size={16} 
+              <Octicons
+                name="thumbsdown"
+                size={16}
                 color={isLiked === 'dislike' ? '#ef4444' : Colors.dark.txtSecondary}
               />
             </TouchableOpacity>
@@ -322,10 +291,10 @@ const AdvancedAIResponse = ({
               style={[styles.actionButton, mainCopied && styles.copiedButton]}
               onPress={() => handleCopy(message)}
             >
-              <Feather 
-                name={mainCopied ? "check" : "copy"} 
-                size={16} 
-                color={mainCopied ? "#22c55e" : Colors.dark.txtSecondary} 
+              <Feather
+                name={mainCopied ? "check" : "copy"}
+                size={16}
+                color={mainCopied ? "#22c55e" : Colors.dark.txtSecondary}
               />
             </TouchableOpacity>
 
@@ -357,8 +326,7 @@ const AdvancedAIResponse = ({
 
         {/* Extended Actions */}
         {showActions && (
-          <Animated.View style={styles.extendedActions}
-          >
+          <Animated.View style={styles.extendedActions}>
             <TouchableOpacity style={styles.extendedAction}>
               <Ionicons name="bookmark-outline" size={16} color={Colors.dark.txtSecondary} />
               <Text style={styles.extendedActionText}>Save Response</Text>
@@ -449,11 +417,13 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
     minHeight: 60,
-    maxHeight: 400,
+    // Removed flex: 1 to prevent expansion issues
+  },
+  scrollContentContainer: {
+    flexGrow: 1,
   },
   loadingContainer: {
     padding: 20,
- 
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -472,35 +442,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
   },
+  // Fixed code block styling - removed nested ScrollView
   codeBlockContainer: {
     marginVertical: 12,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#0d1117',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#30363d',
   },
   codeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#2d2d2d',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#161b22',
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#21262d',
   },
   codeLanguage: {
-    backgroundColor: '#444',
+    backgroundColor: 'rgba(110, 118, 129, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(110, 118, 129, 0.2)',
   },
   codeLanguageText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    color: '#8b949e',
+    fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'lowercase',
   },
   codeActions: {
     flexDirection: 'row',
@@ -509,32 +482,38 @@ const styles = StyleSheet.create({
   codeActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
     backgroundColor: 'transparent',
-    gap: 4,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#30363d',
   },
   copiedButton: {
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   codeActionText: {
-    color: '#888',
-    fontSize: 11,
+    color: '#8b949e',
+    fontSize: 12,
     fontWeight: '500',
   },
   copiedText: {
-    color: '#22c55e',
+    color: '#10b981',
   },
-  codeScrollView: {
-    maxHeight: 300,
+  // Fixed: Simple container instead of ScrollView
+  codeContainer: {
+    maxHeight: 300, // Constrain height to prevent excessive expansion
+    backgroundColor: '#0d1117',
   },
   codeText: {
-    color: '#d4d4d4',
-    fontFamily: 'Courier',
-    fontSize: 13,
-    lineHeight: 18,
-    padding: 12,
+    color: '#e6edf3',
+    fontFamily: 'Monaco',
+    fontSize: 14,
+    lineHeight: 20,
+    padding: 16,
+    backgroundColor: '#0d1117',
   },
   actionBar: {
     flexDirection: 'row',
@@ -647,7 +626,7 @@ const markdownStyles = StyleSheet.create({
     fontSize: 13,
   },
   blockquote: {
-    backgroundColor:'#2a2a2a',
+    backgroundColor: '#2a2a2a',
     borderLeftWidth: 4,
     borderLeftColor: '#3b82f6',
     paddingLeft: 16,
@@ -676,6 +655,6 @@ const markdownStyles = StyleSheet.create({
     color: '#3b82f6',
     textDecorationLine: 'underline',
   },
-}) 
+})
 
 export default AdvancedAIResponse;

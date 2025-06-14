@@ -1,6 +1,8 @@
-import express, { Request, Response } from 'express';
-import router from './routes/router';
+import express from 'express';
 import cors from 'cors';
+import { rateLimiter, validateApiKey } from './middlewares/validation';
+import router from './routes/authRouter';
+import chatsRouter from './routes/chatsRouter';
 
 
 // Create an Express app
@@ -9,19 +11,23 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-}));
+app.use(cors());
 
 app.use(express.static('public'));
 app.use(express.static('src'));
-app.use(router)
 
-/// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+//rate limiting 
+app.use(rateLimiter(60000, 100))
+
+//api key validation
+app.use('/api/chats/', validateApiKey);
+
+app.use(router);
+
+app.use('/api/chats/', chatsRouter);
+
+
+
 
 
 

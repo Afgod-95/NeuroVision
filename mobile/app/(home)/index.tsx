@@ -13,7 +13,7 @@ import {
   Platform,
   FlatList
 } from 'react-native';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Colors } from '@/src/constants/Colors';
 import ChatInput from '@/src/components/textInputs/ChatInput';
 import CustomSideBar from '@/src/components/sidebar/CustomSideBar';
@@ -57,6 +57,25 @@ interface SupabaseMessage {
   created_at: string;
 }
 
+// Memoized UserMessageBox with proper prop comparison
+const MemoizedUserMessageBox = React.memo(UserMessageBox, (prevProps, nextProps) => {
+  return (
+    prevProps.message === nextProps.message &&
+    prevProps.messageId === nextProps.messageId &&
+    prevProps.userMessage === nextProps.userMessage &&
+    JSON.stringify(prevProps.messageContent) === JSON.stringify(nextProps.messageContent)
+  );
+});
+
+// Memoized AdvancedAIResponse with proper prop comparison
+const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse, (prevProps, nextProps) => {
+  return (
+    prevProps.message === nextProps.message &&
+    prevProps.loading === nextProps.loading
+    // Note: We don't compare onRegenerate function since it should be stable with useCallback
+  );
+});
+
 const Index = () => {
   const [isSidebarVisible, setIsSidebarVisible] = useState<boolean>(false);
   const [message, setMessage] = useState<string>('');
@@ -73,8 +92,8 @@ const Index = () => {
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
   const queryClient = useQueryClient();
 
-  const MemoizedUserMessageBox = React.memo(UserMessageBox);
-  const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse);  
+  // Memoize username to prevent recalculation
+  const username = useMemo(() => userDetails?.username?.split(" ")[0], [userDetails?.username]);
 
   // Generate or get conversation ID
   useEffect(() => {
@@ -182,67 +201,19 @@ const Index = () => {
     }
   }, [conversationId, userDetails?.id]);
 
-  // Replace your current onContentSizeChange
+  // Memoized scroll to bottom function
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, []);
 
-  // Use this in useEffect instead
+  // Use this in useEffect instead - but avoid running on every message change
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
   }, [messages.length, scrollToBottom]);
-
-  // Fetch initial messages from Supabase (commented out for demo, but keep for production)
-  /*
-  useEffect(() => {
-    const fetchInitialMessages = async () => {
-      if (!conversationId || !userDetails?.id) return;
-
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true });
-
-        if (error) {
-          console.error('Error fetching messages:', error);
-        } else {
-          // Transform Supabase messages to our Message format
-          const transformedMessages: Message[] = (data || []).map((msg: SupabaseMessage) => ({
-            id: msg.id,
-            conversation_id: msg.conversation_id,
-            user_id: msg.user_id,
-            sender: msg.sender,
-            text: msg.content,
-            created_at: msg.created_at,
-            timestamp: msg.created_at,
-            user: msg.sender === 'user',
-            // Parse content if it's JSON for rich messages
-            content: (() => {
-              try {
-                return JSON.parse(msg.content);
-              } catch {
-                return { type: 'text', text: msg.content };
-              }
-            })(),
-          }));
-          
-          setMessages(transformedMessages);
-        }
-      } catch (error) {
-        console.error('Failed to fetch initial messages:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInitialMessages();
-  }, [conversationId, userDetails?.id]);
-  */
 
   // Set up realtime subscription
   useEffect(() => {
@@ -360,7 +331,7 @@ const Index = () => {
   }, [conversationId, userDetails?.id]);
 
   // Function to save message to Supabase
-  const saveMessageToSupabase = async (
+  const saveMessageToSupabase = useCallback(async (
     messageText: string,
     sender: 'user' | 'assistant' | 'system',
     messageContent?: MessageContent
@@ -389,7 +360,7 @@ const Index = () => {
     }
 
     return data;
-  };
+  }, [conversationId, userDetails?.id]);
 
   // Updated mutation with realtime integration
   const sendMessageMutation = useMutation({
@@ -445,14 +416,23 @@ const Index = () => {
         }
       }
 
-      // Send message to AI API
+      // Send message to your updated AI API with new structure
       const response = await axios.post('/api/chat/send-message', {
-        userId: userDetails?.id,
         message: finalMessage,
-        conversationId: conversationId
+        userId: userDetails?.id,
+        conversationId: conversationId,
+        useDatabase: true, // Enable database storage
+        temperature: 0.7,
+        maxTokens: 4096,
+        systemPrompt: "You are a helpful AI assistant." // Optional customize as needed
       });
 
-      return { userMessage: finalMessage, aiResponse: response.data, originalAudioFile: audioFile };
+      return {
+        userMessage: finalMessage,
+        aiResponse: response.data,
+        originalAudioFile: audioFile,
+        conversationId: response.data.conversationId // Get the conversation ID from response
+      };
     },
     onMutate: () => {
       // Add loading message immediately
@@ -472,12 +452,26 @@ const Index = () => {
     onSuccess: async (data) => {
       console.log('Message sent successfully:', data);
 
+      // Update conversation ID if it was created/changed
+      if (data.conversationId && data.conversationId !== conversationId) {
+        setConversationId(data.conversationId);
+      }
+
       // Save AI response to Supabase (will trigger realtime update)
       try {
-        await saveMessageToSupabase(
-          data.aiResponse.message || data.aiResponse.content || 'I received your message.',
-          'assistant'
-        );
+        // The response structure from your backend
+        const aiResponseText = data.aiResponse.response ||
+          data.aiResponse.message ||
+          data.aiResponse.content ||
+          'I received your message.';
+
+        await saveMessageToSupabase(aiResponseText, 'assistant');
+
+        // Log metadata for debugging
+        if (data.aiResponse.metadata) {
+          console.log('AI Response Metadata:', data.aiResponse.metadata);
+        }
+
       } catch (error) {
         console.error('Failed to save AI response:', error);
         // Add error message locally if saving fails
@@ -506,10 +500,39 @@ const Index = () => {
         const withoutLoading = prev.filter(msg => !msg.isLoading);
 
         let errorText = 'Sorry, I encountered an error processing your message.';
-        if (error.message.includes('Transcription')) {
+
+        // Handle specific error cases from your backend
+        if (error.response?.data?.error) {
+          const backendError = error.response.data.error;
+
+          if (backendError.includes('Message is required')) {
+            errorText = 'Please provide a message to send.';
+          } else if (backendError.includes('Message is too long')) {
+            errorText = 'Your message is too long. Please shorten it and try again.';
+          } else if (backendError.includes('userId is required')) {
+            errorText = 'Authentication error. Please log in again.';
+          } else if (backendError.includes('Invalid conversation ID')) {
+            errorText = 'Conversation error. Starting a new conversation.';
+            setConversationId(''); // Reset conversation ID
+          } else if (backendError.includes('Invalid user ID')) {
+            errorText = 'User authentication error. Please log in again.';
+          } else if (backendError.includes('API quota exceeded')) {
+            errorText = 'Service temporarily unavailable. Please try again later.';
+          } else if (backendError.includes('Database error')) {
+            errorText = 'Database connection error. Please try again.';
+          } else if (backendError.includes('Failed to get response from Gemini')) {
+            errorText = 'AI service temporarily unavailable. Please try again.';
+          } else {
+            errorText = backendError;
+          }
+        } else if (error.message.includes('Transcription')) {
           errorText = `Audio transcription error: ${error.message}`;
+        } else if (error.response?.status === 400) {
+          errorText = 'Invalid request. Please check your input and try again.';
         } else if (error.response?.status === 404) {
           errorText = 'Service not found. Please check your API configuration.';
+        } else if (error.response?.status === 429) {
+          errorText = 'Too many requests. Please wait a moment and try again.';
         } else if (error.response?.status === 500) {
           errorText = 'Server error. Please try again in a moment.';
         } else if (error.message) {
@@ -547,16 +570,29 @@ const Index = () => {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
 
-  const handleMessageOnChange = (text: string) => {
+  // Stable callback functions to prevent re-renders
+  const handleMessageOnChange = useCallback((text: string) => {
     setMessage(text);
-  };
+  }, []);
 
-  const handleIsRecording = (isRecording: boolean) => {
+  const handleIsRecording = useCallback((isRecording: boolean) => {
     setIsRecording(isRecording);
-  };
+  }, []);
 
-  // Updated handleSendMessage function
-  const handleSendMessage = async (messageText: string, audioFile?: UploadedAudioFile) => {
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarVisible(true);
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setIsSidebarVisible(false);
+  }, []);
+
+  const handleOpenSidebar = useCallback(() => {
+    setIsSidebarVisible(true);
+  }, []);
+
+  // Updated handleSendMessage function - make it stable with useCallback
+  const handleSendMessage = useCallback(async (messageText: string, audioFile?: UploadedAudioFile) => {
     console.log('handleSendMessage called with:', { messageText, audioFile });
 
     if (!messageText.trim() && !audioFile) {
@@ -568,7 +604,43 @@ const Index = () => {
 
     // Send to AI via mutation (this will also save to Supabase)
     sendMessageMutation.mutate({ messageText, audioFile });
-  };
+  }, [sendMessageMutation]);
+
+
+  // function to start new conversation
+  const startNewConversation = useCallback(() => {
+    setConversationId('');
+    // Optionally clear messages from UI
+    // setMessages([]);
+  }, []);
+
+  // function to get conversation history from database
+  const loadConversationHistory = useCallback(async (convId: string) => {
+    try {
+      // You might want to add an endpoint to fetch conversation history
+      // const response = await axios.get(`/api/chat/conversation/${convId}`, {
+      //   params: { userId: userDetails?.id }
+      // });
+      // return response.data.history;
+    } catch (error) {
+      console.error('Failed to load conversation history:', error);
+    }
+  }, [userDetails?.id]);
+
+  // Stable callback for regenerate functionality
+  const handleRegenerate = useCallback((messageId: string) => {
+    const currentIndex = messages.findIndex(msg => msg.id === messageId);
+    const previousUserMessage = messages.slice(0, currentIndex).reverse().find(msg => msg.user);
+
+    if (previousUserMessage) {
+      handleSendMessage(previousUserMessage.text);
+    }
+  }, [messages, handleSendMessage]);
+
+  // Stable callback for edit message
+  const handleEditMessageCallback = useCallback(() => {
+    handleEditMessage(message);
+  }, [handleEditMessage, message]);
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardWillShow', () => {
@@ -584,12 +656,59 @@ const Index = () => {
     };
   }, []);
 
-  // Username extraction
-  const username = userDetails?.username?.split(" ")[0];
+  // Memoized render functions to prevent re-creation
+  const renderItem = useCallback(({ item }: { item: Message }) => {
+    if (item.user) {
+      return (
+        <MemoizedUserMessageBox
+          message={item.text}
+          messageId={item.id}
+          userMessage={true}
+          messageContent={item.content}
+        />
+      );
+    } else {
+      return (
+        <MemoizedAdvancedAIResponse
+          message={item.text}
+          loading={item.isLoading || false}
+          onRegenerate={() => handleRegenerate(item.id)}
+        />
+      );
+    }
+  }, [handleRegenerate]);
+
+  const keyExtractor = useCallback((item: Message) => item.id, []);
+
+  const onContentSizeChangeCallback = useCallback(() => {
+    // Auto-scroll to bottom when content changes
+    flatListRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  // Memoized welcome content to prevent re-renders
+  const welcomeContent = useMemo(() => (
+    <View style={styles.contentArea}>
+      <View style={styles.welcomeContainer}>
+        <Text style={styles.welcomeText}>
+          Hello {username} 👋{'\n'}
+          <Text style={styles.boldText}>I&apos;m NeuroVision, your AI assistant.</Text>
+        </Text>
+        <Text style={styles.subText}>
+          How may I help you today?
+        </Text>
+      </View>
+    </View>
+  ), [username]);
+
+  const loadingContent = useMemo(() => (
+    <View style={styles.contentArea}>
+      <Text style={styles.subText}>Loading messages...</Text>
+    </View>
+  ), []);
 
   return (
     <>
-      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.container}>
           {/* Background Image */}
           <Image
@@ -605,9 +724,7 @@ const Index = () => {
             <SafeAreaView style={styles.safeAreaContainer}>
               {/* Header - Fixed at top */}
               <View style={styles.header}>
-                <TouchableOpacity onPress={() => {
-                  setIsSidebarVisible(true);
-                }}>
+                <TouchableOpacity onPress={handleToggleSidebar}>
                   <Image
                     source={require('@/src/assets/images/menu.png')}
                     style={styles.menuIcon}
@@ -619,70 +736,27 @@ const Index = () => {
               </View>
 
               {/* Content Area - Show welcome or messages */}
-              {loading ? (
-                <View style={styles.contentArea}>
-                  <Text style={styles.subText}>Loading messages...</Text>
-                </View>
-              ) : messages.length === 0 ? (
-                <View style={styles.contentArea}>
-                  <View style={styles.welcomeContainer}>
-                    <Text style={styles.welcomeText}>
-                      Hello {username} 👋{'\n'}
-                      <Text style={styles.boldText}>I&apos;m NeuroVision, your AI assistant.</Text>
-                    </Text>
-                    <Text style={styles.subText}>
-                      How may I help you today?
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                
-                <FlatList
-                  ref={flatListRef}
-                  data={messages}
-                  keyExtractor={(item) => item.id}
-                  contentContainerStyle={{
-                    paddingHorizontal: 16,
-                    paddingBottom: 100
-                  }}
-                  // Add these performance optimizations
-                  removeClippedSubviews={true}
-                  maxToRenderPerBatch={10}
-                  updateCellsBatchingPeriod={50}
-                  initialNumToRender={10}
-                  windowSize={10}
-                  decelerationRate="normal"
-                  scrollEventThrottle={16}
-                  onContentSizeChange={() => {
-                    // Auto-scroll to bottom when content changes
-                    flatListRef.current?.scrollToEnd({ animated: true });
-                  }}
-                  renderItem={({ item }) =>
-                    item.user ? (
-                      <MemoizedUserMessageBox
-                        message={item.text}
-                        messageId={item.id}
-                        userMessage={true}
-                        messageContent={item.content}
-                      />
-                    ) : (
-                      <MemoizedAdvancedAIResponse
-                        message={item.text}
-                        loading={item.isLoading || false}
-                        onRegenerate={() => {
-                          if (!item.isLoading) {
-                            const currentIndex = messages.findIndex(msg => msg.id === item.id);
-                            const previousUserMessage = messages.slice(0, currentIndex).reverse().find(msg => msg.user);
-
-                            if (previousUserMessage) {
-                              handleSendMessage(previousUserMessage.text);
-                            }
-                          }
-                        }}
-                      />
-                    )
-                  }
-                />
+              {loading ? loadingContent : (
+                messages.length === 0 ? welcomeContent : (
+                  <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    keyExtractor={keyExtractor}
+                    renderItem={renderItem}
+                    contentContainerStyle={styles.flatListContent}
+                    // Performance optimizations
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={10}
+                    updateCellsBatchingPeriod={50}
+                    initialNumToRender={10}
+                    windowSize={10}
+                    decelerationRate="normal"
+                    scrollEventThrottle={16}
+                    onContentSizeChange={onContentSizeChangeCallback}
+                    // Prevent unnecessary re-renders
+                    getItemLayout={undefined}
+                  />
+                )
               )}
             </SafeAreaView>
 
@@ -691,7 +765,7 @@ const Index = () => {
               message={messageId ?? ''}
               messageId={messageId ?? ''}
               userMessage={true}
-              editMessage={() => handleEditMessage(message)}
+              editMessage={handleEditMessageCallback}
             />
 
             {/* Chat input */}
@@ -710,13 +784,12 @@ const Index = () => {
       {/* Sidebar */}
       <CustomSideBar
         isVisible={isSidebarVisible}
-        onClose={() => setIsSidebarVisible(false)}
-        onOpen={() => setIsSidebarVisible(true)}
+        onClose={handleCloseSidebar}
+        onOpen={handleOpenSidebar}
       />
     </>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: {
@@ -776,6 +849,10 @@ const styles = StyleSheet.create({
     color: Colors.dark.txtSecondary,
     marginTop: 10,
     fontSize: 16,
+  },
+  flatListContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
   },
 });
 
