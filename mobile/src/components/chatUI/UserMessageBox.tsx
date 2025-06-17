@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.button,
     maxWidth: 300,
     padding: 10,
-    borderRadius: 15,
+    borderRadius: 16,
     marginVertical: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },

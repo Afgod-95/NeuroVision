@@ -45,6 +45,7 @@ const SearchBar: React.FC<SearchbarProps> = ({
                     <TextInput
                         placeholder='Search'
                         value={value}
+                        autoFocus = {true}
                         onChangeText={onChangeText}
                         placeholderTextColor={Colors.dark.txtSecondary}
                         style={styles.searchInput}
@@ -95,7 +96,7 @@ const styles = StyleSheet.create({
     },
     searchInput: {
         flex: 1,
-        color: Colors.dark.bgSecondary,
+        color: Colors.dark.txtPrimary,
         fontSize: 16,
         fontFamily: 'Manrope-Regular',
     },

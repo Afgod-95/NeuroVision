@@ -14,8 +14,8 @@ import {
 import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import SearchBar from '../searchbar/SearchBar';
-import RecentMessages from '../messages/RecentMessages';
+import SearchBar from './SearchBar';
+import RecentMessages from '../chatUI/RecentMessages';
 import dummyMessages from '@/src/utils/dummyMessage';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';

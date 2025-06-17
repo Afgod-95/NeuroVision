@@ -1,4 +1,4 @@
-import { Message } from "@/src/components/messages/RecentMessages";
+import { Message } from "@/src/components/chatUI/RecentMessages";
 
 // Helper function to create dates relative to now
 const createDate = (minutesAgo: number): Date => {

@@ -29,19 +29,17 @@ type AIResponseProps = {
   onFeedback?: (type: 'like' | 'dislike', messageId?: string) => void;
   messageId?: string;
   timestamp?: Date;
-  model?: string;
   tokensUsed?: number;
   responseTime?: number;
 };
 
 const AdvancedAIResponse = ({
   message,
-  loading = false,
+  loading = true,
   onRegenerate,
   onFeedback,
   messageId,
   timestamp = new Date(),
-  model = "Claude Sonnet 4",
   tokensUsed,
   responseTime,
 }: AIResponseProps) => {
@@ -101,7 +99,7 @@ const AdvancedAIResponse = ({
     try {
       await Share.share({
         message: message,
-        title: 'AI Response from Claude',
+        title: 'AI Response from NeuroVision',
       });
     } catch (error) {
       console.error('Error sharing:', error);
@@ -226,7 +224,7 @@ const AdvancedAIResponse = ({
               <View style={[styles.typingDot, { animationDelay: '150ms' }]} />
               <View style={[styles.typingDot, { animationDelay: '300ms' }]} />
             </View>
-            <Text style={styles.loadingText}>Claude is thinking...</Text>
+            <Text style={styles.loadingText}>Thinking...</Text>
           </View>
         </View>
       </View>
@@ -417,7 +415,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
     minHeight: 60,
-    // Removed flex: 1 to prevent expansion issues
   },
   scrollContentContainer: {
     flexGrow: 1,
@@ -442,7 +439,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
   },
-  // Fixed code block styling - removed nested ScrollView
+ 
   codeBlockContainer: {
     marginVertical: 12,
     borderRadius: 8,

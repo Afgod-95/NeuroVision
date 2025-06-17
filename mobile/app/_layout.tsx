@@ -13,7 +13,7 @@ import { Buffer } from 'buffer';
 global.Buffer = global.Buffer || Buffer;
 
 // Axios config
-axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl || 'https://neurovision-uscp.onrender.com';
+axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl;
 axios.defaults.headers.post['Content-Type'] = 'application/json';
 axios.defaults.withCredentials = true;
 

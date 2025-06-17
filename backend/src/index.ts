@@ -24,7 +24,7 @@ app.use('/api/chats/', validateApiKey);
 
 app.use(router);
 
-app.use('/api/chats/', chatsRouter);
+app.use('/api/chats', chatsRouter);
 
 
 

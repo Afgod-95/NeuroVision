@@ -1,5 +1,5 @@
-import express, { Request, Response } from 'express';
-import { generateCompletion, getModels, healthCheck, sendChatMessage, sendStreamingMessage, testDatabase } from '../controller/chats/chats';
+import express, { Request, RequestHandler, Response } from 'express';
+import { generateCompletion, getConversation, getModels, healthCheck, sendChatMessage, sendStreamingMessage, testDatabase } from '../controller/chats/chats';
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
 import { getMessages } from '../controller/messages/messages';
 
@@ -25,9 +25,13 @@ chatsRouter.post('/transcribe-audio', async (req: Request, res: Response) => {
 });
 
 //get all messages endpoint for specific user
-chatsRouter.get('/user/:id', async (req: Request, res: Response) => {
+chatsRouter.get('/conversation/:conversationId/', async (req: Request, res: Response) => {
     await getMessages(req, res);
-})
+});
+
+//get conversation history
+chatsRouter.get('/conversation/:conversationId/history', getConversation)
+
 
 //test chats storage 
 chatsRouter.get('/test', testDatabase);
