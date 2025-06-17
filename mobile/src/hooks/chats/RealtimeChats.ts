@@ -18,6 +18,7 @@ interface Message {
     user: boolean;
     content?: MessageContent;
     isLoading?: boolean;
+    metadata?: any; // Add this line to allow metadata property
 }
 
 interface MessageContent {
@@ -92,9 +93,8 @@ const useRealtimeChat = ({
     const flatListRef = useRef<FlatList>(null);
     const pendingUserMessageRef = useRef<string | null>(null);
     const aiResponseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    
-    // Add a ref to track if we're currently processing an AI response
     const isProcessingResponseRef = useRef<boolean>(false);
+    const processedMessageIds = useRef<Set<string>>(new Set()); // Track processed messages
 
     const { user: userDetails } = useSelector((state: RootState) => state.user);
     const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
@@ -103,25 +103,22 @@ const useRealtimeChat = ({
     // Memoize username to prevent recalculation
     const username = useMemo(() => userDetails?.username?.split(" ")[0], [userDetails?.username]);
 
-    // Helper function to clear AI responding state - FIXED VERSION
+    // Helper function to clear AI responding state
     const clearAIResponding = useCallback(() => {
         console.log('Clearing AI responding state');
-        
-        // Use functional updates to avoid stale state
+
         setIsAIResponding(prevState => {
             if (prevState) {
                 console.log('AI responding state cleared');
             }
             return false;
         });
-        
-        // Clear timeout
+
         if (aiResponseTimeoutRef.current) {
             clearTimeout(aiResponseTimeoutRef.current);
             aiResponseTimeoutRef.current = null;
         }
-        
-        // Reset processing flag
+
         isProcessingResponseRef.current = false;
     }, []);
 
@@ -149,6 +146,33 @@ const useRealtimeChat = ({
         }, 100);
     }, []);
 
+    // Helper function to transform Supabase message
+    const transformSupabaseMessage = useCallback((supabaseMessage: SupabaseMessage): Message => {
+        let content: MessageContent;
+        let text: string;
+
+        try {
+            const parsed = JSON.parse(supabaseMessage.content);
+            content = parsed;
+            text = parsed.text || supabaseMessage.content;
+        } catch {
+            content = { type: 'text', text: supabaseMessage.content };
+            text = supabaseMessage.content;
+        }
+
+        return {
+            id: supabaseMessage.id,
+            conversation_id: supabaseMessage.conversation_id,
+            user_id: supabaseMessage.user_id,
+            sender: supabaseMessage.sender,
+            text: text,
+            created_at: supabaseMessage.created_at,
+            timestamp: supabaseMessage.created_at,
+            user: supabaseMessage.sender === 'user',
+            content: content,
+        };
+    }, []);
+
     // Set up realtime subscription - FIXED VERSION
     useEffect(() => {
         if (!conversationId || !userDetails?.id) return;
@@ -173,51 +197,45 @@ const useRealtimeChat = ({
                     console.log('New message received via realtime:', payload.new);
 
                     const newMessage = payload.new as SupabaseMessage;
-                    const transformedMessage: Message = {
-                        id: newMessage.id,
-                        conversation_id: newMessage.conversation_id,
-                        user_id: newMessage.user_id,
-                        sender: newMessage.sender,
-                        text: newMessage.content,
-                        created_at: newMessage.created_at,
-                        timestamp: newMessage.created_at,
-                        user: newMessage.sender === 'user',
-                        content: (() => {
-                            try {
-                                return JSON.parse(newMessage.content);
-                            } catch {
-                                return { type: 'text', text: newMessage.content };
-                            }
-                        })(),
-                    };
+
+                    // Prevent duplicate processing
+                    if (processedMessageIds.current.has(newMessage.id)) {
+                        console.log('Message already processed, skipping:', newMessage.id);
+                        return;
+                    }
+                    processedMessageIds.current.add(newMessage.id);
+
+                    const transformedMessage = transformSupabaseMessage(newMessage);
 
                     setMessages(prev => {
-                        // Check if message already exists to prevent duplicates
+                        // Double-check for existing message to prevent duplicates
                         const exists = prev.some(msg => msg.id === transformedMessage.id);
-                        if (exists) return prev;
+                        if (exists) {
+                            console.log('Message already exists in state, skipping:', transformedMessage.id);
+                            return prev;
+                        }
 
-                        // For user messages, replace the temporary one we added
+                        let newMessages = [...prev];
+
+                        // For user messages, replace the temporary one
                         if (newMessage.sender === 'user' && pendingUserMessageRef.current) {
-                            const withoutTemp = prev.filter(msg => msg.id !== pendingUserMessageRef.current);
+                            console.log('Replacing temp user message:', pendingUserMessageRef.current);
+                            newMessages = newMessages.filter(msg => msg.id !== pendingUserMessageRef.current);
                             pendingUserMessageRef.current = null;
-                            return [...withoutTemp, transformedMessage];
                         }
 
                         // For AI messages, remove loading messages and clear AI responding state
                         if (newMessage.sender === 'assistant') {
-                            console.log('AI message received, clearing loading state');
-                            const withoutLoading = prev.filter(msg => !msg.isLoading);
-                            
-                            // IMPORTANT: Clear AI responding state immediately using setTimeout
-                            // to ensure it runs after the current render cycle
+                            console.log('AI message received, removing loading messages');
+                            newMessages = newMessages.filter(msg => !msg.isLoading);
+
+                            // Clear AI responding state
                             setTimeout(() => {
                                 clearAIResponding();
                             }, 0);
-                            
-                            return [...withoutLoading, transformedMessage];
                         }
 
-                        return [...prev, transformedMessage];
+                        return [...newMessages, transformedMessage];
                     });
 
                     // Scroll to bottom when new message arrives
@@ -236,23 +254,7 @@ const useRealtimeChat = ({
                     console.log('Message updated via realtime:', payload.new);
 
                     const updatedMessage = payload.new as SupabaseMessage;
-                    const transformedMessage: Message = {
-                        id: updatedMessage.id,
-                        conversation_id: updatedMessage.conversation_id,
-                        user_id: updatedMessage.user_id,
-                        sender: updatedMessage.sender,
-                        text: updatedMessage.content,
-                        created_at: updatedMessage.created_at,
-                        timestamp: updatedMessage.created_at,
-                        user: updatedMessage.sender === 'user',
-                        content: (() => {
-                            try {
-                                return JSON.parse(updatedMessage.content);
-                            } catch {
-                                return { type: 'text', text: updatedMessage.content };
-                            }
-                        })(),
-                    };
+                    const transformedMessage = transformSupabaseMessage(updatedMessage);
 
                     setMessages(prev =>
                         prev.map(msg =>
@@ -279,7 +281,7 @@ const useRealtimeChat = ({
                 realtimeChannelRef.current = null;
             }
         };
-    }, [conversationId, userDetails?.id, scrollToBottom, clearAIResponding]);
+    }, [conversationId, userDetails?.id, scrollToBottom, clearAIResponding, transformSupabaseMessage]);
 
     // Function to save message to Supabase
     const saveMessageToSupabase = useCallback(async (
@@ -292,7 +294,7 @@ const useRealtimeChat = ({
         }
 
         // Prepare content - if messageContent exists, stringify it, otherwise use messageText
-        const contentToSave = messageContent ? JSON.stringify(messageContent) : messageText;
+         const contentToSave = messageContent ? JSON.stringify(messageContent) : messageText;
 
         const { data, error } = await supabase
             .from('messages')
@@ -312,8 +314,39 @@ const useRealtimeChat = ({
 
         return data;
     }, [conversationId, userDetails?.id]);
+    
 
-    // Updated mutation with proper user message handling - FIXED VERSION
+    // Function to extract AI response text with better fallbacks
+    const extractAIResponseText = useCallback((aiResponse: any): string => {
+        // Try multiple possible response fields
+        const possibleFields = [
+            'response',
+            'message',
+            'content',
+            'text',
+            'answer',
+            'reply'
+        ];
+
+        for (const field of possibleFields) {
+            if (aiResponse[field] && typeof aiResponse[field] === 'string' && aiResponse[field].trim()) {
+                return aiResponse[field].trim();
+            }
+        }
+
+        // If aiResponse is a string itself
+        if (typeof aiResponse === 'string' && aiResponse.trim()) {
+            return aiResponse.trim();
+        }
+
+        // Log the full response for debugging
+        console.log('AI Response structure:', JSON.stringify(aiResponse, null, 2));
+
+        // Return a default message if no valid response found
+        return 'I apologize, but I was unable to generate a proper response. Please try again.';
+    }, []);
+
+    // Updated mutation with better error handling and response extraction
     const sendMessageMutation = useMutation({
         mutationFn: async ({ messageText, audioFile }: { messageText: string, audioFile?: UploadedAudioFile }) => {
             let finalMessage = messageText;
@@ -335,10 +368,7 @@ const useRealtimeChat = ({
                     text: messageText,
                 };
             }
-
-            // Save user message to Supabase
-            await saveMessageToSupabase(finalMessage, 'user', messageContent);
-
+            
             // If there's an audio file, transcribe it first
             if (audioFile && userDetails?.id) {
                 try {
@@ -367,7 +397,7 @@ const useRealtimeChat = ({
                 }
             }
 
-            // Send message to AI API with new structure
+            // Send message to AI API
             const response = await axios.post('/api/chats/send-message', {
                 message: finalMessage,
                 systemPrompt: systemPrompt,
@@ -378,20 +408,32 @@ const useRealtimeChat = ({
                 useDatabase: true,
             });
 
+            // Validate the AI response
+            if (!response.data) {
+                throw new Error('No response data received from AI service');
+            }
+
             return {
                 userMessage: finalMessage,
                 aiResponse: response.data,
                 originalAudioFile: audioFile,
-                conversationId: response.data.conversationId
+                conversationId: response.data.conversationId,
+                //savedUserMessage
             };
         },
         onMutate: ({ messageText, audioFile }) => {
             console.log('Mutation started, setting AI responding to true');
 
+            // Prevent multiple simultaneous requests
+            if (isProcessingResponseRef.current) {
+                console.log('Already processing, cancelling new request');
+                throw new Error('Already processing a request');
+            }
+
             // Set processing flag
             isProcessingResponseRef.current = true;
 
-            // 1. Add user message immediately to local state
+            // Create temporary user message
             const tempUserMessageId = `temp-user-${Date.now()}`;
             let messageContent: MessageContent | undefined;
             let finalMessage = messageText;
@@ -422,7 +464,7 @@ const useRealtimeChat = ({
                 content: messageContent,
             };
 
-            // 2. Add AI loading message
+            // Create loading message
             const loadingMessage: Message = {
                 id: `loading-${Date.now()}`,
                 text: '',
@@ -433,21 +475,19 @@ const useRealtimeChat = ({
                 isLoading: true
             };
 
-            // Store the temp user message ID to replace it later
+            // Store the temp user message ID
             pendingUserMessageRef.current = tempUserMessageId;
 
             // Add both messages to state
             setMessages(prev => [...prev, tempUserMessage, loadingMessage]);
             setIsAIResponding(true);
 
-            // Set a timeout to clear AI responding state as a fallback
-            // This ensures the loading state doesn't get stuck
+            // Set timeout as fallback
             aiResponseTimeoutRef.current = setTimeout(() => {
                 console.log('AI response timeout reached, clearing loading state');
                 clearAIResponding();
-            }, 30000); // 30 second timeout
+            }, 600000);
 
-            // Scroll to bottom
             scrollToBottom();
         },
         onSuccess: async (data) => {
@@ -458,15 +498,15 @@ const useRealtimeChat = ({
                 setConversationId(data.conversationId);
             }
 
-            // Save AI response to Supabase (will trigger realtime update)
             try {
-                const aiResponseText = data.aiResponse.response ||
-                    data.aiResponse.message ||
-                    data.aiResponse.content ||
-                    'I received your message.';
+                // Extract AI response text with better error handling
+                const aiResponseText = extractAIResponseText(data.aiResponse);
+
+                if (!aiResponseText || aiResponseText.trim() === '') {
+                    throw new Error('AI response is empty or invalid');
+                }
 
                 console.log('Saving AI response to Supabase:', aiResponseText);
-                await saveMessageToSupabase(aiResponseText, 'assistant');
 
                 if (data.aiResponse.metadata) {
                     console.log('AI Response Metadata:', data.aiResponse.metadata);
@@ -474,27 +514,22 @@ const useRealtimeChat = ({
 
             } catch (error) {
                 console.error('Failed to save AI response:', error);
-                // Add error message locally if saving fails
+
+                // Only handle errors manually since realtime won't trigger for failed saves
+                setMessages(prev => prev.filter(msg => !msg.isLoading));
+
                 const errorMessage: Message = {
                     id: `error-${Date.now()}`,
-                    text: 'Failed to save AI response. Please try again.',
+                    text: 'Failed to get a valid response from AI. Please try again.',
                     user: false,
                     created_at: new Date().toISOString(),
                     timestamp: new Date().toISOString(),
                     sender: 'assistant'
                 };
 
-                setMessages(prev => {
-                    const withoutLoading = prev.filter(msg => !msg.isLoading);
-                    return [...withoutLoading, errorMessage];
-                });
-
-                // Clear AI responding state on error
+                setMessages(prev => [...prev, errorMessage]);
                 clearAIResponding();
             }
-
-            // IMPORTANT: Don't clear isAIResponding here - let the realtime subscription handle it
-            // This prevents race conditions where we might clear the state before the message arrives
         },
         onError: (error: any) => {
             console.error('Failed to send message:', error);
@@ -505,7 +540,11 @@ const useRealtimeChat = ({
 
                 let errorText = 'Sorry, I encountered an error processing your message.';
 
-                // Handle specific error cases from your backend
+                // Handle specific error cases
+                if (error.message === 'Already processing a request') {
+                    return prev; // Don't add error message for this case
+                }
+
                 if (error.response?.data?.error) {
                     const backendError = error.response.data.error;
 
@@ -560,7 +599,7 @@ const useRealtimeChat = ({
         }
     });
 
-    // Updated handleSendMessage function - make it stable with useCallback
+    // Updated handleSendMessage function
     const handleSendMessage = useCallback(async (messageText: string, audioFile?: UploadedAudioFile) => {
         console.log('handleSendMessage called with:', { messageText, audioFile });
 
@@ -577,30 +616,25 @@ const useRealtimeChat = ({
         // Clear the input immediately
         setMessage('');
 
-        // Send to AI via mutation (this will also save to Supabase)
+        // Send to AI via mutation
         sendMessageMutation.mutate({ messageText, audioFile });
     }, [sendMessageMutation]);
 
-    // function to start new conversation
+    // Function to start new conversation
     const startNewConversation = useCallback(() => {
-        const newConvId = uniqueConvId
+        const newConvId = uniqueConvId;
         setConversationId(newConvId);
-        // Clear messages from UI
         setMessages([]);
-        // Clear any pending user message reference
         pendingUserMessageRef.current = null;
-        // Clear AI responding state
+        processedMessageIds.current.clear(); // Clear processed message IDs
         clearAIResponding();
     }, [uniqueConvId, clearAIResponding]);
 
-    // function to get conversation history from database
+    // Function to get conversation history from database
     const loadConversationHistory = useCallback(async (convId: string) => {
         try {
-            // You might want to add an endpoint to fetch conversation history
-            // const response = await axios.get(`/api/chat/conversation/${convId}`, {
-            //   params: { userId: userDetails?.id }
-            // });
-            // return response.data.history;
+            // Implementation for loading conversation history
+            console.log('Loading conversation history for:', convId);
         } catch (error) {
             console.error('Failed to load conversation history:', error);
         }
@@ -644,7 +678,7 @@ const useRealtimeChat = ({
             }, 30000);
 
             try {
-                // Call API directly without going through the mutation
+                // api call for sending message
                 const response = await axios.post('/api/chats/send-message', {
                     message: previousUserMessage.text,
                     systemPrompt: systemPrompt,
@@ -655,23 +689,53 @@ const useRealtimeChat = ({
                     useDatabase: true,
                 });
 
-                // Save AI response to Supabase (will trigger realtime update)
-                const aiResponseText = response.data.response ||
-                    response.data.message ||
-                    response.data.content ||
-                    'I received your message.';
+                // Extract and validate AI response
+                const aiResponseText = extractAIResponseText(response.data);
+
+                if (!aiResponseText || aiResponseText.trim() === '') {
+                    throw new Error('AI response is empty or invalid');
+                }
 
                 await saveMessageToSupabase(aiResponseText, 'assistant');
 
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Failed to regenerate message:', error);
+
+                // Determine a more specific error message
+                let errorText = 'Failed to regenerate response. Please try again.';
+
+                if (error.response) {
+                    // Error returned from server
+                    const status = error.response.status;
+                    if (status === 401) {
+                        errorText = 'You are not authorized to regenerate this response. Please log in again.';
+                    } else if (status === 403) {
+                        errorText = 'Access denied. You do not have permission to regenerate this response.';
+                    } else if (status === 404) {
+                        errorText = 'Resource not found. This conversation or message may have been deleted.';
+                    } else if (status === 429) {
+                        errorText = 'Too many requests. Please wait a moment and try again.';
+                    } else if (status >= 500) {
+                        errorText = 'Server error occurred. Please try again later.';
+                    } else {
+                        errorText = `Unexpected error (${status}). Please try again.`;
+                    }
+                } else if (error.request) {
+                    // No response received
+                    errorText = 'No response from server. Please check your internet connection.';
+                } else if (error.message && error.message.includes('timeout')) {
+                    errorText = 'The request timed out. Please try again in a few moments.';
+                } else if (error.message) {
+                    // Fallback to general error message
+                    errorText = `Error: ${error.message}`;
+                }
 
                 // Remove loading and add error message
                 setMessages(prev => {
                     const withoutLoading = prev.filter(msg => !msg.isLoading);
                     const errorMessage: Message = {
                         id: `error-${Date.now()}`,
-                        text: 'Failed to regenerate response. Please try again.',
+                        text: errorText,
                         user: false,
                         created_at: new Date().toISOString(),
                         timestamp: new Date().toISOString(),
@@ -683,7 +747,7 @@ const useRealtimeChat = ({
                 clearAIResponding();
             }
         }
-    }, [messages, systemPrompt, temperature, maxTokens, conversationId, userDetails?.id, saveMessageToSupabase, clearAIResponding]);
+    }, [messages, systemPrompt, temperature, maxTokens, conversationId, userDetails?.id, saveMessageToSupabase, clearAIResponding, extractAIResponseText]);
 
     // Prefill message if it's edited
     useEffect(() => {
@@ -714,10 +778,18 @@ const useRealtimeChat = ({
         }
     }, [isAIResponding, onLoadingChange]);
 
+    // Call onMessagesChange callback when messages change
+    useEffect(() => {
+        if (onMessagesChange) {
+            onMessagesChange(messages);
+        }
+    }, [messages, onMessagesChange]);
+
     // DEBUG: Log state changes
     useEffect(() => {
         console.log('isAIResponding changed:', isAIResponding);
-    }, [isAIResponding]);
+        console.log('Messages count:', messages.length);
+    }, [isAIResponding, messages.length]);
 
     // Return component API
     return {

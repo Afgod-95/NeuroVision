@@ -80,7 +80,7 @@ const storeMessage = async (
                 content_length: truncatedContent.length
             });
 
-            // Remove 'public.' prefix - Supabase client handles schema automatically
+            
             const { data, error } = await supabase
                 .from('messages')
                 .insert({
@@ -99,17 +99,6 @@ const storeMessage = async (
                     code: error.code,
                     attempt
                 });
-                
-                // Don't retry on validation errors or constraint violations
-                if (error.code === '23505' || error.message.includes('duplicate')) {
-                    console.log('Duplicate message detected, skipping...');
-                    return;
-                }
-                
-                // Don't retry on foreign key constraint errors
-                if (error.code === '23503') {
-                    throw new Error(`Foreign key constraint error: ${error.message}`);
-                }
                 
                 if (attempt === retries) {
                     throw new Error(`Database error after ${retries} attempts: ${error.message}`);

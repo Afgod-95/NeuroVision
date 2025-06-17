@@ -11,6 +11,8 @@ import {
   Dimensions,
   ActivityIndicator,
   Pressable,
+  Image,
+  Modal,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import Octicons from '@expo/vector-icons/Octicons';
@@ -22,6 +24,15 @@ import * as Clipboard from 'expo-clipboard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+type GeneratedImage = {
+  id: string;
+  uri: string;
+  prompt?: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+};
+
 type AIResponseProps = {
   message: string;
   loading?: boolean;
@@ -31,6 +42,8 @@ type AIResponseProps = {
   timestamp?: Date;
   tokensUsed?: number;
   responseTime?: number;
+  generatedImages?: GeneratedImage[];
+  onImageSave?: (imageUri: string) => void;
 };
 
 const AdvancedAIResponse = ({
@@ -42,6 +55,8 @@ const AdvancedAIResponse = ({
   timestamp = new Date(),
   tokensUsed,
   responseTime,
+  generatedImages = [],
+  onImageSave,
 }: AIResponseProps) => {
   const [isLiked, setIsLiked] = useState<'like' | 'dislike' | null>(null);
   const [showActions, setShowActions] = useState(false);
@@ -49,6 +64,8 @@ const AdvancedAIResponse = ({
   const [expandedBlocks, setExpandedBlocks] = useState<{ [key: string]: boolean }>({});
   const [showMetadata, setShowMetadata] = useState(false);
   const [mainCopied, setMainCopied] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
+  const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -106,6 +123,30 @@ const AdvancedAIResponse = ({
     }
   };
 
+  const handleImagePress = (image: GeneratedImage) => {
+    setSelectedImage(image);
+  };
+
+  const handleImageSave = async (imageUri: string) => {
+    try {
+      onImageSave?.(imageUri);
+      Alert.alert('Success', 'Image saved to gallery');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save image');
+    }
+  };
+
+  const handleImageShare = async (image: GeneratedImage) => {
+    try {
+      await Share.share({
+        url: image.uri,
+        title: image.prompt || 'Generated Image',
+      });
+    } catch (error) {
+      console.error('Error sharing image:', error);
+    }
+  };
+
   const extractCodeBlocks = (text: string) => {
     const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
     const blocks = [];
@@ -122,7 +163,6 @@ const AdvancedAIResponse = ({
 
     return blocks;
   };
-
 
   const CodeBlock = ({ code, language, blockId }: { code: string; language: string; blockId: string }) => {
     const isCopied = copiedStates[blockId];
@@ -169,10 +209,74 @@ const AdvancedAIResponse = ({
             </TouchableOpacity>
           </View>
         </View>
-        {/* code text */}
         <View style={styles.codeContainer}>
           <Text style={styles.codeText}>{displayCode}</Text>
         </View>
+      </View>
+    );
+  };
+
+  const ImageGallery = ({ images }: { images: GeneratedImage[] }) => {
+    if (images.length === 0) return null;
+
+    return (
+      <View style={styles.imageGalleryContainer}>
+        <View style={styles.imageGalleryHeader}>
+          <Feather name="image" size={16} color={Colors.dark.txtSecondary} />
+          <Text style={styles.imageGalleryTitle}>Generated Images</Text>
+          <Text style={styles.imageCount}>
+            {images.length} {images.length === 1 ? 'image' : 'images'}
+          </Text>
+        </View>
+        
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.imageScrollContainer}
+        >
+          {images.map((image, index) => (
+            <TouchableOpacity
+              key={image.id}
+              style={styles.imageContainer}
+              onPress={() => handleImagePress(image)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.imageWrapper}>
+                {imageLoadingStates[image.id] && (
+                  <View style={styles.imageLoadingOverlay}>
+                    <ActivityIndicator size="small" color="#fff" />
+                  </View>
+                )}
+                <Image
+                  source={{ uri: image.uri }}
+                  style={styles.generatedImage}
+                  onLoadStart={() => setImageLoadingStates(prev => ({ ...prev, [image.id]: true }))}
+                  onLoadEnd={() => setImageLoadingStates(prev => ({ ...prev, [image.id]: false }))}
+                  onError={() => setImageLoadingStates(prev => ({ ...prev, [image.id]: false }))}
+                />
+                <View style={styles.imageOverlay}>
+                  <TouchableOpacity
+                    style={styles.imageActionButton}
+                    onPress={() => handleImageShare(image)}
+                  >
+                    <Feather name="share-2" size={14} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.imageActionButton}
+                    onPress={() => handleImageSave(image.uri)}
+                  >
+                    <Feather name="download" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {image.prompt && (
+                <Text style={styles.imagePrompt} numberOfLines={2}>
+                  {image.prompt}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
     );
   };
@@ -252,13 +356,15 @@ const AdvancedAIResponse = ({
           </View>
         )}
 
-        {/* Content - Fixed: Removed nested ScrollView */}
+        {/* Generated Images */}
+        <ImageGallery images={generatedImages} />
+
+        {/* Content */}
         <Pressable>
           <View style={styles.contentContainer}>
             {renderCustomMarkdown(message)}
           </View>
         </Pressable>
-
 
         {/* Action Bar */}
         <View style={styles.actionBar}>
@@ -340,6 +446,62 @@ const AdvancedAIResponse = ({
           </Animated.View>
         )}
       </View>
+
+      {/* Image Modal */}
+      <Modal
+        visible={selectedImage !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackground}
+            activeOpacity={1}
+            onPress={() => setSelectedImage(null)}
+          >
+            <View style={styles.modalContent}>
+              {selectedImage && (
+                <>
+                  <Image
+                    source={{ uri: selectedImage.uri }}
+                    style={styles.modalImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.modalActionButton}
+                      onPress={() => handleImageShare(selectedImage)}
+                    >
+                      <Feather name="share-2" size={20} color="#fff" />
+                      <Text style={styles.modalActionText}>Share</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modalActionButton}
+                      onPress={() => handleImageSave(selectedImage.uri)}
+                    >
+                      <Feather name="download" size={20} color="#fff" />
+                      <Text style={styles.modalActionText}>Save</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modalActionButton}
+                      onPress={() => setSelectedImage(null)}
+                    >
+                      <Feather name="x" size={20} color="#fff" />
+                      <Text style={styles.modalActionText}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {selectedImage.prompt && (
+                    <View style={styles.modalPrompt}>
+                      <Text style={styles.modalPromptText}>{selectedImage.prompt}</Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </Animated.View>
   );
 };
@@ -412,6 +574,137 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
   },
+  // Image Gallery Styles
+  imageGalleryContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 16,
+  },
+  imageGalleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  imageGalleryTitle: {
+    color: Colors.dark.txtPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  imageCount: {
+    color: Colors.dark.txtSecondary,
+    fontSize: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  imageScrollContainer: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  imageContainer: {
+    width: 200,
+    marginRight: 12,
+  },
+  imageWrapper: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#2a2a2a',
+  },
+  generatedImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+  },
+  imageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  imageActionButton: {
+    width: 32,
+    height: 32,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePrompt: {
+    color: Colors.dark.txtSecondary,
+    fontSize: 12,
+    marginTop: 8,
+    lineHeight: 16,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBackground: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: SCREEN_WIDTH - 40,
+    alignItems: 'center',
+  },
+  modalImage: {
+    width: '100%',
+    maxHeight: '70%',
+    borderRadius: 12,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 16,
+  },
+  modalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  modalActionText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modalPrompt: {
+    marginTop: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    maxWidth: '100%',
+  },
+  modalPromptText: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   contentContainer: {
     padding: 16,
     minHeight: 60,
@@ -439,7 +732,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
   },
- 
   codeBlockContainer: {
     marginVertical: 12,
     borderRadius: 8,
@@ -499,9 +791,8 @@ const styles = StyleSheet.create({
   copiedText: {
     color: '#10b981',
   },
-  // Fixed: Simple container instead of ScrollView
   codeContainer: {
-    maxHeight: 300, // Constrain height to prevent excessive expansion
+    maxHeight: 300,
     backgroundColor: '#0d1117',
   },
   codeText: {

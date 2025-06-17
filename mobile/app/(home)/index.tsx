@@ -121,7 +121,7 @@ const Index = () => {
         isLoading: msg.isLoading
       });
     });
-    
+
     // Check for duplicate IDs
     const ids = messages.map(m => m.id);
     const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
@@ -174,7 +174,7 @@ const Index = () => {
   // SINGLE renderItem function - Remove all other render functions
   const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => {
     console.log(`Rendering message ${index}:`, { id: item.id, user: item.user, sender: item.sender });
-    
+
     if (item.user) {
       return (
         <MemoizedUserMessageBox
@@ -186,13 +186,13 @@ const Index = () => {
       );
     } else {
       const isLastMessage = index === messages.length - 1;
-      const shouldShowLoading = isLastMessage && 
-                               isAIResponding && 
-                               (item.text.trim() === '' || item.isLoading === true);
-      
+      const shouldShowLoading = isLastMessage &&
+        isAIResponding &&
+        (item.text.trim() === '' || item.isLoading === true);
+
       // Force loading to false if AI is not responding
       const finalLoadingState = isAIResponding ? shouldShowLoading : false;
-      
+
       return (
         <MemoizedAdvancedAIResponse
           message={item.text}
@@ -301,7 +301,7 @@ const Index = () => {
                     windowSize={10}
                     decelerationRate="normal"
                     scrollEventThrottle={16}
-                   // onContentSizeChange={onContentSizeChangeCallback}
+                    // onContentSizeChange={onContentSizeChangeCallback}
                     // Prevent unnecessary re-renders
                     getItemLayout={undefined}
                     // Add these props to help with duplicate prevention
