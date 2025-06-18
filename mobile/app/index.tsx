@@ -12,11 +12,7 @@ export default function index() {
       <Onboarding />
       <View style={styles.buttonContainer}>
         <Button
-          title={'Login'}
-          onPress={() => router.push('/(auth)')}
-        />
-        <Button
-          title={'Sign up'}
+          title={'Get Started'}
           onPress={() => router.push('/(auth)/signup')}
         />
       </View>

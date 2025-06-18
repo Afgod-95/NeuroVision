@@ -8,7 +8,8 @@ import {
   TextInputKeyPressEventData,
   Animated,
   Text,
-  TouchableOpacity
+  TouchableOpacity,
+  ActivityIndicator
 } from 'react-native';
 import { Colors } from '@/src/constants/Colors';
 
@@ -17,6 +18,9 @@ interface OTPInputProps {
   onCodeFilled?: (code: string) => void;
   onResendCode?: () => void;
   resendDelay?: number; // in seconds
+  isLoading?: boolean;
+  onSubmit?: (code: string) => void;
+  submitButtonText?: string;
 }
 
 // Helper for formatting time
@@ -93,7 +97,9 @@ function useOtpInput({
   onCodeFilled,
   onResendCode,
   resendDelay,
-}: Required<OTPInputProps>) {
+  onSubmit,
+}: Required<Pick<OTPInputProps, 'codeLength' | 'resendDelay'>> & 
+  Pick<OTPInputProps, 'onCodeFilled' | 'onResendCode' | 'onSubmit'>) {
   const {
     code,
     setCode,
@@ -124,15 +130,20 @@ function useOtpInput({
 
   useEffect(() => {
     const completeCode = code.join('');
-    if (completeCode.length === codeLength && !hasTriggered.current) {
+    if (completeCode.length === codeLength && !hasTriggered.current && onCodeFilled) {
       hasTriggered.current = true;
       onCodeFilled(completeCode);
-      Keyboard.dismiss();
     } else if (completeCode.length < codeLength) {
       hasTriggered.current = false;
     }
   }, [code, codeLength, onCodeFilled]);
 
+  const handleSubmit = useCallback(() => {
+    const completeCode = code.join('');
+    if (completeCode.length === codeLength && onSubmit) {
+      onSubmit(completeCode);
+    }
+  }, [code, codeLength, onSubmit]);
 
   const handleResendCode = useCallback(() => {
     if (canResend && onResendCode) {
@@ -187,6 +198,8 @@ function useOtpInput({
     }
   }, [code, setCode, inputRefs]);
 
+  const isCodeComplete = code.join('').length === codeLength;
+
   return {
     code,
     focusedIndex,
@@ -199,6 +212,8 @@ function useOtpInput({
     handleKeyPress,
     animateFocus,
     handleResendCode,
+    handleSubmit,
+    isCodeComplete,
   };
 }
 
@@ -211,6 +226,7 @@ const OtpFields: React.FC<{
   handleChange: (text: string, index: number) => void;
   handleKeyPress: (event: NativeSyntheticEvent<TextInputKeyPressEventData>, index: number) => void;
   animateFocus: (index: number, focused: boolean) => void;
+  isLoading?: boolean;
 }> = ({
   code,
   focusedIndex,
@@ -219,6 +235,7 @@ const OtpFields: React.FC<{
   handleChange,
   handleKeyPress,
   animateFocus,
+  isLoading = false,
 }) => (
     <View style={styles.inputContainer}>
       {code.map((digit, index) => (
@@ -235,7 +252,8 @@ const OtpFields: React.FC<{
             }}
             style={[
               styles.input,
-              focusedIndex === index && styles.inputFocused
+              focusedIndex === index && styles.inputFocused,
+              isLoading && styles.inputDisabled
             ]}
             value={digit}
             onChangeText={text => handleChange(text, index)}
@@ -251,10 +269,55 @@ const OtpFields: React.FC<{
             caretHidden={true}
             autoComplete="off"
             autoCorrect={false}
+            editable={!isLoading}
           />
         </Animated.View>
       ))}
     </View>
+  );
+
+// Subcomponent for submit button
+const OtpSubmitButton: React.FC<{
+  isCodeComplete: boolean;
+  isLoading?: boolean;
+  onSubmit: () => void;
+  submitButtonText?: string;
+}> = ({
+  isCodeComplete,
+  isLoading = false,
+  onSubmit,
+  submitButtonText = "Verify OTP",
+}) => (
+    <TouchableOpacity
+      style={[
+        styles.submitButton,
+        !isCodeComplete && styles.submitButtonDisabled,
+        isLoading && styles.submitButtonLoading
+      ]}
+      onPress={onSubmit}
+      disabled={!isCodeComplete || isLoading}
+      activeOpacity={0.8}
+    >
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator 
+            size="small" 
+            color={Colors.dark.txtPrimary} 
+            style={styles.loadingIndicator}
+          />
+          <Text style={[styles.submitButtonText, styles.loadingText]}>
+            Verifying...
+          </Text>
+        </View>
+      ) : (
+        <Text style={[
+          styles.submitButtonText,
+          !isCodeComplete && styles.submitButtonTextDisabled
+        ]}>
+          {submitButtonText}
+        </Text>
+      )}
+    </TouchableOpacity>
   );
 
 // Subcomponent for resend/counter
@@ -263,21 +326,28 @@ const OtpResend: React.FC<{
   handleResendCode: () => void;
   timeLeft: number;
   formatTime: (time: number) => string;
+  isLoading?: boolean;
 }> = ({
   canResend,
   handleResendCode,
   timeLeft,
   formatTime,
+  isLoading = false,
 }) => (
     <View style={styles.resendContainer}>
       {canResend ? (
         <TouchableOpacity
-          style={styles.resendButton}
+          style={[styles.resendButton, isLoading && styles.resendButtonDisabled]}
           onPress={handleResendCode}
           activeOpacity={0.7}
+          disabled={isLoading}
         >
-          <Text style={[styles.resendText, { color: Colors.dark.txtPrimary }]}>
-            Didn&apos;t receive code? <Text style={styles.resendText}>Resend</Text>
+          <Text style={[
+            styles.resendText, 
+            { color: Colors.dark.txtPrimary },
+            isLoading && styles.resendTextDisabled
+          ]}>
+            Didn&apos;t receive code? <Text style={[styles.resendText, isLoading && styles.resendTextDisabled]}>Resend</Text>
           </Text>
         </TouchableOpacity>
       ) : (
@@ -295,12 +365,16 @@ const OTPInput: React.FC<OTPInputProps> = ({
   onCodeFilled,
   onResendCode,
   resendDelay = 600,
+  isLoading = false,
+  onSubmit,
+  submitButtonText = "Verify OTP",
 }) => {
   const otp = useOtpInput({
     codeLength,
-    onCodeFilled: onCodeFilled ?? (() => { }),
-    onResendCode: onResendCode ?? (() => { }),
+    onCodeFilled,
+    onResendCode,
     resendDelay,
+    onSubmit,
   });
 
   return (
@@ -313,12 +387,22 @@ const OTPInput: React.FC<OTPInputProps> = ({
         handleChange={otp.handleChange}
         handleKeyPress={otp.handleKeyPress}
         animateFocus={otp.animateFocus}
+        isLoading={isLoading}
       />
+      
+      <OtpSubmitButton
+        isCodeComplete={otp.isCodeComplete}
+        isLoading={isLoading}
+        onSubmit={otp.handleSubmit}
+        submitButtonText={submitButtonText}
+      />
+      
       <OtpResend
         canResend={otp.canResend}
         handleResendCode={otp.handleResendCode}
         timeLeft={otp.timeLeft}
         formatTime={otp.formatTime}
+        isLoading={isLoading}
       />
     </View>
   );
@@ -362,6 +446,56 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  inputDisabled: {
+    opacity: 0.6,
+  },
+  submitButton: {
+    backgroundColor: Colors.dark.link,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    minWidth: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.dark.link,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  submitButtonDisabled: {
+    backgroundColor: Colors.dark.bgSecondary,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  submitButtonLoading: {
+    backgroundColor: Colors.dark.link,
+    opacity: 0.8,
+  },
+  submitButtonText: {
+    color: Colors.dark.txtPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Manrope-medium',
+  },
+  submitButtonTextDisabled: {
+    color: Colors.dark.txtSecondary,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingIndicator: {
+    marginRight: 8,
+  },
+  loadingText: {
+    color: Colors.dark.txtPrimary,
+  },
   resendContainer: {
     marginTop: 16,
     alignItems: 'center',
@@ -370,11 +504,17 @@ const styles = StyleSheet.create({
   resendButton: {
     padding: 8,
   },
+  resendButtonDisabled: {
+    opacity: 0.6,
+  },
   resendText: {
     color: Colors.dark.link,
     fontSize: 14,
     fontWeight: '600',
     fontFamily: 'Manrope-medium'
+  },
+  resendTextDisabled: {
+    color: Colors.dark.txtSecondary,
   },
   countdownContainer: {
     padding: 8,

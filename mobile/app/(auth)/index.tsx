@@ -12,6 +12,8 @@ import { useLoginUserMutation } from '@/src/hooks/auth/AuthMutation';
 import { useDispatch } from 'react-redux';
 import axios from 'axios';
 import { login } from '@/src/redux/slices/authSlice';
+import * as Device from "expo-device";
+import Constants from "expo-constants";
 
 
 const { width } = Dimensions.get('screen')
@@ -56,7 +58,14 @@ const Index = () => {
         }
         try {
             setIsLoading(true);
-            const response = await axios.post('/api/auth/login',  user);
+            const deviceData = {
+                browser: Constants?.platform?.web ? navigator.userAgent : 'Expo',
+                device_name: Device.modelName || 'Unknown',
+            };
+            const response = await axios.post('/api/auth/login', {
+                user,
+                deviceData
+            });
             if (response.status === 200){
                 dispatch(login(response.data.user));
                 Alert.alert('Success', response.data.message, [

@@ -1,6 +1,6 @@
 import OTPInput from '@/src/components/textInputs/OtpInput'
 import { Colors } from '@/src/constants/Colors'
-import { useVerifyEmailMutation, useResendOtpMutation } from '@/src/hooks/auth/AuthMutation'
+import { useVerifyEmailMutation, useResendOtpMutation, useVerifyPasswordResetOTPMutation } from '@/src/hooks/auth/AuthMutation'
 import { router, useLocalSearchParams } from 'expo-router'
 import React, { useCallback } from 'react'
 import {
@@ -14,28 +14,127 @@ import {
     View
 } from 'react-native'
 
-const EmailVerification = () => {
-   const { userId, email } = useLocalSearchParams(); 
-   console.log('Fetched userId:', userId);
-    const emailVerificationMutation = useVerifyEmailMutation();
-    const resendOtpMutation = useResendOtpMutation();
-   
-    //otp codes will be sent automatically when the digits are entered
-    const handleOTPVerification = useCallback((otpCode: string) => {
-        emailVerificationMutation.mutate({ userId: userId, otpCode });
-        console.log(otpCode)
-    
-    }, [userId, emailVerificationMutation]);
+interface OTPScreenProps {
+    type?: 'email_verification' | 'password_reset';
+    userId: string;
+    email?: string;
+}
 
-    // Handle resend code
+const EmailVerification = () => {
+    const params = useLocalSearchParams();
+    
+    // Get props from navigation params
+    const type = params.type as 'email_verification' | 'password_reset' || 'email_verification';
+    const userId = params.userId as string;
+    const email = params.email as string;
+
+    console.log('Fetched userId:', userId);
+    console.log('Verification type:', type);
+    
+    // Initialize mutations
+    const emailVerificationMutation = useVerifyEmailMutation();
+    const passwordResetOTPMutation = useVerifyPasswordResetOTPMutation();
+    const resendOtpMutation = useResendOtpMutation();
+
+    // Choose the appropriate mutation based on type
+    const currentMutation = type === 'password_reset' ? passwordResetOTPMutation : emailVerificationMutation;
+
+    // Handle OTP verification
+    const handleOTPVerification = useCallback((otpCode: string) => {
+        if (type === 'password_reset') {
+            // For password reset mutation and navigation
+            passwordResetOTPMutation.mutate(
+                { userId: userId, otpCode },
+                {
+                    onSuccess: (data) => {
+                        Alert.alert('Success', 'OTP verified successfully!', [
+                            {
+                                text: 'OK',
+                                onPress: () => {
+                                    router.push({
+                                        pathname: '/auth/reset-password',
+                                        params: { userId }
+                                    });
+                                }
+                            }
+                        ]);
+                    },
+                    onError: (error) => {
+                        Alert.alert('Error', error.message || 'Invalid OTP. Please try again.');
+                    }
+                }
+            );
+        } else {
+            // For email verification
+            emailVerificationMutation.mutate(
+                { userId: userId, otpCode },
+                {
+                    onSuccess: (data) => {
+                        Alert.alert('Success', data.message, [
+                            {
+                                text: 'OK',
+                                onPress: () => {
+                                    setTimeout(() => {
+                                        router.push(`/(auth)`);
+                                    }, 500); 
+                                }
+                            }
+                        ]);
+                    },
+                    onError: (error) => {
+                        Alert.alert('Error', error.message || 'Invalid OTP. Please try again.');
+                    }
+                }
+            );
+        }
+        console.log('OTP Code:', otpCode, 'Type:', type);
+    }, [userId, type, emailVerificationMutation, passwordResetOTPMutation]);
+
+    // Handle resend code with type-specific logic
     const handleResendCode = useCallback(() => {
         if (typeof email === 'string') {
-            resendOtpMutation.mutate({ email });
+            if (type === 'password_reset') {
+                // Call password reset OTP resend
+                resendOtpMutation.mutate(
+                    { email, type: 'password_reset' },
+                    {
+                        onSuccess: () => {
+                            Alert.alert('Success', 'Password reset code sent successfully!');
+                        },
+                        onError: (error) => {
+                            Alert.alert('Error', 'Failed to resend code. Please try again.');
+                        }
+                    }
+                );
+            } else {
+                // Call email verification OTP resend
+                resendOtpMutation.mutate(
+                    { email, type: 'email_verification' },
+                    {
+                        onSuccess: () => {
+                            Alert.alert('Success', 'Verification code sent successfully!');
+                        },
+                        onError: (error) => {
+                            Alert.alert('Error', 'Failed to resend code. Please try again.');
+                        }
+                    }
+                );
+            }
         } else {
-            // Optionally handling missing email case
             Alert.alert('Error', 'No email address found to resend code.');
         }
-    }, [email, resendOtpMutation]);
+    }, [email, type, resendOtpMutation]);
+
+    // Get dynamic content based on type
+    const getScreenTitle = () => {
+        return type === 'password_reset' ? 'Reset Password' : 'Email Verification';
+    };
+
+    const getScreenSubtitle = () => {
+        return type === 'password_reset' 
+            ? 'Enter the 6-digit code sent to your email to reset your password'
+            : 'Enter the 6-digit code sent to your email address';
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: Colors.dark.bgPrimary }]}>
@@ -45,16 +144,17 @@ const EmailVerification = () => {
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
                     <View style={{ marginHorizontal: 20, justifyContent: 'center', alignItems: 'center' }}>
-                        <Text style={styles.title}>Email Verification</Text>
+                        <Text style={styles.title}>{getScreenTitle()}</Text>
                         <Text style={styles.subtitle}>
-                            Enter the 6-digit code sent to your email address
+                            {getScreenSubtitle()}
                         </Text>
-
+                        
                         <OTPInput
                             codeLength={6}
                             onCodeFilled={handleOTPVerification}
                             onResendCode={handleResendCode}
                             resendDelay={300}
+                            isLoading={currentMutation.isPending}
                         />
                     </View>
                     <Image
@@ -63,8 +163,6 @@ const EmailVerification = () => {
                     />
                 </KeyboardAvoidingView>
             </TouchableWithoutFeedback>
-
-
         </View>
     )
 }
@@ -87,7 +185,7 @@ const styles = StyleSheet.create({
         color: Colors.dark.txtSecondary,
         textAlign: 'center',
         fontFamily: 'Manrope-medium',
-        marginBottom: 30,
+        marginBottom: 20,
     },
 
     image: {
@@ -100,8 +198,3 @@ const styles = StyleSheet.create({
 });
 
 export default EmailVerification;
-
-
-
-
-
