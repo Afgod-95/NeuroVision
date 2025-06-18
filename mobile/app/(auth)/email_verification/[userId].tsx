@@ -52,7 +52,7 @@ const EmailVerification = () => {
                                 text: 'OK',
                                 onPress: () => {
                                     router.push({
-                                        pathname: '/auth/reset-password',
+                                        pathname: '/(auth)/reset-password',
                                         params: { userId }
                                     });
                                 }

@@ -317,14 +317,14 @@ const resetPasswordRequest = async (req: Request, res: Response) => {
 
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, email')
+      .select('id, email, username, password, is_email_verified, created_at')
       .eq('email', email)
       .single();
 
     if (error || !user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    const otpResult = await sendOtp(email, true);
+    const otpResult = await sendOtp(user, true);
     if (otpResult.error) {
       console.error('Otp error:', otpResult.error);
       return res.status(500).json({ error: 'Failed to send otp' });

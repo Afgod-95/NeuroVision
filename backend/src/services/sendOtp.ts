@@ -53,7 +53,7 @@ const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
         mailOptions.subject = 'Forgot Password';
         mailOptions.html = `
         <p>Hello ${user.username},</p>
-        <p>Your NeuroVision verification code is:</p>
+        <p>Your reset password verification code is:</p>
         <h2>${otp}</h2>
         <p>This code will expire in 10 minutes.</p>
         <br />

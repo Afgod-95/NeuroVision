@@ -100,7 +100,7 @@ export const useVerifyEmailMutation = () => {
 export const useForgotPasswordMutation = () => {
     return useMutation({
         mutationFn: async ({ email }: { email: string}) => {
-            const result = await axios.post('/api/auth/forgot-password', {
+            const result = await axios.post('/api/auth/reset-password-request', {
                 email
             });
             console.log(result.data)
