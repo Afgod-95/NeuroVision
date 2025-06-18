@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import supabase from '../../lib/supabase';
 import { sendOtp } from '../../services/sendOtp';
-import { 
-    checkUserExists,
-    validateRegisterFields,
-    createUser
- } from '../../helpers/userHelpers';
+import {
+  checkUserExists,
+  validateRegisterFields,
+  createUser
+} from '../../helpers/userHelpers';
 import { comparePassword, hashPassword } from '../../utils/encryptedPassword';
 import { getDevicesLocation_info, isDeviceNew, saveDevice, sendNewDeviceEmail } from '../../services/devicesLoginDetector';
 import { updateDeviceLastAccessed } from '../../helpers/lastAccessedDevice';
@@ -21,29 +21,29 @@ const registerUser = async (req: Request, res: Response) => {
     if (userExistsResult.error || userExistsResult.exists) return;
 
     const newUser = await createUser(username, email, password, res);
-    
+
     if (!newUser) {
-        return res.status(500).json({ error: 'Failed to create user' });
+      return res.status(500).json({ error: 'Failed to create user' });
     };
 
     const otpResult = await sendOtp(newUser);
 
     if (otpResult.error) {
-        console.log(otpResult)
+      console.log(otpResult)
       return res.status(500).json({ error: 'Failed to send OTP', details: otpResult.error });
     }
 
-    if(otpResult.success){
+    if (otpResult.success) {
       return res.status(201).json({
-      message: `User created successfully. \n
+        message: `User created successfully. \n
         A 6 digit otp has been sent to your mail. Please check and verify.
       `,
-      otp: otpResult,
-      userId: newUser.id,
-      email: newUser.email
-    });
+        otp: otpResult,
+        userId: newUser.id,
+        email: newUser.email
+      });
     }
-  
+
   } catch (error) {
     console.error('Error registering user:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -61,7 +61,7 @@ const resendOtp = async (req: Request, res: Response) => {
         error: "Email not found"
       })
     }
-    
+
     // Fetch the full user object by email
     const { data: user, error } = await supabase
       .from('users')
@@ -76,15 +76,15 @@ const resendOtp = async (req: Request, res: Response) => {
     const otpResult = await sendOtp(user);
 
     if (otpResult.error) {
-        console.log(otpResult)
+      console.log(otpResult)
       return res.status(500).json({ error: 'Failed to send OTP', details: otpResult.error });
     }
 
-    if(otpResult.success){
+    if (otpResult.success) {
       return res.status(201).json({
-      message: `A 6 digit otp has been sent to your mail. Please re-check and verify again.`,
-      otp: otpResult,
-    });
+        message: `A 6 digit otp has been sent to your mail. Please re-check and verify again.`,
+        otp: otpResult,
+      });
     }
 
   } catch (error) {
@@ -168,7 +168,7 @@ const loginUser = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Invalid email or password' });
     }
 
-    
+
     const isPasswordValid = await comparePassword({ password, hashedPassword: user.password });
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid password' });
@@ -187,7 +187,7 @@ const loginUser = async (req: Request, res: Response) => {
     console.log('Getting device info...');
     const getDeviceInfo = await getDevicesLocation_info(req);
     console.log('Device info received:', getDeviceInfo);
-    
+
     // Check if user has any known devices
     const { data: existingDevices } = await supabase
       .from('known_devices')
@@ -195,10 +195,10 @@ const loginUser = async (req: Request, res: Response) => {
       .eq('user_id', user.id);
 
     const isFirstLogin = !existingDevices || existingDevices.length === 0;
-    
+
     if (await isDeviceNew(user.id, getDeviceInfo)) {
       console.log('New device detected');
-      
+
       // Only send email if it's NOT the first login
       if (!isFirstLogin) {
         console.log('Sending new device email...');
@@ -206,7 +206,7 @@ const loginUser = async (req: Request, res: Response) => {
       } else {
         console.log('First login detected - skipping email notification');
       }
-      
+
       // Always save the device (whether first login or not)
       await saveDevice(user.id, getDeviceInfo);
     } else {
@@ -305,14 +305,17 @@ const resetUserPassword = async (req: Request, res: Response) => {
 };
 
 
-//reset password request
+
+// 1. Add request tracking to prevent duplicate calls
+const activeRequests = new Map<string, boolean>();
+
 const resetPasswordRequest = async (req: Request, res: Response) => {
   try {
     console.log('Reset password request received');
     console.log('Request body:', req.body);
     console.log('Request method:', req.method);
     console.log('Request path:', req.path);
-    
+
     const { email } = req.body;
 
     if (!email) {
@@ -320,40 +323,54 @@ const resetPasswordRequest = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    console.log('Looking for user with email:', email);
-
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, email, username, password, is_email_verified, created_at')
-      .eq('email', email)
-      .single();
-
-    if (error || !user) {
-      console.log('User not found:', error);
-      return res.status(404).json({ error: 'User not found' });
+    // Check if there's already an active request for this email
+    const requestKey = `reset_${email}`;
+    if (activeRequests.get(requestKey)) {
+      console.log('Duplicate request detected for email:', email);
+      return res.status(429).json({ error: 'Request already in progress' });
     }
 
-    console.log('User found, sending OTP...');
-    
-    const otpResult = await sendOtp(user, true);
-    if (otpResult.error) {
-      console.error('OTP error:', otpResult.error);
-      return res.status(500).json({ error: 'Failed to send OTP' });
-    }
+    // Mark this request as active
+    activeRequests.set(requestKey, true);
 
-    console.log('OTP sent successfully');
-    
-    res.status(200).json({ 
-      message: 'OTP sent successfully',
-      otpResult,
-      user: { id: user.id, email: user.email, username: user.username } // Don't send password
-    });
+    try {
+      console.log('Looking for user with email:', email);
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, email, username, password, is_email_verified, created_at')
+        .eq('email', email)
+        .single();
+
+      if (error || !user) {
+        console.log('User not found:', error);
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      console.log('User found, sending OTP...');
+
+      const otpResult = await sendOtp(user, true);
+      if (otpResult.error) {
+        console.error('OTP error:', otpResult.error);
+        return res.status(500).json({ error: 'Failed to send OTP' });
+      }
+
+      console.log('OTP sent successfully');
+
+      res.status(200).json({
+        message: 'OTP sent successfully',
+        otpResult,
+        user: { id: user.id, email: user.email, username: user.username }
+      });
+    } finally {
+      // Always clear the active request flag
+      activeRequests.delete(requestKey);
+    }
   } catch (error) {
     console.error('Reset request error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
-
 
 // LOGOUT USER
 const logoutUser = async (req: Request, res: Response) => {

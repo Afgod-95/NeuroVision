@@ -59,14 +59,13 @@ export const useVerifyPasswordResetOTPMutation = () => {
     });
 };
 
-//Resend OTP Mutation to handle both types
 export const useResendOtpMutation = () => {
     return useMutation({
         mutationFn: async ({ email, type = 'email_verification' }: { email: string; type?: 'email_verification' | 'password_reset' }) => {
             const endpoint = type === 'password_reset' 
-                ? '/api/auth/resend-verification-otp' 
+                ? '/api/auth/resend-password-reset-otp'
                 : '/api/auth/resend-verification-otp';
-            
+                        
             const result = await axios.post(endpoint, { email });
             return result.data;
         },
@@ -130,7 +129,9 @@ export const useForgotPasswordMutation = () => {
                 console.error('Unknown error:', error.message);
                 Alert.alert('Error', 'An unexpected error occurred.');
             }
-        }
+        },
+        retry: false, 
+        retryDelay: 0,
     });
 };
 

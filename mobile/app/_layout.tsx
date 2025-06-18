@@ -13,7 +13,7 @@ import { Buffer } from 'buffer';
 global.Buffer = global.Buffer || Buffer;
 
 // Axios config
-axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl;
+axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl || 'http://localhost:3000';
 axios.defaults.headers.post['Content-Type'] = 'application/json';
 axios.defaults.withCredentials = true;
 

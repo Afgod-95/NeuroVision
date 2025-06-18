@@ -15,8 +15,20 @@ export const transporter = nodemailer.createTransport({
     }
 })
 
-const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
+const sentOtps = new Map<string, number>();
+
+export const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
     console.log('sendOtp called with:', { userId: user.id, email: user.email, isForgotPassword });
+    
+    // Check if OTP was sent recently (within last 30 seconds)
+    const otpKey = `${user.id}_${isForgotPassword ? 'forgot' : 'verify'}`;
+    const lastSent = sentOtps.get(otpKey);
+    const now = Date.now();
+    
+    if (lastSent && (now - lastSent) < 30000) { 
+        console.log('OTP recently sent, skipping duplicate');
+        return { success: false, error: 'OTP already sent recently' };
+    }
     
     const otp = generateOtp();
     console.log('Generated OTP:', otp);
@@ -45,7 +57,7 @@ const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
 
     //send email 
     const mailOptions = {
-        from: `"NeuroVision" <${process.env.EMAIL_USER}>`, // Fixed typo: "NueroVision" -> "NeuroVision"
+        from: `"NeuroVision" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: 'OTP Verification',
         html: `
@@ -74,6 +86,15 @@ const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
     try {
         await transporter.sendMail(mailOptions);
         console.log(`OTP ${otp} sent successfully to ${user.email}`);
+        
+        // Record the time this OTP was sent
+        sentOtps.set(otpKey, now);
+        
+        // Clean up old entries (optional)
+        setTimeout(() => {
+            sentOtps.delete(otpKey);
+        }, 60000); // Clean up after 1 minute
+        
         return { success: true, error: null };
     } catch (error) {
         console.error('Email sending failed:', error);
@@ -84,4 +105,4 @@ const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
     }
 }
 
-export { sendOtp };
+

@@ -21,6 +21,7 @@ const authRouter = express.Router();
 authRouter.post('/register', registerUser as RequestHandler);
 authRouter.post('/verify-email', verifyEmailOtp as RequestHandler);
 authRouter.post('/resend-verification-otp', resendOtp as RequestHandler);
+authRouter.post('/resend-password-reset-otp', resendOtp as RequestHandler);
 authRouter.post('/login', loginUser as RequestHandler);
 authRouter.post('/logout', logoutUser);
 authRouter.post('/reset-password-request', resetPasswordRequest as RequestHandler);
