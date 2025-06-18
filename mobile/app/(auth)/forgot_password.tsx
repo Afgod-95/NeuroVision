@@ -1,28 +1,53 @@
+import { useEffect } from 'react';
 import AuthWrapper from '@/src/components/wrapper/AuthWrapper';
 import Button from '@/src/components/button/CustomButton';
 import AnimatedTextInput from '@/src/components/textInputs/Input';
 import { Colors } from '@/src/constants/Colors';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
+import { useForgotPasswordMutation } from '@/src/hooks/auth/AuthMutation';
+import { emailRegex } from '@/src/constants/Regex';
 
 const { width } = Dimensions.get('screen')
 
 interface UserProps {
     email: string;
-    password: string;
 }
 
 const ForgotPassword = () => {
     const [user, setUser] = useState<UserProps>({
-        email: '',
-        password: '',
+        email: ''
     })
+
+    const [isDisabled, setIsDisabled] = useState<boolean>(false)
 
     const handleTextInputChange = (name: string, value: string) => {
         setUser({ ...user, [name]: value });
     };
+
+    useEffect(() => {
+            const isFilled = user.email.trim();
+            setIsDisabled(!isFilled);
+        }, [user]);
+
+    const forgotPasswordMutation = useForgotPasswordMutation();
+
+    //disable email input container if there its correct email or not
+
+    const handleForgotPassword = async () => {
+        if (!emailRegex.test(user.email)){
+            Alert.alert('Please enter a valid email')
+            return
+        }
+        forgotPasswordMutation.mutate({ email: user.email });
+        const data = await forgotPasswordMutation.mutateAsync(user)
+        router.push('/(auth)/email_verification/[userId]', {
+            userId: data?.userId,
+            email: data?.email,
+        })
+    }
 
     return (
         <AuthWrapper>
@@ -52,27 +77,10 @@ const ForgotPassword = () => {
                 
                 <Button
                     title='Reset'
-                    disabled={false}
-                    loading={false}
-                    onPress={() => router.push('/(auth)/email_verification')}
+                    disabled={isDisabled}
+                    loading={forgotPasswordMutation.isPending}
+                    onPress={handleForgotPassword}
                 />
-                <Animated.View
-                    style={{
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        flexDirection: 'row',
-                        flexWrap: 'wrap',
-                        gap: 5,
-                        marginTop: 40,
-                        marginBottom: 25
-                    }}
-                    entering={FadeInUp.duration(600).delay(200).springify()}
-                >
-                    <Text style={styles.forgotPasswordText}>Remembered your account?</Text>
-                    <TouchableOpacity onPress={() => router.push('/(auth)')}>
-                        <Text style={[styles.forgotPasswordText, { color: Colors.dark.link }]}>Login</Text>
-                    </TouchableOpacity>
-                </Animated.View>
             </Animated.View>
         </AuthWrapper>
     )

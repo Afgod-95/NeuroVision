@@ -20,6 +20,7 @@ import dummyMessages from '@/src/utils/dummyMessage';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
+import { router } from 'expo-router';
 
 
 const { width } = Dimensions.get('window');
@@ -55,6 +56,12 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const clearSearch = () => {
         setSearchQuery('')
     }
+
+    //open seetings screen
+    const openSettings = () => {
+        router.push('/(home)/settings');
+    }
+
 
     useEffect(() => {
         Animated.timing(sidebarWidth, {
@@ -157,8 +164,9 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
             >
                 <View style={styles.contentContainer}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>NeuraVision</Text>
-
+                        {/* Hide tittle if search bar is open */}
+                        {!searchbarVisible && <Text style={styles.title}>NeuraVision</Text>}
+                        
                         {/* Hide search icon if search bar is open */}
                         {!searchbarVisible && (
                             <TouchableOpacity onPress={searchbarOpen}>
@@ -184,8 +192,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                 />
                
                 <View style={styles.bottom}>
-                    <TouchableOpacity style={styles.bottomContent}>
-                        <TouchableOpacity style={styles.userCont}>
+                    <TouchableOpacity style={styles.bottomContent} onPress={openSettings}>
+                        <TouchableOpacity style={styles.userCont} onPress={openSettings}>
                             <View
                               
                                 style={styles.userAccountButton}
@@ -194,8 +202,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                             </View>
                             <Text style={styles.userText}>{username}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style = {{opacity: 0.5 }}>
-                            <Feather name="more-horizontal" size={24} color={Colors.dark.borderColor} />
+                        <TouchableOpacity style = {{opacity: 0.5 }} onPress={openSettings}>
+                            <Feather name="more-horizontal" size={24} color={Colors.dark.txtSecondary} />
                         </TouchableOpacity>
                     </TouchableOpacity>
                 </View>

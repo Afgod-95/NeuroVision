@@ -1,20 +1,30 @@
-import { View, Text } from 'react-native'
-import React from 'react'
-import { Stack } from 'expo-router'
+import { Stack, router } from 'expo-router';
+import { Colors } from '@/src/constants/Colors';
+import { Text, TouchableOpacity } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const _layout = () => {
+
   return (
-   <Stack>
+    <Stack>
       <Stack.Screen
         name="index"
         options={{
-          headerShown:false,
-          presentation: "card",
+          headerShown: false,
+          presentation: 'card',
         }}
       />
-      
-   </Stack>
-  )
-}
 
-export default _layout
+      <Stack.Screen
+        name="settings"
+        options={{
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+
+    </Stack>
+  );
+};
+
+export default _layout;

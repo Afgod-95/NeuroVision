@@ -19,11 +19,13 @@ import ChatInput from '@/src/components/chatUI/ChatInput';
 import CustomSideBar from '@/src/components/chatUI/CustomSideBar';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import UserMessageBox, { MessagePreview, MessageContent } from '@/src/components/chatUI/UserMessageBox';
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
 import { UploadedAudioFile as OriginalUploadedAudioFile } from '@/src/components/chatUI/ChatInput';
 import { uniqueConvId } from '@/src/constants/generateConversationId';
 import useRealtimeChat from '@/src/hooks/chats/RealtimeChats';
+import Loading from '@/src/components/Loaders/Loading';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = OriginalUploadedAudioFile & {
@@ -34,7 +36,7 @@ type UploadedAudioFile = OriginalUploadedAudioFile & {
 interface Message {
   id: string;
   conversation_id?: string;
-  user_id?: number;
+  user_id?: string; 
   sender: 'user' | 'assistant' | 'system';
   text: string;
   content?: MessageContent;
@@ -246,9 +248,7 @@ const Index = () => {
   ), [username]);
 
   const loadingContent = useMemo(() => (
-    <View style={styles.contentArea}>
-      <Text style={styles.subText}>Loading messages...</Text>
-    </View>
+    <Loading />
   ), []);
 
   return (
@@ -280,7 +280,7 @@ const Index = () => {
 
                 {/* Optional: Add new conversation button */}
                 <TouchableOpacity onPress={startNewConversation}>
-                  <Text style={styles.newChatButton}>New</Text>
+                  <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
                 </TouchableOpacity>
               </View>
 
@@ -378,22 +378,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   menuIcon: {
-    width: 30,
-    height: 30,
+    width: 24,
+    height: 24,
   },
   headerTitle: {
     fontFamily: 'Manrope-ExtraBold',
-    fontSize: 28,
+    fontSize: 20,
     color: Colors.dark.txtPrimary,
   },
-  newChatButton: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 16,
-    color: Colors.dark.button,
-    textDecorationLine: 'underline',
-  },
+  
   welcomeText: {
-    fontSize: 24,
+    fontSize: 20,
     color: Colors.dark.button,
     textAlign: 'center',
     fontFamily: 'Manrope-ExtraBold',

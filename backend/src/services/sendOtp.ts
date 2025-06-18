@@ -16,7 +16,7 @@ export const transporter = nodemailer.createTransport({
 })
 
 //send otp 
-const sendOtp = async (user: User) => {
+const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
     const otp = generateOtp();
     // otp expires at 5 minutes
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -46,6 +46,19 @@ const sendOtp = async (user: User) => {
         <h2>${otp}</h2>
         <p>This code will expire in 10 minutes.</p>
     `,
+    }
+
+    //forgot password 
+    if (isForgotPassword) { 
+        mailOptions.subject = 'Forgot Password';
+        mailOptions.html = `
+        <p>Hello ${user.username},</p>
+        <p>Your NeuroVision verification code is:</p>
+        <h2>${otp}</h2>
+        <p>This code will expire in 10 minutes.</p>
+        <br />
+        <p>Ignore this message if you did not initiate this process.</p>
+    `
     }
 
     try{

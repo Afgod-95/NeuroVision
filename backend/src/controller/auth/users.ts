@@ -324,10 +324,15 @@ const resetPasswordRequest = async (req: Request, res: Response) => {
     if (error || !user) {
       return res.status(404).json({ error: 'User not found' });
     }
-
-    // TODO: Send reset link or code here
-    res.status(200).json({
-      message: 'Password reset instructions sent to email (not implemented)'
+    const otpResult = await sendOtp(email, true);
+    if (otpResult.error) {
+      console.error('Otp error:', otpResult.error);
+      return res.status(500).json({ error: 'Failed to send otp' });
+    }
+    res.status(200).json({ message: 
+      'Otp sent successfully',
+      otp: otpResult,
+      userId: user.id
     });
   } catch (error) {
     console.error('Reset request error:', error);
