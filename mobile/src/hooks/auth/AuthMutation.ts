@@ -96,27 +96,45 @@ export const useVerifyEmailMutation = () => {
 
 
 
-//forgot password
 export const useForgotPasswordMutation = () => {
     return useMutation({
         mutationFn: async ({ email }: { email: string}) => {
-            const result = await axios.post('/api/auth/reset-password-request', {
-                email
-            });
-            console.log(result.data)
-            return result.data
+            console.log('Sending request to reset password with email:', email);
+            
+            try {
+                const result = await axios.post('/api/auth/reset-password-request', { email });
+                console.log('Response received:', result.data);
+                return result.data;
+            } catch (error) {
+                console.error('Axios error:', error);
+                throw error;
+            }
         },
         onSuccess: (data) => {
-            Alert.alert('Success', data.message);
+            console.log('Success data:', data);
+            Alert.alert('Success', data.message || 'OTP sent successfully');
         },
-        onError: (error) => {
-            console.log('Error sending otp', error.message);
-            Alert.alert('An error occured whilst resetting password');
+        onError: (error: any) => {
+            console.error('Mutation error:', error);
+            
+            if (error.response) {
+                console.error('Error status:', error.response.status);
+                console.error('Error data:', error.response.data);
+                
+                const errorMessage = error.response.data?.error || 'Failed to send reset code';
+                Alert.alert('Error', errorMessage);
+            } else if (error.request) {
+                console.error('Network error:', error.request);
+                Alert.alert('Error', 'Network error. Please check your connection.');
+            } else {
+                console.error('Unknown error:', error.message);
+                Alert.alert('Error', 'An unexpected error occurred.');
+            }
         }
     });
-}
+};
 
-export const DeleteUserAccountMutation = () => {
+export const useDeleteUserAccountMutation = () => {
     return useMutation({
         mutationFn: async ({ id } : DeleteUserAccountMutationVariables)  => {
             const response = await axios.delete(`/api/auth/delete-account/${id}`)

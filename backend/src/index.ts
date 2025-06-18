@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { rateLimiter, validateApiKey } from './middlewares/validation';
-import router from './routes/authRouter';
 import chatsRouter from './routes/chatsRouter';
+import authRouter from './routes/authRouter';
 
 
 // Create an Express app
@@ -22,7 +22,7 @@ app.use(rateLimiter(60000, 100))
 //api key validation
 app.use('/api/chats/', validateApiKey);
 
-app.use(router);
+app.use('/api/auth', authRouter);
 
 app.use('/api/chats', chatsRouter);
 

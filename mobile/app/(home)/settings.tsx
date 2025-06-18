@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Colors } from '@/src/constants/Colors';
 import SettingItem from '@/src/components/settings/SettingItem';
-import DeleteUserAccountMutation from '@/src/hooks/auth/AuthMutation';
+import { useDeleteUserAccountMutation } from '@/src/hooks/auth/AuthMutation';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { useDispatch } from 'react-redux';
@@ -68,7 +68,7 @@ const SettingsScreen: React.FC = () => {
         },
     });
 
-    const deleteUserAccount = DeleteUserAccountMutation();
+    const deleteUserAccount = useDeleteUserAccountMutation();
 
     //platform compatibility
     const isAndroid = Platform.OS === 'android';

@@ -305,15 +305,22 @@ const resetUserPassword = async (req: Request, res: Response) => {
 };
 
 
-
-// RESET PASSWORD REQUEST
+//reset password request
 const resetPasswordRequest = async (req: Request, res: Response) => {
   try {
+    console.log('Reset password request received');
+    console.log('Request body:', req.body);
+    console.log('Request method:', req.method);
+    console.log('Request path:', req.path);
+    
     const { email } = req.body;
 
     if (!email) {
+      console.log('No email provided in request');
       return res.status(400).json({ error: 'Email is required' });
     }
+
+    console.log('Looking for user with email:', email);
 
     const { data: user, error } = await supabase
       .from('users')
@@ -322,17 +329,24 @@ const resetPasswordRequest = async (req: Request, res: Response) => {
       .single();
 
     if (error || !user) {
+      console.log('User not found:', error);
       return res.status(404).json({ error: 'User not found' });
     }
+
+    console.log('User found, sending OTP...');
+    
     const otpResult = await sendOtp(user, true);
     if (otpResult.error) {
-      console.error('Otp error:', otpResult.error);
-      return res.status(500).json({ error: 'Failed to send otp' });
+      console.error('OTP error:', otpResult.error);
+      return res.status(500).json({ error: 'Failed to send OTP' });
     }
-    res.status(200).json({ message: 
-      'Otp sent successfully',
-      otp: otpResult,
-      userId: user.id
+
+    console.log('OTP sent successfully');
+    
+    res.status(200).json({ 
+      message: 'OTP sent successfully',
+      otpResult,
+      user: { id: user.id, email: user.email, username: user.username } // Don't send password
     });
   } catch (error) {
     console.error('Reset request error:', error);

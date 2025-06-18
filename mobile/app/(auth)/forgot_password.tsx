@@ -34,19 +34,28 @@ const ForgotPassword = () => {
 
     const forgotPasswordMutation = useForgotPasswordMutation();
 
-    //disable email input container if there its correct email or not
+    
 
     const handleForgotPassword = async () => {
         if (!emailRegex.test(user.email)){
             Alert.alert('Please enter a valid email')
             return
         }
-        forgotPasswordMutation.mutate({ email: user.email });
-        const data = await forgotPasswordMutation.mutateAsync(user)
-        router.push('/(auth)/email_verification/[userId]', {
-            userId: data?.userId,
-            email: data?.email,
-        })
+        try {   
+             forgotPasswordMutation.mutate(user);
+            const data = await forgotPasswordMutation.mutateAsync(user)
+            console.log(user)
+            console.log(data)
+            router.push('/(auth)/email_verification/[userId]', {
+                userId: data?.user.id,
+                email: data?.user.email,
+            })
+            
+        
+        } catch (error: any) {
+            console.log(error.message)
+        }
+       
     }
 
     return (

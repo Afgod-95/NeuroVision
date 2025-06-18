@@ -15,11 +15,17 @@ export const transporter = nodemailer.createTransport({
     }
 })
 
-//send otp 
 const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
+    console.log('sendOtp called with:', { userId: user.id, email: user.email, isForgotPassword });
+    
     const otp = generateOtp();
+    console.log('Generated OTP:', otp);
+    
     // otp expires at 5 minutes
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    
+    console.log('Upserting OTP to database...');
+    
     //upsert otp and overwrite new one 
     const { error } = await supabase
     .from('otp_verifications')
@@ -28,50 +34,51 @@ const sendOtp = async (user: User, isForgotPassword: boolean = false) => {
         otp_code: otp,
         expires_at: expiresAt.toISOString(),
         is_verified: false
-    },{ onConflict: 'user_id' });
+    }, { onConflict: 'user_id' });
 
     if (error) {
-        console.error('Failed to send otp', error);
+        console.error('Database error while saving OTP:', error);
         return { success: false, error };
     }
 
+    console.log('OTP saved to database successfully');
+
     //send email 
     const mailOptions = {
-        from: `"NueroVision" <${process.env.EMAIL_USER}>`,
+        from: `"NeuroVision" <${process.env.EMAIL_USER}>`, // Fixed typo: "NueroVision" -> "NeuroVision"
         to: user.email,
         subject: 'OTP Verification',
         html: `
         <p>Hello ${user.username},</p>
         <p>Your NeuroVision verification code is:</p>
         <h2>${otp}</h2>
-        <p>This code will expire in 10 minutes.</p>
+        <p>This code will expire in 5 minutes.</p>
     `,
     }
 
     //forgot password 
     if (isForgotPassword) { 
-        mailOptions.subject = 'Forgot Password';
+        mailOptions.subject = 'Reset Password - NeuroVision';
         mailOptions.html = `
         <p>Hello ${user.username},</p>
         <p>Your reset password verification code is:</p>
         <h2>${otp}</h2>
-        <p>This code will expire in 10 minutes.</p>
+        <p>This code will expire in 5 minutes.</p>
         <br />
-        <p>Ignore this message if you did not initiate this process.</p>
+        <p>If you did not request this password reset, please ignore this email.</p>
     `
     }
 
-    try{
-        await transporter.sendMail(mailOptions);
-        console.log(`Otp ${otp} sent to user`, user.email);
-        return { success: true, error: null };
-    }
+    console.log('Sending email to:', user.email);
 
-    catch (error){
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`OTP ${otp} sent successfully to ${user.email}`);
+        return { success: true, error: null };
+    } catch (error) {
+        console.error('Email sending failed:', error);
         if (error instanceof Error) {
-            console.error('Failed to send otp', error.message);
-        } else {
-            console.error('Failed to send otp', error);
+            console.error('Email error message:', error.message);
         }
         return { success: false, error };
     }
