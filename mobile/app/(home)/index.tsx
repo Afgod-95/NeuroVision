@@ -26,6 +26,7 @@ import { UploadedAudioFile as OriginalUploadedAudioFile } from '@/src/components
 import { uniqueConvId } from '@/src/constants/generateConversationId';
 import useRealtimeChat from '@/src/hooks/chats/RealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
+import { useFetchMessagesMutation } from '@/src/hooks/message/GetMessagesMutation';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = OriginalUploadedAudioFile & {
@@ -85,7 +86,6 @@ const Index = () => {
     handleRegenerate,
     handleEditMessageCallback,
     startNewConversation,
-    loadConversationHistory,
     setMessage,
     setIsRecording,
     setIsSidebarVisible,
@@ -145,7 +145,7 @@ const Index = () => {
     setIsSidebarVisible(true);
   }, [setIsSidebarVisible]);
 
-  // Message input handlers
+   // Message input handlers
   const handleMessageOnChange = useCallback((text: string) => {
     setMessage(text);
   }, [setMessage]);

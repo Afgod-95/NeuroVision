@@ -126,23 +126,20 @@ const storeMessage = async (
 /**
  * Retrieve conversation history from Supabase with pagination
  */
-const getConversationHistory = async (
-    conversationId: string,
+export const getConversationHistory = async (
     userId: number,
     limit: number = 50,
     offset: number = 0
 ): Promise<GeminiMessage[]> => {
     try {
-        // Validate UUID format
-        if (!isValidUUID(conversationId)) {
-            console.warn(`Invalid conversation_id format: ${conversationId}`);
-            return [];
+        
+        if (!userId) {
+            throw new Error('User ID is required');
         }
 
         const { data, error } = await supabase
             .from('messages')
             .select('id, sender, content, created_at')
-            .eq('conversation_id', conversationId)
             .eq('user_id', userId)
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1);
@@ -237,7 +234,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
         // Get conversation history from database if using database mode
         let history = conversationHistory || [];
         if (useDatabase && conversationId && userId) {
-            history = await getConversationHistory(conversationId, userId);
+            history = await getConversationHistory(userId);
         }
 
         // Limit history length to prevent token overflow
@@ -369,7 +366,7 @@ export const sendStreamingMessage = async (req: Request, res: Response): Promise
         // Get conversation history from database if using database mode
         let history = conversationHistory || [];
         if (useDatabase && conversationId && userId) {
-            history = await getConversationHistory(conversationId, userId);
+            history = await getConversationHistory(userId);
         }
 
         // Store user message if using database (async)
@@ -508,9 +505,9 @@ export const generateCompletion = async (req: Request, res: Response): Promise<v
  */
 export const getConversation = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { conversationId, userId, limit = 50, offset = 0 } = req.query;
+        const { userId, limit = 50, offset = 0 } = req.query;
 
-        if (!conversationId || !userId) {
+        if (!userId) {
             res.status(400).json({
                 success: false,
                 error: 'conversationId and userId are required'
@@ -518,16 +515,7 @@ export const getConversation = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        if (!isValidUUID(conversationId as string)) {
-            res.status(400).json({
-                success: false,
-                error: 'Invalid conversationId format. Must be a valid UUID.'
-            });
-            return;
-        }
-
         const history = await getConversationHistory(
-            conversationId as string, 
             parseInt(userId as string), 
             parseInt(limit as string),
             parseInt(offset as string)
@@ -535,7 +523,6 @@ export const getConversation = async (req: Request, res: Response): Promise<void
 
         res.json({
             success: true,
-            conversationId,
             history,
             metadata: {
                 messageCount: history.length,
@@ -553,50 +540,6 @@ export const getConversation = async (req: Request, res: Response): Promise<void
     }
 };
 
-/**
- * Get all conversations for a user
- */
-export const getUserConversations = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { userId, limit = 20, offset = 0 } = req.query;
-
-        if (!userId) {
-            res.status(400).json({
-                success: false,
-                error: 'userId is required'
-            });
-            return;
-        }
-
-        const { data, error } = await supabase
-            .from('conversation_summaries')
-            .select('*')
-            .eq('user_id', parseInt(userId as string))
-            .order('last_message_at', { ascending: false })
-            .range(parseInt(offset as string), parseInt(offset as string) + parseInt(limit as string) - 1);
-
-        if (error) {
-            throw error;
-        }
-
-        res.json({
-            success: true,
-            conversations: data || [],
-            metadata: {
-                count: data?.length || 0,
-                limit: parseInt(limit as string),
-                offset: parseInt(offset as string),
-                timestamp: new Date().toISOString()
-            }
-        });
-    } catch (error: any) {
-        console.error('Get user conversations error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to fetch user conversations'
-        });
-    }
-};
 
 /**
  * Delete conversation endpoint
@@ -662,92 +605,6 @@ export const getModels = async (req: Request, res: Response): Promise<void> => {
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to fetch models'
-        });
-    }
-};
-
-/**
- * Health check endpoint
- */
-export const healthCheck = async (req: Request, res: Response): Promise<void> => {
-    try {
-        // Test Gemini AI service
-        const testResponse = await geminiService.sendMessage("Hello, please respond with 'AI service is working'", []);
-        
-        // Test database connection
-        const { error: dbError } = await supabase
-            .from('messages')
-            .select('id')
-            .limit(1);
-
-        const dbStatus = dbError ? 'Database connection failed' : 'Database connection successful';
-
-        res.json({
-            success: true,
-            status: 'Services operational',
-            services: {
-                geminiAI: {
-                    status: 'operational',
-                    testResponse: testResponse.substring(0, 100) + '...',
-                    model: "gemini-2.0-flash-exp"
-                },
-                database: {
-                    status: dbError ? 'error' : 'operational',
-                    message: dbStatus,
-                    error: dbError?.message
-                }
-            },
-            timestamp: new Date().toISOString()
-        });
-    } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            status: 'Service error',
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-};
-
-/**
- * Test database connection endpoint
- */
-export const testDatabase = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const testConversationId = uuidv4();
-        const testUserId = 12; // Use a valid user ID that exists in your users table
-        const testMessage = "Test message for database connectivity";
-
-        // Try to insert a test message
-        await storeMessage(testConversationId, testUserId, 'user', testMessage);
-        
-        // Try to retrieve it
-        const history = await getConversationHistory(testConversationId, testUserId);
-        
-        // Clean up test data
-        const { error: cleanupError } = await supabase
-            .from('messages')
-            .delete()
-            .eq('conversation_id', testConversationId);
-
-        res.json({
-            success: true,
-            message: 'Database test passed',
-            testResults: {
-                insertSuccess: true,
-                retrieveSuccess: history.length > 0,
-                cleanupSuccess: !cleanupError,
-                messagesFound: history.length
-            },
-            timestamp: new Date().toISOString()
-        });
-    } catch (error: any) {
-        console.error('Database test error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            message: 'Database test failed',
-            timestamp: new Date().toISOString()
         });
     }
 };

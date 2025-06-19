@@ -5,6 +5,7 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import supabase from '@/src/supabase/supabaseClient';
 import axios from 'axios';
 import { useMessageOptions } from '../UserMessageOptions';
+import { useFetchMessagesMutation } from '../message/GetMessagesMutation';
 
 // Types
 interface Message {
@@ -132,6 +133,7 @@ const useRealtimeChat = ({
 
     // Initialize with sample messages for demonstration
     useEffect(() => {
+
         if (conversationId && userDetails?.id) {
             const sampleMessages: Message[] = [];
             setMessages(sampleMessages);
@@ -630,11 +632,14 @@ const useRealtimeChat = ({
         clearAIResponding();
     }, [uniqueConvId, clearAIResponding]);
 
+    
     // Function to get conversation history from database
-    const loadConversationHistory = useCallback(async (convId: string) => {
+    const loadConversationHistoryMutation = useFetchMessagesMutation();
+    const loadConversationHistory = useCallback(async () => {
         try {
-            // Implementation for loading conversation history
-            console.log('Loading conversation history for:', convId);
+            loadConversationHistoryMutation.mutate(userDetails?.id)
+            const { history } = await loadConversationHistoryMutation.data;
+            setMessages(history);
         } catch (error) {
             console.error('Failed to load conversation history:', error);
         }

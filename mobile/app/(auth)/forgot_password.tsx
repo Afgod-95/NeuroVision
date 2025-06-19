@@ -44,11 +44,14 @@ const ForgotPassword = () => {
         try {   
             forgotPasswordMutation.mutate(user);
             const data = await forgotPasswordMutation.mutateAsync(user)
-            console.log(user)
-            console.log(data)
-            router.push('/(auth)/email_verification/[userId]', {
-                userId: data?.user?.Id,
-                email: data?.user?.email,
+            const { user: userDetails } = data;
+            router.push({
+                pathname: '/(auth)/email_verification/[userId]',
+                params: {
+                    userId: userDetails.id,
+                    email: userDetails.email,
+                    type: 'password_reset'
+                }
             })
             
         

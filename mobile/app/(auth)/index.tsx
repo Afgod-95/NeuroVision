@@ -63,8 +63,9 @@ const Index = () => {
                 device_name: Device.modelName || 'Unknown',
             };
             const response = await axios.post('/api/auth/login', {
-                user,
-                deviceData
+                email: user.email,
+                password: user.password,
+                //deviceData
             });
             if (response.status === 200){
                 dispatch(login(response.data.user));

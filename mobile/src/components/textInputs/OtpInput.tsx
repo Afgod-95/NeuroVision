@@ -286,7 +286,7 @@ const OtpSubmitButton: React.FC<{
   isCodeComplete,
   isLoading = false,
   onSubmit,
-  submitButtonText = "Verify OTP",
+  submitButtonText = "Verify",
 }) => (
     <TouchableOpacity
       style={[
@@ -450,12 +450,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButton: {
-    backgroundColor: Colors.dark.link,
-    paddingHorizontal: 32,
+    backgroundColor: Colors.dark.button,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 16,
-    minWidth: 140,
+   width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: Colors.dark.link,
@@ -468,22 +468,23 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   submitButtonDisabled: {
-    backgroundColor: Colors.dark.bgSecondary,
+    backgroundColor: Colors.dark.txtSecondary,
+    color: '#000',
     shadowOpacity: 0,
     elevation: 0,
   },
   submitButtonLoading: {
-    backgroundColor: Colors.dark.link,
+    backgroundColor: Colors.dark.button,
     opacity: 0.8,
   },
   submitButtonText: {
     color: Colors.dark.txtPrimary,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     fontFamily: 'Manrope-medium',
   },
   submitButtonTextDisabled: {
-    color: Colors.dark.txtSecondary,
+    color: '#000',
   },
   loadingContainer: {
     flexDirection: 'row',
