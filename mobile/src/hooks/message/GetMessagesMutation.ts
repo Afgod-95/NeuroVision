@@ -11,7 +11,6 @@ export const useFetchMessagesMutation = () => {
                     offset: 0,
                 },
             });
-            console.log(response.data)
             return response.data;
         },
 

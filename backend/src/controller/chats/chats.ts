@@ -1,15 +1,19 @@
-// controllers/geminiController.ts
+
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import { ChatRequest, GeminiMessage } from "../../types/gemini";
 import supabase from "../../lib/supabase";
 import { v4 as uuidv4 } from 'uuid';
+import { getConversationSummary } from "./chats.conversation.summaries";
+import { isValidUUID } from "../../middlewares/isValidUUID";
+import { generateConversationSummary } from "../../helpers/chatSummary/AISummary";
+
 
 // Initialize Gemini service with enhanced system prompt for coding assistance
 const geminiService = new GeminiAIService({
     apiKey: process.env.GEMINI_API_KEY || "",
     model: "gemini-2.0-flash-exp",
-    maxTokens: 8192, 
+    maxTokens: 8192,
     temperature: 0.7
 });
 
@@ -35,14 +39,8 @@ When debugging:
 
 Always be helpful, accurate, and provide actionable solutions.`;
 
-/**
- * Validate UUID format with improved regex
- */
-export const isValidUUID = (uuid: string): boolean => {
-    if (!uuid || typeof uuid !== 'string') return false;
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
-};
+
+
 
 /**
  * Store message in Supabase with enhanced error handling and retry logic
@@ -80,7 +78,7 @@ const storeMessage = async (
                 content_length: truncatedContent.length
             });
 
-            
+
             const { data, error } = await supabase
                 .from('messages')
                 .insert({
@@ -99,11 +97,11 @@ const storeMessage = async (
                     code: error.code,
                     attempt
                 });
-                
+
                 if (attempt === retries) {
                     throw new Error(`Database error after ${retries} attempts: ${error.message}`);
                 }
-                
+
                 // Wait before retry (exponential backoff)
                 await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
                 continue;
@@ -116,7 +114,7 @@ const storeMessage = async (
                 console.error('Error in storeMessage after all retries:', error);
                 throw error;
             }
-            
+
             // Wait before retry
             await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
@@ -132,14 +130,14 @@ export const getConversationHistory = async (
     offset: number = 0
 ): Promise<GeminiMessage[]> => {
     try {
-        
+
         if (!userId) {
             throw new Error('User ID is required');
         }
 
         const { data, error } = await supabase
             .from('messages')
-            .select('id, sender, content, created_at')
+            .select('*')
             .eq('user_id', userId)
             .order('created_at', { ascending: true })
             .range(offset, offset + limit - 1);
@@ -168,23 +166,26 @@ const getOrCreateConversationId = (conversationId?: string): string => {
     if (conversationId && isValidUUID(conversationId)) {
         return conversationId;
     }
-    
+
     // Generate new UUID if not provided or invalid
     const newId = uuidv4();
     console.log('Generated new conversation ID:', newId);
     return newId;
 };
 
+
+
+
 /**
  *chat message handler with better error handling and response formatting
  */
 export const sendChatMessage = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { 
-            message, 
-            conversationHistory, 
-            systemPrompt, 
-            temperature, 
+        const {
+            message,
+            conversationHistory,
+            systemPrompt,
+            temperature,
             maxTokens,
             conversationId: rawConversationId,
             userId,
@@ -247,7 +248,8 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
         const enhancedSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
         // Store user message if using database (async, don't block response)
-        if (useDatabase && conversationId && userId) {
+        const shouldStoreUserMessage = useDatabase && conversationId && userId;
+        if (shouldStoreUserMessage) {
             storeMessage(conversationId, userId, 'user', message).catch(error => {
                 console.error('Failed to store user message:', error);
             });
@@ -271,12 +273,29 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             });
         }
 
-        // Prepare updated conversation history for response (not stored in DB)
+        // Prepare updated conversation history for response 
         const updatedHistory = [
             ...history,
             { role: 'user' as const, content: message },
             { role: 'assistant' as const, content: response }
         ];
+
+
+
+        // Handle AI conversation summary (async, don't block response)
+        if (useDatabase && conversationId && userId) {
+            const conversationText = updatedHistory
+                .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+                .join('\n\n');
+
+            const customPrompt = `Please summarize the following conversation:\n\n${conversationText}\n\nSUMMARY:`;
+
+            generateConversationSummary(conversationId, userId, customPrompt)
+                .then(() => console.log("Summary generated"))
+                .catch(err => console.error("Summary generation error:", err));
+
+
+        }
 
         // Enhanced response format
         res.json({
@@ -289,13 +308,14 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                 historyLength: updatedHistory.length,
                 responseLength: response.length,
                 model: "gemini-2.0-flash-exp",
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                summaryProcessed: useDatabase // Indicates if summary processing was attempted
             }
         });
 
     } catch (error: any) {
         console.error('Chat message error:', error);
-        
+
         // Provide more specific error messages
         let errorMessage = 'Failed to send message to Gemini AI';
         let statusCode = 500;
@@ -324,108 +344,16 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
     }
 };
 
-/**
- * Enhanced streaming message with better error handling
- */
-export const sendStreamingMessage = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { 
-            message, 
-            conversationHistory,
-            conversationId: rawConversationId,
-            userId,
-            useDatabase = false,
-            systemPrompt,
-            temperature,
-            maxTokens
-        }: ChatRequest & {
-            conversationId?: string;
-            userId?: number;
-            useDatabase?: boolean;
-        } = req.body;
-
-        if (!message || typeof message !== 'string' || message.trim().length === 0) {
-            res.status(400).json({
-                success: false,
-                error: 'Message is required and must be a non-empty string'
-            });
-            return;
-        }
-
-        if (useDatabase && !userId) {
-            res.status(400).json({
-                success: false,
-                error: 'userId is required when useDatabase is true'
-            });
-            return;
-        }
-
-        // Generate or validate conversation ID
-        const conversationId = useDatabase ? getOrCreateConversationId(rawConversationId) : rawConversationId;
-
-        // Get conversation history from database if using database mode
-        let history = conversationHistory || [];
-        if (useDatabase && conversationId && userId) {
-            history = await getConversationHistory(userId);
-        }
-
-        // Store user message if using database (async)
-        if (useDatabase && conversationId && userId) {
-            storeMessage(conversationId, userId, 'user', message).catch(error => {
-                console.error('Failed to store user message:', error);
-            });
-        }
-
-        // Set headers for streaming
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-
-        let fullResponse = '';
-
-        await geminiService.sendMessageStream(
-            message,
-            history,
-            (chunk: string) => {
-                res.write(chunk);
-                fullResponse += chunk;
-            },
-        );
-
-        // Store assistant response if using database (async)
-        if (useDatabase && conversationId && userId && fullResponse) {
-            storeMessage(conversationId, userId, 'assistant', fullResponse).catch(error => {
-                console.error('Failed to store assistant message:', error);
-            });
-        }
-
-        res.end();
-    } catch (error: any) {
-        console.error('Streaming message error:', error);
-        
-        if (!res.headersSent) {
-            res.status(500).json({
-                success: false,
-                error: error.message || 'Failed to stream message from Gemini AI'
-            });
-        } else {
-            res.write(`\n\nError: ${error.message}`);
-            res.end();
-        }
-    }
-};
 
 /**
  * Generate a text completion with enhanced prompting
  */
 export const generateCompletion = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { 
-            prompt, 
-            temperature, 
-            maxTokens, 
+        const {
+            prompt,
+            temperature,
+            maxTokens,
             type = 'general',
             conversationId: rawConversationId,
             userId,
@@ -478,6 +406,16 @@ export const generateCompletion = async (req: Request, res: Response): Promise<v
             storeMessage(conversationId, userId, 'assistant', response).catch(error => {
                 console.error('Failed to store completion:', error);
             });
+
+            // Handle AI conversation summary for completion (async)
+            const updatedHistory = [
+                { role: 'user' as const, content: prompt },
+                { role: 'assistant' as const, content: response }
+            ];
+
+            generateConversationSummary(conversationId, userId, updatedHistory.toString()).catch(error => {
+                console.error('Failed to handle conversation summary:', error);
+            });
         }
 
         res.json({
@@ -516,7 +454,7 @@ export const getConversation = async (req: Request, res: Response): Promise<void
         }
 
         const history = await getConversationHistory(
-            parseInt(userId as string), 
+            parseInt(userId as string),
             parseInt(limit as string),
             parseInt(offset as string)
         );

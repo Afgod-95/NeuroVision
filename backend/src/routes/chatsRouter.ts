@@ -1,13 +1,12 @@
 import express, { Request, RequestHandler, Response } from 'express';
-import { generateCompletion, getConversation, getModels, sendChatMessage, sendStreamingMessage } from '../controller/chats/chats';
+import { generateCompletion, getConversation, getModels, sendChatMessage } from '../controller/chats/chats';
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
 import { getMessages } from '../controller/messages/messages';
-import { bulkGenerateSummaries, generateConversationSummary, getConversationSummary } from '../controller/chats/chats.conversation.summaries';
+import { bulkGenerateSummaries,  getConversationSummary } from '../controller/chats/chats.conversation.summaries';
 
 
 const chatsRouter = express.Router()
 // Chat endpoints
-chatsRouter.post('/stream', sendStreamingMessage);
 chatsRouter.post('/send-message', sendChatMessage);
 
 // Completion endpoint
@@ -38,7 +37,6 @@ chatsRouter.get('/conversation/:conversationId/history', getConversation)
 
 
 // New summary routes
-chatsRouter.post('/conversations/summary/generate', generateConversationSummary);
 chatsRouter.get('/conversations/summary', getConversationSummary);
 //chatsRouter.put('/conversations/summary', updateConversationSummary);
 chatsRouter.post('/conversations/summaries/bulk-generate', bulkGenerateSummaries);

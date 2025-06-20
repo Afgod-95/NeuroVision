@@ -296,7 +296,7 @@ const useRealtimeChat = ({
         }
 
         // Prepare content - if messageContent exists, stringify it, otherwise use messageText
-         const contentToSave = messageContent ? JSON.stringify(messageContent) : messageText;
+        const contentToSave = messageContent ? JSON.stringify(messageContent) : messageText;
 
         const { data, error } = await supabase
             .from('messages')
@@ -316,7 +316,7 @@ const useRealtimeChat = ({
 
         return data;
     }, [conversationId, userDetails?.id]);
-    
+
 
     // Function to extract AI response text with better fallbacks
     const extractAIResponseText = useCallback((aiResponse: any): string => {
@@ -370,7 +370,7 @@ const useRealtimeChat = ({
                     text: messageText,
                 };
             }
-            
+
             // If there's an audio file, transcribe it first
             if (audioFile && userDetails?.id) {
                 try {
@@ -632,18 +632,32 @@ const useRealtimeChat = ({
         clearAIResponding();
     }, [uniqueConvId, clearAIResponding]);
 
-    
-    // Function to get conversation history from database
-    const loadConversationHistoryMutation = useFetchMessagesMutation();
-    const loadConversationHistory = useCallback(async () => {
-        try {
-            loadConversationHistoryMutation.mutate(userDetails?.id)
-            const { history } = await loadConversationHistoryMutation.data;
-            setMessages(history);
-        } catch (error) {
-            console.error('Failed to load conversation history:', error);
-        }
-    }, [userDetails?.id]);
+
+   const loadConversationHistoryMutation = useFetchMessagesMutation();
+
+const loadConversationHistory = useCallback(async () => {
+  try {
+    setLoading(true);
+
+    const response = await loadConversationHistoryMutation.mutateAsync(userDetails?.id);
+
+    const extractedMessages = response.history?.map((item: { content: string; role: string }) => ({
+      content: item.content,
+      role: item.role,
+    })) ?? [];
+
+    console.log(`Extract: ${JSON.stringify(extractedMessages)}`);
+
+    setMessages(extractedMessages); // ✅ SET messages here
+    console.log(`Messages updated: ${extractedMessages.length}`);
+  } catch (error) {
+    console.error('Failed to load conversation history:', error);
+  } finally {
+    setLoading(false);
+  }
+}, [userDetails?.id]);
+
+
 
     const handleRegenerate = useCallback(async (messageId: string) => {
         // Prevent regeneration if already processing

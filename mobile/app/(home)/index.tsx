@@ -86,6 +86,7 @@ const Index = () => {
     handleRegenerate,
     handleEditMessageCallback,
     startNewConversation,
+    loadConversationHistory,
     setMessage,
     setIsRecording,
     setIsSidebarVisible,
@@ -110,6 +111,10 @@ const Index = () => {
     initialMessages: [],
     enableSampleMessages: true,
   });
+
+  useEffect(() => {
+    loadConversationHistory()
+  },[loadConversationHistory])
 
   // Debug: Log messages to check for duplicates
   useEffect(() => {
