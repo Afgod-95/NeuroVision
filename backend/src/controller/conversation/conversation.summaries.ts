@@ -55,7 +55,7 @@ const autoGenerateSummary = async (conversationId: string, userId: number): Prom
             if (history.length === 0) return;
 
             const conversationText = history
-                .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+                .map(msg => `${msg.role}: ${msg.content}`)
                 .join('\n\n');
 
             const summaryPrompt = `Provide a concise summary of this conversation highlighting the main topics, questions asked, and solutions provided:
