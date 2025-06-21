@@ -20,11 +20,11 @@ app.use(express.static('src'));
 app.use(rateLimiter(60000, 100))
 
 //api key validation
-app.use('/api/chats/', validateApiKey);
+app.use('/api/conversations/', validateApiKey);
 
 app.use('/api/auth', authRouter);
 
-app.use('/api/chats', chatsRouter);
+app.use('/api/conversations', chatsRouter);
 
 
 

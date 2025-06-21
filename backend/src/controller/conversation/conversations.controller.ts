@@ -4,7 +4,6 @@ import GeminiAIService from "../../services/GeminiAI";
 import { ChatRequest, GeminiMessage } from "../../types/gemini";
 import supabase from "../../lib/supabase";
 import { v4 as uuidv4 } from 'uuid';
-import { getConversationSummary } from "./chats.conversation.summaries";
 import { isValidUUID } from "../../middlewares/isValidUUID";
 import { generateConversationSummary } from "../../helpers/chatSummary/AISummary";
 
@@ -293,8 +292,6 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             generateConversationSummary(conversationId, userId, customPrompt)
                 .then(() => console.log("Summary generated"))
                 .catch(err => console.error("Summary generation error:", err));
-
-
         }
 
         // Enhanced response format
@@ -309,7 +306,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                 responseLength: response.length,
                 model: "gemini-2.0-flash-exp",
                 timestamp: new Date().toISOString(),
-                summaryProcessed: useDatabase // Indicates if summary processing was attempted
+                summaryProcessed: useDatabase 
             }
         });
 
@@ -477,6 +474,80 @@ export const getConversation = async (req: Request, res: Response): Promise<void
         });
     }
 };
+
+
+
+/**
+ * Get conversation messages by conversation ID
+ */
+export const getConversationMessages = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { conversationId, userId } = req.query;
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+
+        if (!conversationId || !userId) {
+            res.status(400).json({
+                success: false,
+                error: 'conversationId and userId are required'
+            });
+            return;
+        }
+
+        if (!isValidUUID(conversationId as string)) {
+            res.status(400).json({
+                success: false,
+                error: 'Invalid conversationId format'
+            });
+            return;
+        }
+
+        // First verify the conversation belongs to the user
+        const { data: conversationExists } = await supabase
+            .from('ai_conversation_summaries')
+            .select('conversation_id')
+            .eq('conversation_id', conversationId)
+            .eq('user_id', parseInt(userId as string))
+            .single();
+
+        if (!conversationExists) {
+            res.status(404).json({
+                success: false,
+                error: 'Conversation not found or access denied'
+            });
+            return;
+        }
+
+        // Get messages for this conversation
+        // Assuming you have a messages table with conversation_id
+        const { data: messages, error } = await supabase
+            .from('messages') // or your messages table name
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .eq('user_id', parseInt(userId as string))
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            throw error;
+        }
+
+        res.json({
+            success: true,
+            conversationId,
+            messages: messages || [],
+            messageCount: messages?.length || 0,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error: any) {
+        console.error('Get conversation messages error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to fetch conversation messages'
+        });
+    }
+};
+
 
 
 /**

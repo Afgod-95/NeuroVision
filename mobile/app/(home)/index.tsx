@@ -26,7 +26,7 @@ import { UploadedAudioFile as OriginalUploadedAudioFile } from '@/src/components
 import { uniqueConvId } from '@/src/constants/generateConversationId';
 import useRealtimeChat from '@/src/hooks/chats/RealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
-import { useFetchMessagesMutation } from '@/src/hooks/message/GetMessagesMutation';
+import { useFetchMessagesMutation } from '@/src/hooks/conversations/GetConversationsMutation';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = OriginalUploadedAudioFile & {
@@ -116,26 +116,6 @@ const Index = () => {
     loadConversationHistory()
   },[loadConversationHistory])
 
-  // Debug: Log messages to check for duplicates
-  useEffect(() => {
-    console.log('=== MESSAGES DEBUG ===');
-    messages.forEach((msg, index) => {
-      console.log(`Message ${index}:`, {
-        id: msg.id,
-        sender: msg.sender,
-        user: msg.user,
-        textPreview: msg.text.substring(0, 50) + '...',
-        isLoading: msg.isLoading
-      });
-    });
-
-    // Check for duplicate IDs
-    const ids = messages.map(m => m.id);
-    const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
-    if (duplicateIds.length > 0) {
-      console.warn('⚠️ DUPLICATE MESSAGE IDs FOUND:', duplicateIds);
-    }
-  }, [messages]);
 
   // Sidebar handlers
   const handleToggleSidebar = useCallback(() => {

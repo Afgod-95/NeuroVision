@@ -2,7 +2,7 @@
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
-import { getConversationHistory } from "../../controller/chats/chats";
+import { getConversationHistory } from "../../controller/conversation/conversations.controller";
 import { isValidUUID } from "../../middlewares/isValidUUID";
 
 // Initialize Gemini service with enhanced system prompt for coding assistance
@@ -40,8 +40,8 @@ interface AiConversationSummary {
 }
 
 /**
- * Generate conversation summary using Gemini AI
-*/
+ * Enhanced conversation summary generation with better conversation handling
+ */
 export const generateConversationSummary = async (
     conversationId: string,
     userId: number | string,
@@ -70,28 +70,19 @@ export const generateConversationSummary = async (
             return;
         }
 
-        // First check if this conversation exists in your view
-        const { data: conversationInfo, error: conversationError }: { data: ConversationInfo | null, error: any } = await supabase
-            .from('conversation_summaries')
+        // Get messages for this specific conversation
+        const { data: messages, error: messagesError } = await supabase
+            .from('messages') 
             .select('*')
             .eq('conversation_id', conversationId)
-            .eq('user_id', userId)
-            .single();
+            .eq('user_id', parseInt(userId as string))
+            .order('created_at', { ascending: true });
 
-        if (conversationError || !conversationInfo) {
-            if (res) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Conversation not found'
-                });
-            }
-            return;
+        if (messagesError) {
+            throw messagesError;
         }
 
-        // Get the full conversation history
-        const history = await getConversationHistory(parseInt(userId as string), 100, 0);
-
-        if (history.length === 0) {
+        if (!messages || messages.length === 0) {
             if (res) {
                 res.status(404).json({
                     success: false,
@@ -102,7 +93,7 @@ export const generateConversationSummary = async (
         }
 
         // Create conversation text for summarization
-        const conversationText = history
+        const conversationText = messages
             .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
             .join('\n\n');
 
@@ -123,7 +114,7 @@ ${conversationText}
 
 SUMMARY:`;
 
-        console.log(`Generating summary for conversation ${conversationId} with ${history.length} messages`);
+        console.log(`Generating summary for conversation ${conversationId} with ${messages.length} messages`);
 
         // Generate summary using Gemini
         const summary: string = await geminiService.generateCompletion(summaryPrompt, {
@@ -143,9 +134,9 @@ Title:`;
             maxTokens: 50
         });
 
-        const cleanTitle: string = title.trim().replace(/^["']|["']$/g, ''); // Remove quotes if present
+        const cleanTitle: string = title.trim().replace(/^["']|["']$/g, '');
 
-        // Store the AI-generated summary in the ai_conversation_summaries table
+        // Store the AI-generated summary
         const { data, error }: { data: AiConversationSummary[] | null, error: any } = await supabase
             .from('ai_conversation_summaries')
             .upsert({
@@ -154,6 +145,7 @@ Title:`;
                 title: cleanTitle,
                 summary: summary,
                 summary_type: 'manual',
+                message_count: messages.length,
                 updated_at: new Date().toISOString()
             })
             .select();
@@ -169,8 +161,7 @@ Title:`;
                 conversationId,
                 title: cleanTitle,
                 summary,
-                messageCount: conversationInfo.message_count,
-                conversationInfo,
+                messageCount: messages.length,
                 summaryData: data?.[0],
                 timestamp: new Date().toISOString()
             });
@@ -186,6 +177,7 @@ Title:`;
         }
     }
 };
+
 
 
 

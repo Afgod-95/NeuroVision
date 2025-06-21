@@ -5,7 +5,7 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import supabase from '@/src/supabase/supabaseClient';
 import axios from 'axios';
 import { useMessageOptions } from '../UserMessageOptions';
-import { useFetchMessagesMutation } from '../message/GetMessagesMutation';
+import { useFetchMessagesMutation } from '../conversations/GetConversationsMutation';
 
 // Types
 interface Message {
@@ -93,7 +93,6 @@ const useRealtimeChat = ({
     const realtimeChannelRef = useRef<any>(null);
     const flatListRef = useRef<FlatList>(null);
     const pendingUserMessageRef = useRef<string | null>(null);
-    const aiResponseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isProcessingResponseRef = useRef<boolean>(false);
     const processedMessageIds = useRef<Set<string>>(new Set()); // Track processed messages
 
@@ -114,11 +113,6 @@ const useRealtimeChat = ({
             }
             return false;
         });
-
-        if (aiResponseTimeoutRef.current) {
-            clearTimeout(aiResponseTimeoutRef.current);
-            aiResponseTimeoutRef.current = null;
-        }
 
         isProcessingResponseRef.current = false;
     }, []);
@@ -484,12 +478,6 @@ const useRealtimeChat = ({
             setMessages(prev => [...prev, tempUserMessage, loadingMessage]);
             setIsAIResponding(true);
 
-            // Set timeout as fallback
-            aiResponseTimeoutRef.current = setTimeout(() => {
-                console.log('AI response timeout reached, clearing loading state');
-                clearAIResponding();
-            }, 600000);
-
             scrollToBottom();
         },
         onSuccess: async (data) => {
@@ -647,8 +635,6 @@ const loadConversationHistory = useCallback(async () => {
     })) ?? [];
 
     console.log(`Extract: ${JSON.stringify(extractedMessages)}`);
-
-    setMessages(extractedMessages); // ✅ SET messages here
     console.log(`Messages updated: ${extractedMessages.length}`);
   } catch (error) {
     console.error('Failed to load conversation history:', error);
@@ -689,12 +675,6 @@ const loadConversationHistory = useCallback(async () => {
 
             setMessages(prev => [...prev, loadingMessage]);
             setIsAIResponding(true);
-
-            // Set timeout as fallback
-            aiResponseTimeoutRef.current = setTimeout(() => {
-                console.log('Regenerate timeout reached, clearing loading state');
-                clearAIResponding();
-            }, 30000);
 
             try {
                 // api call for sending message
@@ -780,15 +760,6 @@ const loadConversationHistory = useCallback(async () => {
     const handleEditMessageCallback = useCallback(() => {
         handleEditMessage(message);
     }, [handleEditMessage, message]);
-
-    // Cleanup timeout on unmount
-    useEffect(() => {
-        return () => {
-            if (aiResponseTimeoutRef.current) {
-                clearTimeout(aiResponseTimeoutRef.current);
-            }
-        };
-    }, []);
 
     // Call onLoadingChange callback when isAIResponding changes
     useEffect(() => {

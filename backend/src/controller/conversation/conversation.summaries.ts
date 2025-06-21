@@ -2,7 +2,7 @@
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
-import { getConversationHistory } from "./chats";
+import { getConversationHistory } from "./conversations.controller";
 import { isValidUUID } from "../../middlewares/isValidUUID";
 
 // Initialize Gemini service with enhanced system prompt for coding assistance
@@ -103,71 +103,14 @@ Title:`;
 };
 
 /**
- * Get conversation summary - Updated for enhanced view
+ * Get all conversation summaries for a user - for sidebar display
  */
-export const getConversationSummary = async (req: Request, res: Response): Promise<void> => {
+export const getUserConversationSummaries = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { conversationId, userId } = req.query;
-
-        if (!conversationId || !userId) {
-            res.status(400).json({
-                success: false,
-                error: 'conversationId and userId are required'
-            });
-            return;
-        }
-
-        if (!isValidUUID(conversationId as string)) {
-            res.status(400).json({
-                success: false,
-                error: 'Invalid conversationId format'
-            });
-            return;
-        }
-
-        // Get from the enhanced view that combines both tables
-        const { data, error } = await supabase
-            .from('enhanced_conversation_summaries')
-            .select('*')
-            .eq('conversation_id', conversationId)
-            .eq('user_id', parseInt(userId as string))
-            .single();
-
-        if (error && error.code !== 'PGRST116') { 
-            throw error;
-        }
-
-        if (!data) {
-            res.status(404).json({
-                success: false,
-                error: 'Conversation not found'
-            });
-            return;
-        }
-
-        res.json({
-            success: true,
-            conversationData: data,
-            hasSummary: !!data.summary,
-            needsSummary: data.needs_summary,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error: any) {
-        console.error('Get summary error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to fetch conversation summary'
-        });
-    }
-};
-
-/**
- * Get all conversations with summaries - Updated for your view
- */
-export const getUserConversations = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { userId, limit = 20, offset = 0 } = req.query;
+        const { userId } = req.query;
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const offset = (page - 1) * limit;
 
         if (!userId) {
             res.status(400).json({
@@ -177,45 +120,37 @@ export const getUserConversations = async (req: Request, res: Response): Promise
             return;
         }
 
-        // Use the enhanced view that combines both your existing view and AI summaries
-        const { data, error } = await supabase
-            .from('enhanced_conversation_summaries')
-            .select('*')
+        // Get all conversation summaries for the user, ordered by most recent
+        const { data, error, count } = await supabase
+            .from('ai_conversation_summaries')
+            .select('*', { count: 'exact' })
             .eq('user_id', parseInt(userId as string))
-            .order('last_message_at', { ascending: false })
-            .range(parseInt(offset as string), parseInt(offset as string) + parseInt(limit as string) - 1);
+            .order('updated_at', { ascending: false })
+            .range(offset, offset + limit - 1);
 
         if (error) {
             throw error;
         }
 
-        // Separate conversations with and without summaries
-        const withSummaries = data?.filter(conv => conv.summary) || [];
-        const withoutSummaries = data?.filter(conv => !conv.summary) || [];
-
         res.json({
             success: true,
             conversations: data || [],
-            stats: {
-                total: data?.length || 0,
-                withSummaries: withSummaries.length,
-                withoutSummaries: withoutSummaries.length,
-                needingSummaries: data?.filter(conv => conv.needs_summary).length || 0
-            },
-            metadata: {
-                limit: parseInt(limit as string),
-                offset: parseInt(offset as string),
-                timestamp: new Date().toISOString()
-            }
+            totalCount: count || 0,
+            page,
+            limit,
+            hasMore: (count || 0) > offset + limit,
+            timestamp: new Date().toISOString()
         });
+
     } catch (error: any) {
         console.error('Get user conversations error:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to fetch user conversations'
+            error: error.message || 'Failed to fetch conversations'
         });
     }
 };
+
 
 /**
  * Bulk generate summaries for conversations that need them

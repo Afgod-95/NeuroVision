@@ -1,8 +1,8 @@
 import express, { Request, RequestHandler, Response } from 'express';
-import { generateCompletion, getConversation, getModels, sendChatMessage } from '../controller/chats/chats';
+import { generateCompletion, getConversation, getConversationMessages, getModels, sendChatMessage } from '../controller/conversation/conversations.controller';
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
 import { getMessages } from '../controller/messages/messages';
-import { bulkGenerateSummaries,  getConversationSummary } from '../controller/chats/chats.conversation.summaries';
+import { bulkGenerateSummaries, getUserConversationSummaries } from '../controller/conversation/conversation.summaries';
 
 
 const chatsRouter = express.Router()
@@ -27,19 +27,24 @@ chatsRouter.post('/transcribe-audio', async (req: Request, res: Response) => {
 });
 
 
+/**
+ * get messages endpoint
+ */
+chatsRouter.get('/messages', getConversationMessages);
+
 //get conversation history
-chatsRouter.get('/conversation/:conversationId/history', getConversation)
+chatsRouter.get('/:conversationId/history', getConversation)
 
 
 
-
-
-
-
-// New summary routes
-chatsRouter.get('/conversations/summary', getConversationSummary);
 //chatsRouter.put('/conversations/summary', updateConversationSummary);
-chatsRouter.post('/conversations/summaries/bulk-generate', bulkGenerateSummaries);
+chatsRouter.post('/summaries/bulk-generate', bulkGenerateSummaries);
+
+
+/**
+ * GET CONVERSATION SUMMARIES FOR A SPECIFIC USER
+*/
+chatsRouter.get('/user/summaries/', getUserConversationSummaries);
 
 
 export default chatsRouter;
