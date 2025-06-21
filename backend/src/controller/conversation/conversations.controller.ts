@@ -5,13 +5,13 @@ import { ChatRequest, GeminiMessage } from "../../types/gemini";
 import supabase from "../../lib/supabase";
 import { v4 as uuidv4 } from 'uuid';
 import { isValidUUID } from "../../middlewares/isValidUUID";
-import { generateConversationSummary } from "../../helpers/chatSummary/AISummary";
+import { generateConversationSummary, shouldUpdateSummary } from "../../helpers/chatSummary/AISummary";
 
 
 // Initialize Gemini service with enhanced system prompt for coding assistance
 const geminiService = new GeminiAIService({
     apiKey: process.env.GEMINI_API_KEY || "",
-    model: "gemini-2.0-flash-exp",
+    model: "gemini-2.5-flash",
     maxTokens: 8192,
     temperature: 0.7
 });
@@ -176,7 +176,7 @@ const getOrCreateConversationId = (conversationId?: string): string => {
 
 
 /**
- *chat message handler with better error handling and response formatting
+ * Chat message handler with better error handling and response formatting
  */
 export const sendChatMessage = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -230,11 +230,19 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
 
         // Generate or validate conversation ID
         const conversationId = useDatabase ? getOrCreateConversationId(rawConversationId) : rawConversationId;
+        console.log('Using conversation ID:', conversationId);
 
         // Get conversation history from database if using database mode
         let history = conversationHistory || [];
         if (useDatabase && conversationId && userId) {
-            history = await getConversationHistory(userId);
+            try {
+                history = await getConversationHistory(userId);
+                console.log(`Retrieved ${history.length} messages from database`);
+            } catch (error) {
+                console.error('Error getting conversation history:', error);
+                // Continue with empty history if database fetch fails
+                history = [];
+            }
         }
 
         // Limit history length to prevent token overflow
@@ -249,12 +257,14 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
         // Store user message if using database (async, don't block response)
         const shouldStoreUserMessage = useDatabase && conversationId && userId;
         if (shouldStoreUserMessage) {
+            console.log('Storing user message...');
             storeMessage(conversationId, userId, 'user', message).catch(error => {
                 console.error('Failed to store user message:', error);
             });
         }
 
         // Send message to Gemini with enhanced configuration
+        console.log('Sending message to Gemini...');
         const response = await geminiService.sendMessage(
             message,
             history,
@@ -265,8 +275,11 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             }
         );
 
+        console.log(`Received response from Gemini (${response.length} characters)`);
+
         // Store assistant response if using database (async, don't block response)
         if (useDatabase && conversationId && userId && response) {
+            console.log('Storing assistant message...');
             storeMessage(conversationId, userId, 'assistant', response).catch(error => {
                 console.error('Failed to store assistant message:', error);
             });
@@ -279,19 +292,52 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             { role: 'assistant' as const, content: response }
         ];
 
-
-
         // Handle AI conversation summary (async, don't block response)
         if (useDatabase && conversationId && userId) {
-            const conversationText = updatedHistory
-                .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
-                .join('\n\n');
+            console.log('Starting summary generation process...');
+            console.log(`Summary params - conversationId: ${conversationId}, userId: ${userId}, historyLength: ${updatedHistory.length}`);
+            
+            // Check if we should generate a summary based on message count
+            const shouldGenerate = await shouldUpdateSummary(conversationId, parseInt(userId.toString()), updatedHistory.length);
+            console.log(`Should generate summary: ${shouldGenerate}`);
+            
+            if (shouldGenerate) {
+                console.log('Generating conversation summary...');
+                
+                // Use the updated history instead of recreating conversation text
+                const conversationText = updatedHistory
+                    .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+                    .join('\n\n');
 
-            const customPrompt = `Please summarize the following conversation:\n\n${conversationText}\n\nSUMMARY:`;
+                console.log(`Conversation text length: ${conversationText.length} characters`);
 
-            generateConversationSummary(conversationId, userId, customPrompt)
-                .then(() => console.log("Summary generated"))
-                .catch(err => console.error("Summary generation error:", err));
+                const customPrompt = `Please summarize the following conversation in a clear and concise manner:
+
+${conversationText}
+
+SUMMARY:`;
+
+                // Add more detailed error handling for summary generation
+                generateConversationSummary(conversationId, userId, customPrompt)
+                    .then(() => {
+                        console.log("✅ Summary generated successfully");
+                    })
+                    .catch(err => {
+                        console.error("❌ Summary generation failed:");
+                        console.error("Error message:", err.message);
+                        console.error("Error stack:", err.stack);
+                        console.error("Summary params used:", {
+                            conversationId,
+                            userId,
+                            customPromptLength: customPrompt.length,
+                            conversationTextLength: conversationText.length
+                        });
+                    });
+            } else {
+                console.log('⏭️ Skipping summary generation (conditions not met)');
+            }
+        } else {
+            console.log('⏭️ Skipping summary generation (database not enabled or missing params)');
         }
 
         // Enhanced response format
@@ -312,6 +358,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
 
     } catch (error: any) {
         console.error('Chat message error:', error);
+        console.error('Error stack:', error.stack);
 
         // Provide more specific error messages
         let errorMessage = 'Failed to send message to Gemini AI';
@@ -337,6 +384,47 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             error: errorMessage,
             details: process.env.NODE_ENV === 'development' ? error.message : undefined,
             timestamp: new Date().toISOString()
+        });
+    }
+};
+
+/**
+ * Alternative function to force generate a summary for testing
+ */
+export const forceGenerateSummary = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { conversationId, userId } = req.body;
+        
+        if (!conversationId || !userId) {
+            res.status(400).json({
+                success: false,
+                error: 'conversationId and userId are required'
+            });
+            return;
+        }
+
+        console.log(`🔧 Force generating summary for conversation ${conversationId}, user ${userId}`);
+        
+        // Get current message count
+        const { data: messages, error } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .eq('user_id', userId);
+            
+        if (error) {
+            throw error;
+        }
+        
+        console.log(`Found ${messages?.length || 0} messages in conversation`);
+        
+        await generateConversationSummary(conversationId, userId, undefined, req, res);
+        
+    } catch (error: any) {
+        console.error('Force generate summary error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 };
@@ -519,9 +607,8 @@ export const getConversationMessages = async (req: Request, res: Response): Prom
         }
 
         // Get messages for this conversation
-        // Assuming you have a messages table with conversation_id
         const { data: messages, error } = await supabase
-            .from('messages') // or your messages table name
+            .from('messages') 
             .select('*')
             .eq('conversation_id', conversationId)
             .eq('user_id', parseInt(userId as string))

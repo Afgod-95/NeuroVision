@@ -16,9 +16,10 @@ import {
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Colors } from '@/src/constants/Colors';
 import ChatInput from '@/src/components/chatUI/ChatInput';
-import CustomSideBar from '@/src/components/chatUI/CustomSideBar';
+import CustomSideBar from '@/src/components/chatUI/SideBar';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
+import { Message } from '@/src/utils/interfaces/TypescriptInterfaces';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import UserMessageBox, { MessagePreview, MessageContent } from '@/src/components/chatUI/UserMessageBox';
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
@@ -26,26 +27,14 @@ import { UploadedAudioFile as OriginalUploadedAudioFile } from '@/src/components
 import { uniqueConvId } from '@/src/constants/generateConversationId';
 import useRealtimeChat from '@/src/hooks/chats/RealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
-import { useFetchMessagesMutation } from '@/src/hooks/conversations/GetConversationsMutation';
+import ScrollToBottomButton from '@/src/components/chatUI/ScrollToBottomButton';
+
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = OriginalUploadedAudioFile & {
   duration?: number;
 };
 
-// Enhanced message types to include content and match database schema
-interface Message {
-  id: string;
-  conversation_id?: string;
-  user_id?: string; 
-  sender: 'user' | 'assistant' | 'system';
-  text: string;
-  content?: MessageContent;
-  created_at: string;
-  timestamp?: string;
-  user: boolean;
-  isLoading?: boolean;
-}
 
 // Memoized UserMessageBox with proper prop comparison
 const MemoizedUserMessageBox = React.memo(UserMessageBox, (prevProps, nextProps) => {
@@ -68,6 +57,7 @@ const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse, (prevProps, ne
 const Index = () => {
   // Get message options from Redux
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
+  const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
 
   // Initialize the realtime chat hook
   const {
@@ -272,6 +262,7 @@ const Index = () => {
               {/* Content Area - Show welcome or messages */}
               {loading ? loadingContent : (
                 messages.length === 0 ? welcomeContent : (
+                  <>
                   <FlatList
                     ref={flatListRef}
                     data={messages}
@@ -286,12 +277,22 @@ const Index = () => {
                     windowSize={10}
                     decelerationRate="normal"
                     scrollEventThrottle={16}
-                    // onContentSizeChange={onContentSizeChangeCallback}
-                    // Prevent unnecessary re-renders
+                    onScroll = {((event) => {
+                      const offsetY = event.nativeEvent.contentOffset.y;
+                      setShowScrollButton(offsetY < 200)
+                    })}
+                    
                     getItemLayout={undefined}
-                    // Add these props to help with duplicate prevention
-                    extraData={messages.length} // Forces re-render only when length changes
+                    
+                    extraData={messages.length}
                   />
+                  <ScrollToBottomButton 
+                     onPress = { scrollToBottom}
+                    visible = {showScrollButton}
+                  />
+                  </>
+                  
+
                 )
               )}
             </SafeAreaView>

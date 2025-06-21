@@ -3,74 +3,17 @@ import { FlatList } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import supabase from '@/src/supabase/supabaseClient';
+import {
+    RootState,
+    MessageContent,
+    SupabaseMessage,
+    UploadedAudioFile,
+    RealtimeChatProps,
+    Message,
+} from '@/src/utils/interfaces/TypescriptInterfaces';
 import axios from 'axios';
 import { useMessageOptions } from '../UserMessageOptions';
-import { useFetchMessagesMutation } from '../conversations/GetConversationsMutation';
-
-// Types
-interface Message {
-    id: string;
-    conversation_id?: string;
-    user_id?: string;
-    sender: 'user' | 'assistant' | 'system';
-    text: string;
-    created_at: string;
-    timestamp: string;
-    user: boolean;
-    content?: MessageContent;
-    isLoading?: boolean;
-    metadata?: any; // Add this line to allow metadata property
-}
-
-interface MessageContent {
-    type: 'text' | 'audio' | 'mixed';
-    text?: string;
-    audioUrl?: string;
-    audioName?: string;
-    audioDuration?: number;
-}
-
-interface SupabaseMessage {
-    id: string;
-    conversation_id: string;
-    user_id: string;
-    sender: 'user' | 'assistant' | 'system';
-    content: string;
-    created_at: string;
-}
-
-interface UploadedAudioFile {
-    name?: string;
-    duration?: number;
-    uploadResult?: {
-        signedUrl: string;
-    };
-}
-
-interface RootState {
-    user: {
-        user: {
-            id: string;
-            username?: string;
-        };
-    };
-    messageOptions: {
-        messageId: string;
-        isEdited: boolean;
-    };
-}
-
-// Component Props
-interface RealtimeChatProps {
-    uniqueConvId: string;
-    systemPrompt?: string;
-    temperature?: number;
-    maxTokens?: number;
-    onMessagesChange?: (messages: Message[]) => void;
-    onLoadingChange?: (loading: boolean) => void;
-    initialMessages?: Message[];
-    enableSampleMessages?: boolean;
-}
+import { useFetchMessagesMutation } from '../conversations/ConversationsMutation';
 
 const useRealtimeChat = ({
     uniqueConvId,
@@ -94,19 +37,20 @@ const useRealtimeChat = ({
     const flatListRef = useRef<FlatList>(null);
     const pendingUserMessageRef = useRef<string | null>(null);
     const isProcessingResponseRef = useRef<boolean>(false);
-    const processedMessageIds = useRef<Set<string>>(new Set()); // Track processed messages
+    const processedMessageIds = useRef<Set<string>>(new Set());
+    const currentLoadingIdRef = useRef<string | null>(null);
+    const subscriptionReadyRef = useRef<boolean>(false); // NEW: Track subscription status
 
     const { user: userDetails } = useSelector((state: RootState) => state.user);
     const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
     const queryClient = useQueryClient();
 
-    // Memoize username to prevent recalculation
     const username = useMemo(() => userDetails?.username?.split(" ")[0], [userDetails?.username]);
 
-    // Helper function to clear AI responding state
+    // FIXED: More robust clearing function with timeout fallback
     const clearAIResponding = useCallback(() => {
         console.log('Clearing AI responding state');
-
+        
         setIsAIResponding(prevState => {
             if (prevState) {
                 console.log('AI responding state cleared');
@@ -115,6 +59,14 @@ const useRealtimeChat = ({
         });
 
         isProcessingResponseRef.current = false;
+        currentLoadingIdRef.current = null;
+        
+        // ADDED: Fallback timeout to ensure state is cleared
+        setTimeout(() => {
+            setIsAIResponding(false);
+            isProcessingResponseRef.current = false;
+            currentLoadingIdRef.current = null;
+        }, 100);
     }, []);
 
     // Generate or get conversation ID
@@ -127,7 +79,6 @@ const useRealtimeChat = ({
 
     // Initialize with sample messages for demonstration
     useEffect(() => {
-
         if (conversationId && userDetails?.id) {
             const sampleMessages: Message[] = [];
             setMessages(sampleMessages);
@@ -135,14 +86,12 @@ const useRealtimeChat = ({
         }
     }, [conversationId, userDetails?.id]);
 
-    // Memoized scroll to bottom function
     const scrollToBottom = useCallback(() => {
         setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
     }, []);
 
-    // Helper function to transform Supabase message
     const transformSupabaseMessage = useCallback((supabaseMessage: SupabaseMessage): Message => {
         let content: MessageContent;
         let text: string;
@@ -169,7 +118,7 @@ const useRealtimeChat = ({
         };
     }, []);
 
-    // Set up realtime subscription - FIXED VERSION
+    // FIXED: Enhanced realtime subscription with better state management
     useEffect(() => {
         if (!conversationId || !userDetails?.id) return;
 
@@ -178,7 +127,8 @@ const useRealtimeChat = ({
             supabase.removeChannel(realtimeChannelRef.current);
         }
 
-        // Create new channel
+        subscriptionReadyRef.current = false; // Reset subscription status
+
         const channel = supabase
             .channel(`messages_${conversationId}`)
             .on(
@@ -204,7 +154,6 @@ const useRealtimeChat = ({
                     const transformedMessage = transformSupabaseMessage(newMessage);
 
                     setMessages(prev => {
-                        // Double-check for existing message to prevent duplicates
                         const exists = prev.some(msg => msg.id === transformedMessage.id);
                         if (exists) {
                             console.log('Message already exists in state, skipping:', transformedMessage.id);
@@ -220,21 +169,24 @@ const useRealtimeChat = ({
                             pendingUserMessageRef.current = null;
                         }
 
-                        // For AI messages, remove loading messages and clear AI responding state
+                        // FIXED: Better handling of AI messages and loading state
                         if (newMessage.sender === 'assistant') {
-                            console.log('AI message received, removing loading messages');
-                            newMessages = newMessages.filter(msg => !msg.isLoading);
+                            console.log('AI message received, clearing loading state');
+                            
+                            // Remove loading messages
+                            if (currentLoadingIdRef.current) {
+                                newMessages = newMessages.filter(msg => msg.id !== currentLoadingIdRef.current);
+                            } else {
+                                newMessages = newMessages.filter(msg => !msg.isLoading);
+                            }
 
-                            // Clear AI responding state
-                            setTimeout(() => {
-                                clearAIResponding();
-                            }, 0);
+                            // FIXED: Immediate state clearing
+                            clearAIResponding();
                         }
 
                         return [...newMessages, transformedMessage];
                     });
 
-                    // Scroll to bottom when new message arrives
                     scrollToBottom();
                 }
             )
@@ -252,34 +204,40 @@ const useRealtimeChat = ({
                     const updatedMessage = payload.new as SupabaseMessage;
                     const transformedMessage = transformSupabaseMessage(updatedMessage);
 
-                    setMessages(prev =>
-                        prev.map(msg =>
+                    setMessages(prev => {
+                        let updatedMessages = prev.map(msg =>
                             msg.id === transformedMessage.id ? transformedMessage : msg
-                        )
-                    );
+                        );
 
-                    // If this is an assistant message update, clear AI responding state
-                    if (updatedMessage.sender === 'assistant') {
-                        setTimeout(() => {
-                            clearAIResponding();
-                        }, 0);
-                    }
+                        // Remove loading messages if this is an assistant update
+                        if (updatedMessage.sender === 'assistant') {
+                            updatedMessages = updatedMessages.filter(msg => !msg.isLoading);
+                            clearAIResponding(); // Clear loading state
+                        }
+
+                        return updatedMessages;
+                    });
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('Subscription status:', status);
+                if (status === 'SUBSCRIBED') {
+                    subscriptionReadyRef.current = true;
+                    console.log('Realtime subscription ready');
+                }
+            });
 
         realtimeChannelRef.current = channel;
 
-        // Cleanup function
         return () => {
             if (realtimeChannelRef.current) {
                 supabase.removeChannel(realtimeChannelRef.current);
                 realtimeChannelRef.current = null;
             }
+            subscriptionReadyRef.current = false;
         };
     }, [conversationId, userDetails?.id, scrollToBottom, clearAIResponding, transformSupabaseMessage]);
 
-    // Function to save message to Supabase
     const saveMessageToSupabase = useCallback(async (
         messageText: string,
         sender: 'user' | 'assistant' | 'system',
@@ -289,7 +247,6 @@ const useRealtimeChat = ({
             throw new Error('Missing conversation ID or user ID');
         }
 
-        // Prepare content - if messageContent exists, stringify it, otherwise use messageText
         const contentToSave = messageContent ? JSON.stringify(messageContent) : messageText;
 
         const { data, error } = await supabase
@@ -311,10 +268,7 @@ const useRealtimeChat = ({
         return data;
     }, [conversationId, userDetails?.id]);
 
-
-    // Function to extract AI response text with better fallbacks
     const extractAIResponseText = useCallback((aiResponse: any): string => {
-        // Try multiple possible response fields
         const possibleFields = [
             'response',
             'message',
@@ -330,25 +284,20 @@ const useRealtimeChat = ({
             }
         }
 
-        // If aiResponse is a string itself
         if (typeof aiResponse === 'string' && aiResponse.trim()) {
             return aiResponse.trim();
         }
 
-        // Log the full response for debugging
         console.log('AI Response structure:', JSON.stringify(aiResponse, null, 2));
-
-        // Return a default message if no valid response found
         return 'I apologize, but I was unable to generate a proper response. Please try again.';
     }, []);
 
-    // Updated mutation with better error handling and response extraction
+    // FIXED: Enhanced mutation with better timeout handling
     const sendMessageMutation = useMutation({
         mutationFn: async ({ messageText, audioFile }: { messageText: string, audioFile?: UploadedAudioFile }) => {
             let finalMessage = messageText;
             let messageContent: MessageContent | undefined;
 
-            // Create message content based on what we have
             if (audioFile) {
                 messageContent = {
                     type: messageText.trim() ? 'mixed' : 'audio',
@@ -365,7 +314,6 @@ const useRealtimeChat = ({
                 };
             }
 
-            // If there's an audio file, transcribe it first
             if (audioFile && userDetails?.id) {
                 try {
                     console.log('Starting audio transcription...');
@@ -393,8 +341,7 @@ const useRealtimeChat = ({
                 }
             }
 
-            // Send message to AI API
-            const response = await axios.post('/api/chats/send-message', {
+            const response = await axios.post('/api/conversations/send-message', {
                 message: finalMessage,
                 systemPrompt: systemPrompt,
                 temperature: temperature,
@@ -404,7 +351,6 @@ const useRealtimeChat = ({
                 useDatabase: true,
             });
 
-            // Validate the AI response
             if (!response.data) {
                 throw new Error('No response data received from AI service');
             }
@@ -414,22 +360,18 @@ const useRealtimeChat = ({
                 aiResponse: response.data,
                 originalAudioFile: audioFile,
                 conversationId: response.data.conversationId,
-                //savedUserMessage
             };
         },
         onMutate: ({ messageText, audioFile }) => {
             console.log('Mutation started, setting AI responding to true');
 
-            // Prevent multiple simultaneous requests
             if (isProcessingResponseRef.current) {
                 console.log('Already processing, cancelling new request');
                 throw new Error('Already processing a request');
             }
 
-            // Set processing flag
             isProcessingResponseRef.current = true;
 
-            // Create temporary user message
             const tempUserMessageId = `temp-user-${Date.now()}`;
             let messageContent: MessageContent | undefined;
             let finalMessage = messageText;
@@ -460,9 +402,9 @@ const useRealtimeChat = ({
                 content: messageContent,
             };
 
-            // Create loading message
+            const loadingMessageId = `loading-${Date.now()}`;
             const loadingMessage: Message = {
-                id: `loading-${Date.now()}`,
+                id: loadingMessageId,
                 text: '',
                 user: false,
                 created_at: new Date().toISOString(),
@@ -471,68 +413,115 @@ const useRealtimeChat = ({
                 isLoading: true
             };
 
-            // Store the temp user message ID
             pendingUserMessageRef.current = tempUserMessageId;
+            currentLoadingIdRef.current = loadingMessageId;
 
-            // Add both messages to state
             setMessages(prev => [...prev, tempUserMessage, loadingMessage]);
             setIsAIResponding(true);
 
             scrollToBottom();
+
+            // ADDED: Timeout fallback to clear loading state
+            setTimeout(() => {
+                if (isProcessingResponseRef.current && currentLoadingIdRef.current === loadingMessageId) {
+                    console.log('Timeout fallback: clearing loading state');
+                    clearAIResponding();
+                    
+                    setMessages(prev => {
+                        const withoutLoading = prev.filter(msg => msg.id !== loadingMessageId);
+                        const timeoutMessage: Message = {
+                            id: `timeout-${Date.now()}`,
+                            text: 'Request timed out. Please try again.',
+                            user: false,
+                            created_at: new Date().toISOString(),
+                            timestamp: new Date().toISOString(),
+                            sender: 'assistant'
+                        };
+                        return [...withoutLoading, timeoutMessage];
+                    });
+                }
+            }, 30000); // 30 second timeout
         },
         onSuccess: async (data) => {
             console.log('Message sent successfully:', data);
 
-            // Update conversation ID if it was created/changed
             if (data.conversationId && data.conversationId !== conversationId) {
                 setConversationId(data.conversationId);
             }
 
             try {
-                // Extract AI response text with better error handling
                 const aiResponseText = extractAIResponseText(data.aiResponse);
 
                 if (!aiResponseText || aiResponseText.trim() === '') {
                     throw new Error('AI response is empty or invalid');
                 }
 
-                console.log('Saving AI response to Supabase:', aiResponseText);
+                console.log('AI response received, waiting for realtime update...');
 
-                if (data.aiResponse.metadata) {
-                    console.log('AI Response Metadata:', data.aiResponse.metadata);
-                }
+                // ADDED: Fallback timeout in case realtime doesn't work
+                setTimeout(() => {
+                    if (isProcessingResponseRef.current) {
+                        console.log('Realtime fallback: manually clearing loading state');
+                        clearAIResponding();
+                        
+                        setMessages(prev => {
+                            const withoutLoading = prev.filter(msg => !msg.isLoading);
+                            
+                            // Check if the response already exists
+                            const responseExists = prev.some(msg => 
+                                msg.sender === 'assistant' && 
+                                msg.text === aiResponseText && 
+                                !msg.isLoading
+                            );
+                            
+                            if (!responseExists) {
+                                const fallbackMessage: Message = {
+                                    id: `fallback-${Date.now()}`,
+                                    text: aiResponseText,
+                                    user: false,
+                                    created_at: new Date().toISOString(),
+                                    timestamp: new Date().toISOString(),
+                                    sender: 'assistant'
+                                };
+                                return [...withoutLoading, fallbackMessage];
+                            }
+                            
+                            return withoutLoading;
+                        });
+                    }
+                }, 5000); // 5 second fallback
 
             } catch (error) {
-                console.error('Failed to save AI response:', error);
+                console.error('Failed to process AI response:', error);
 
-                // Only handle errors manually since realtime won't trigger for failed saves
-                setMessages(prev => prev.filter(msg => !msg.isLoading));
+                setMessages(prev => {
+                    const withoutLoading = prev.filter(msg => msg.id !== currentLoadingIdRef.current);
+                    
+                    const errorMessage: Message = {
+                        id: `error-${Date.now()}`,
+                        text: 'Failed to get a valid response from AI. Please try again.',
+                        user: false,
+                        created_at: new Date().toISOString(),
+                        timestamp: new Date().toISOString(),
+                        sender: 'assistant'
+                    };
 
-                const errorMessage: Message = {
-                    id: `error-${Date.now()}`,
-                    text: 'Failed to get a valid response from AI. Please try again.',
-                    user: false,
-                    created_at: new Date().toISOString(),
-                    timestamp: new Date().toISOString(),
-                    sender: 'assistant'
-                };
-
-                setMessages(prev => [...prev, errorMessage]);
+                    return [...withoutLoading, errorMessage];
+                });
+                
                 clearAIResponding();
             }
         },
         onError: (error: any) => {
             console.error('Failed to send message:', error);
 
-            // Remove loading message and add error message
             setMessages(prev => {
-                const withoutLoading = prev.filter(msg => !msg.isLoading);
+                const withoutLoading = prev.filter(msg => msg.id !== currentLoadingIdRef.current);
 
                 let errorText = 'Sorry, I encountered an error processing your message.';
 
-                // Handle specific error cases
                 if (error.message === 'Already processing a request') {
-                    return prev; // Don't add error message for this case
+                    return prev;
                 }
 
                 if (error.response?.data?.error) {
@@ -583,13 +572,11 @@ const useRealtimeChat = ({
                 return [...withoutLoading, errorMessage];
             });
 
-            // Clear AI responding state and pending user message ref on error
             clearAIResponding();
             pendingUserMessageRef.current = null;
         }
     });
 
-    // Updated handleSendMessage function
     const handleSendMessage = useCallback(async (messageText: string, audioFile?: UploadedAudioFile) => {
         console.log('handleSendMessage called with:', { messageText, audioFile });
 
@@ -597,56 +584,48 @@ const useRealtimeChat = ({
             return;
         }
 
-        // Prevent multiple simultaneous requests
         if (isProcessingResponseRef.current) {
             console.log('Already processing a response, ignoring request');
             return;
         }
 
-        // Clear the input immediately
         setMessage('');
-
-        // Send to AI via mutation
         sendMessageMutation.mutate({ messageText, audioFile });
     }, [sendMessageMutation]);
 
-    // Function to start new conversation
     const startNewConversation = useCallback(() => {
         const newConvId = uniqueConvId;
         setConversationId(newConvId);
         setMessages([]);
         pendingUserMessageRef.current = null;
-        processedMessageIds.current.clear(); // Clear processed message IDs
+        currentLoadingIdRef.current = null;
+        processedMessageIds.current.clear();
         clearAIResponding();
     }, [uniqueConvId, clearAIResponding]);
 
+    const loadConversationHistoryMutation = useFetchMessagesMutation();
 
-   const loadConversationHistoryMutation = useFetchMessagesMutation();
+    const loadConversationHistory = useCallback(async () => {
+        try {
+            setLoading(true);
 
-const loadConversationHistory = useCallback(async () => {
-  try {
-    setLoading(true);
+            const response = await loadConversationHistoryMutation.mutateAsync(userDetails?.id);
 
-    const response = await loadConversationHistoryMutation.mutateAsync(userDetails?.id);
+            const extractedMessages = response.history?.map((item: { content: string; role: string }) => ({
+                content: item.content,
+                role: item.role,
+            })) ?? [];
 
-    const extractedMessages = response.history?.map((item: { content: string; role: string }) => ({
-      content: item.content,
-      role: item.role,
-    })) ?? [];
-
-    console.log(`Extract: ${JSON.stringify(extractedMessages)}`);
-    console.log(`Messages updated: ${extractedMessages.length}`);
-  } catch (error) {
-    console.error('Failed to load conversation history:', error);
-  } finally {
-    setLoading(false);
-  }
-}, [userDetails?.id]);
-
-
+            console.log(`Extract: ${JSON.stringify(extractedMessages)}`);
+            console.log(`Messages updated: ${extractedMessages.length}`);
+        } catch (error) {
+            console.error('Failed to load conversation history:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [userDetails?.id]);
 
     const handleRegenerate = useCallback(async (messageId: string) => {
-        // Prevent regeneration if already processing
         if (isProcessingResponseRef.current) {
             console.log('Already processing a response, ignoring regenerate request');
             return;
@@ -656,15 +635,11 @@ const loadConversationHistory = useCallback(async () => {
         const previousUserMessage = messages.slice(0, currentIndex).reverse().find(msg => msg.user);
 
         if (previousUserMessage) {
-            // Set processing flag
             isProcessingResponseRef.current = true;
 
-            // Remove the AI message that we're regenerating
-            setMessages(prev => prev.filter(msg => msg.id !== messageId));
-
-            // Add loading message
+            const loadingMessageId = `loading-regenerate-${Date.now()}`;
             const loadingMessage: Message = {
-                id: `loading-${Date.now()}`,
+                id: loadingMessageId,
                 text: '',
                 user: false,
                 created_at: new Date().toISOString(),
@@ -673,12 +648,18 @@ const loadConversationHistory = useCallback(async () => {
                 isLoading: true
             };
 
-            setMessages(prev => [...prev, loadingMessage]);
+            currentLoadingIdRef.current = loadingMessageId;
+
+            setMessages(prev => {
+                const filtered = prev.filter(msg => msg.id !== messageId);
+                return [...filtered, loadingMessage];
+            });
+            
             setIsAIResponding(true);
+            scrollToBottom();
 
             try {
-                // api call for sending message
-                const response = await axios.post('/api/chats/send-message', {
+                const response = await axios.post('/api/conversations/send-message', {
                     message: previousUserMessage.text,
                     systemPrompt: systemPrompt,
                     temperature: temperature,
@@ -688,23 +669,40 @@ const loadConversationHistory = useCallback(async () => {
                     useDatabase: true,
                 });
 
-                // Extract and validate AI response
                 const aiResponseText = extractAIResponseText(response.data);
 
                 if (!aiResponseText || aiResponseText.trim() === '') {
                     throw new Error('AI response is empty or invalid');
                 }
 
-                await saveMessageToSupabase(aiResponseText, 'assistant');
+                // ADDED: Same fallback timeout for regeneration
+                setTimeout(() => {
+                    if (isProcessingResponseRef.current && currentLoadingIdRef.current === loadingMessageId) {
+                        console.log('Regeneration fallback: manually clearing loading state');
+                        clearAIResponding();
+                        
+                        setMessages(prev => {
+                            const withoutLoading = prev.filter(msg => msg.id !== loadingMessageId);
+                            
+                            const fallbackMessage: Message = {
+                                id: `regen-fallback-${Date.now()}`,
+                                text: aiResponseText,
+                                user: false,
+                                created_at: new Date().toISOString(),
+                                timestamp: new Date().toISOString(),
+                                sender: 'assistant'
+                            };
+                            return [...withoutLoading, fallbackMessage];
+                        });
+                    }
+                }, 5000);
 
             } catch (error: any) {
                 console.error('Failed to regenerate message:', error);
 
-                // Determine a more specific error message
                 let errorText = 'Failed to regenerate response. Please try again.';
 
                 if (error.response) {
-                    // Error returned from server
                     const status = error.response.status;
                     if (status === 401) {
                         errorText = 'You are not authorized to regenerate this response. Please log in again.';
@@ -720,18 +718,15 @@ const loadConversationHistory = useCallback(async () => {
                         errorText = `Unexpected error (${status}). Please try again.`;
                     }
                 } else if (error.request) {
-                    // No response received
                     errorText = 'No response from server. Please check your internet connection.';
                 } else if (error.message && error.message.includes('timeout')) {
                     errorText = 'The request timed out. Please try again in a few moments.';
                 } else if (error.message) {
-                    // Fallback to general error message
                     errorText = `Error: ${error.message}`;
                 }
 
-                // Remove loading and add error message
                 setMessages(prev => {
-                    const withoutLoading = prev.filter(msg => !msg.isLoading);
+                    const withoutLoading = prev.filter(msg => msg.id !== currentLoadingIdRef.current);
                     const errorMessage: Message = {
                         id: `error-${Date.now()}`,
                         text: errorText,
@@ -746,9 +741,8 @@ const loadConversationHistory = useCallback(async () => {
                 clearAIResponding();
             }
         }
-    }, [messages, systemPrompt, temperature, maxTokens, conversationId, userDetails?.id, saveMessageToSupabase, clearAIResponding, extractAIResponseText]);
+    }, [messages, systemPrompt, temperature, maxTokens, conversationId, userDetails?.id, clearAIResponding, extractAIResponseText, scrollToBottom]);
 
-    // Prefill message if it's edited
     useEffect(() => {
         if (isEdited && messageId) {
             setMessage(messageId);
@@ -756,32 +750,34 @@ const loadConversationHistory = useCallback(async () => {
     }, [isEdited, messageId]);
 
     const { handleEditMessage } = useMessageOptions();
-    // Stable callback for edit message
     const handleEditMessageCallback = useCallback(() => {
         handleEditMessage(message);
     }, [handleEditMessage, message]);
 
-    // Call onLoadingChange callback when isAIResponding changes
     useEffect(() => {
         if (onLoadingChange) {
             onLoadingChange(isAIResponding);
         }
     }, [isAIResponding, onLoadingChange]);
 
-    // Call onMessagesChange callback when messages change
     useEffect(() => {
         if (onMessagesChange) {
             onMessagesChange(messages);
         }
     }, [messages, onMessagesChange]);
 
-    // DEBUG: Log state changes
+    // ENHANCED: Better debugging
     useEffect(() => {
-        console.log('isAIResponding changed:', isAIResponding);
+        console.log('=== STATE DEBUG ===');
+        console.log('isAIResponding:', isAIResponding);
+        console.log('isProcessingResponseRef:', isProcessingResponseRef.current);
+        console.log('currentLoadingIdRef:', currentLoadingIdRef.current);
         console.log('Messages count:', messages.length);
+        console.log('Loading messages:', messages.filter(m => m.isLoading).length);
+        console.log('Subscription ready:', subscriptionReadyRef.current);
+        console.log('==================');
     }, [isAIResponding, messages.length]);
 
-    // Return component API
     return {
         // State
         messages,

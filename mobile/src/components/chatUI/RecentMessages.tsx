@@ -11,17 +11,13 @@ import {
     FlatList,
     ListRenderItem,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
+import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
+import SkeletonMessage from './Skeleton';
 
 const { width, height } = Dimensions.get('window');
 
-export type Message = {
-    id: string;
-    content: string;
-    timestamp: Date;
-};
 
 type ModalAction = {
     id: string;
@@ -34,12 +30,13 @@ type GroupedMessage = {
     type: 'header' | 'message';
     id: string;
     title?: string;
-    message?: Message;
+    message?: ConversationSummary;
 };
 
 type RecentMessagesProps = {
-    messages: Message[];
+    messages: ConversationSummary[];
     search?: string;
+    isLoading: boolean,
     onShareChat?: (messageId: string) => void;
     onRenameChat?: (messageId: string) => void;
     onArchiveChat?: (messageId: string) => void;
@@ -50,6 +47,7 @@ type RecentMessagesProps = {
 const RecentMessages: React.FC<RecentMessagesProps> = ({
     messages = [],
     search = '',
+    isLoading,
     onShareChat,
     onRenameChat,
     onArchiveChat,
@@ -135,18 +133,20 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         // Filter messages based on search if provided
         const filteredMessages = search 
             ? messages.filter(message => 
-                message.content.toLowerCase().includes(search.toLowerCase())
+                message.title.toLowerCase().includes(search.toLowerCase())
               )
             : messages;
 
         // Sort messages by timestamp (newest first)
-        const sortedMessages = [...filteredMessages].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        const sortedMessages = [...filteredMessages].sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.updated_at).getTime()
+        );
         
         const grouped: GroupedMessage[] = [];
         let currentGroup: string | null = null;
 
         sortedMessages.forEach((message) => {
-            const dateLabel = getDateLabel(message.timestamp);
+            const dateLabel = getDateLabel(new Date(message.created_at));
             
             if (currentGroup !== dateLabel) {
                 // Add header for new group
@@ -161,7 +161,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             // Add message
             grouped.push({
                 type: 'message',
-                id: message.id,
+                id: message.conversation_id,
                 message,
             });
         });
@@ -199,7 +199,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         }
 
         const message = item.message!;
-        const isPressed = pressedMessage === message.id;
+        const isPressed = pressedMessage === message.conversation_id;
         
         return (
             <Pressable
@@ -207,13 +207,13 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                     styles.messageItem,
                     isPressed && styles.messageItemPressed
                 ]}
-                onPress={() => handleMessagePress(message.id)}
-                onLongPress={() => handleLongPress(message.id)}
+                onPress={() => handleMessagePress(message.conversation_id)}
+                onLongPress={() => handleLongPress(message.conversation_id)}
                 delayLongPress={500}
             >
                 <View style={[styles.messageContent]}>
                     <Text style={styles.messageText} numberOfLines={2}>
-                        {message.content}
+                        {message.title}
                     </Text>
                 </View>
             </Pressable>
@@ -246,19 +246,41 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
     return (
         <View style={styles.container}>
-            <FlatList
-                data={groupedMessages}
-                renderItem={renderItem}
-                keyExtractor={keyExtractor}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={renderEmptyState}
-                contentContainerStyle={groupedMessages.length === 0 ? styles.emptyListContainer : undefined}
-                initialNumToRender={10}
-                maxToRenderPerBatch={10}
-                windowSize={10}
-                removeClippedSubviews={true}
-                getItemLayout={getItemLayout}
-            />
+            {isLoading ? 
+                groupedMessages.map((_, index: number) => {
+                    return (
+                        <View
+                            key={index}
+                            style={{
+                                height: 72,
+                                marginHorizontal: 20,
+                                marginVertical: 8,
+                                borderRadius: 10,
+                                backgroundColor: '#1f2937',
+                                opacity: 0.5,
+                            }}
+                        >
+                            <SkeletonMessage />
+                        </View>
+                    );
+                })
+            : (
+                <FlatList
+                    data={groupedMessages}
+                    renderItem={renderItem}
+                    keyExtractor={keyExtractor}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={renderEmptyState}
+                    contentContainerStyle={groupedMessages.length === 0 ? styles.emptyListContainer : undefined}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                    removeClippedSubviews={true}
+                    getItemLayout={getItemLayout}
+                />
+            )
+        }
+            
 
             {/* Modal */}
             <Modal
@@ -318,7 +340,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#000000',
     },
     sectionHeaderText: {
-        color: Colors.dark.bgSecondary,
+        color: 'gray',
         fontSize: 16,
         fontFamily: 'Manrope-ExtraBold',
     },

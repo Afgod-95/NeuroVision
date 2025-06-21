@@ -21,7 +21,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
 import { router } from 'expo-router';
-
+import { useFetchConversationSummaryMutation } from '@/src/hooks/conversations/ConversationsMutation';
+import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
@@ -34,14 +35,40 @@ type CustomSideBarProps = {
 };
 
 const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpen }) => {
+    
+    //states
     const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
     const sidebarWidth = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const [shouldRender, setShouldRender] = useState(isVisible);
     const [isDragging, setIsDragging] = useState(false);
     const [searchbarVisible, setSearchbarVisible] = useState(false);
-    const { user: userCredentials } = useSelector((state: RootState) => state.user )
+    const { user: userCredentials } = useSelector((state: RootState) => state.user );
+
+    const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
+
     //search function
     const [searchQuery, setSearchQuery] = useState('');
+
+    //fetch summary
+    const fetchUserSummaryMutation = useFetchConversationSummaryMutation();
+    useEffect(() => {
+        if (userCredentials?.id !== undefined) {
+            fetchUserSummaryMutation.mutateAsync(userCredentials.id)
+            .then((data) => {
+                const { conversations } = data;
+                const summaryTitle = conversations.map((conversation: ConversationSummary) => {
+                    return {
+                        conversation_id: conversation.conversation_id,
+                        title: conversation.title,
+                        created_at: conversation.created_at
+                    }
+                });
+                setSummaryTitle(summaryTitle);
+                });
+        }
+    }, [userCredentials?.id]);
+
+
     
 
     //getting username from redux state
@@ -184,10 +211,11 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                         onCancel={() => setSearchbarVisible(false)}
                     />
                 </View>
-
+                
                 {/* recent messages */}
                 <RecentMessages 
-                    messages={dummyMessages} 
+                    isLoading = {fetchUserSummaryMutation.isPending}
+                    messages={summaryTitle} 
                     search = {searchQuery}
                 />
                
