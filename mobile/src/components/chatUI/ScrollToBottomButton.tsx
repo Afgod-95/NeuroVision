@@ -49,14 +49,14 @@ const ScrollToBottomButton: React.FC<Props> = ({ onPress, visible }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    right: 10,
+    right: 0,
     bottom: 10,
     zIndex: 10,
   },
   button: {
     backgroundColor: Colors.dark.button,
     borderRadius: 50,
-    padding: 10,
+    padding: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,

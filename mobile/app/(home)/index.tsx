@@ -102,6 +102,20 @@ const Index = () => {
     enableSampleMessages: true,
   });
 
+/**
+ * scroll to bottom
+ */
+const onScroll = useCallback((event: any) => {
+  const offsetY = event.nativeEvent.contentOffset.y;
+  const contentHeight = event.nativeEvent.contentSize.height;
+  const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+
+  const isAtBottom = offsetY + layoutHeight >= contentHeight; 
+
+  setShowScrollButton(!isAtBottom && offsetY > 200);
+}, []);
+
+
   useEffect(() => {
     loadConversationHistory()
   },[loadConversationHistory])
@@ -269,7 +283,6 @@ const Index = () => {
                     keyExtractor={keyExtractor}
                     renderItem={renderItem}
                     contentContainerStyle={styles.flatListContent}
-                    // Performance optimizations
                     removeClippedSubviews={true}
                     maxToRenderPerBatch={10}
                     updateCellsBatchingPeriod={50}
@@ -277,10 +290,7 @@ const Index = () => {
                     windowSize={10}
                     decelerationRate="normal"
                     scrollEventThrottle={16}
-                    onScroll = {((event) => {
-                      const offsetY = event.nativeEvent.contentOffset.y;
-                      setShowScrollButton(offsetY < 200)
-                    })}
+                    onScroll = {onScroll}
                     
                     getItemLayout={undefined}
                     
@@ -353,6 +363,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     height: 60,
+    paddingTop: Platform.OS === 'android' ? 20 : undefined
   },
   contentArea: {
     flex: 1,

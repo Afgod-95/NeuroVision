@@ -239,7 +239,6 @@ export const shouldUpdateSummary = async (
     try {
         console.log(`Checking if summary should be updated for conversation ${conversationId}, messageCount: ${messageCount}`);
 
-        // Get existing summary info
         const { data: existingSummary } = await supabase
             .from('ai_conversation_summaries')
             .select('id, updated_at, message_count')
@@ -247,19 +246,20 @@ export const shouldUpdateSummary = async (
             .eq('user_id', userId)
             .single();
 
-        // Update summary if:
-        // 1. No existing summary and conversation has 8+ messages
-        // 2. Existing summary but conversation has grown significantly (every 10 messages after initial summary)
         if (!existingSummary) {
-            console.log(`No existing summary found. Should update: ${messageCount >= 8}`);
-            return messageCount >= 8;
-        } else {
-            const shouldUpdate = messageCount % 10 === 0 && messageCount >= 15;
-            console.log(`Existing summary found with ${existingSummary.message_count} messages. Current: ${messageCount}. Should update: ${shouldUpdate}`);
-            return shouldUpdate;
+            const should = messageCount >= 6;
+            console.log(`No existing summary found. Should update: ${should}`);
+            return should;
         }
+
+        const growth = messageCount - (existingSummary.message_count || 0);
+        const shouldUpdate = growth >= 5;
+
+        console.log(`Existing summary found with ${existingSummary.message_count} messages. Growth: ${growth}. Should update: ${shouldUpdate}`);
+        return shouldUpdate;
+
     } catch (error) {
-        console.log('Error checking summary update status:', error);
+        console.error('Error checking summary update status:', error);
         return false;
     }
 };

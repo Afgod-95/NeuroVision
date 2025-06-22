@@ -277,7 +277,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
 
         console.log(`Received response from Gemini (${response.length} characters)`);
 
-        // Store assistant response if using database (async, don't block response)
+        // Store assistant response if using database 
         if (useDatabase && conversationId && userId && response) {
             console.log('Storing assistant message...');
             storeMessage(conversationId, userId, 'assistant', response).catch(error => {
