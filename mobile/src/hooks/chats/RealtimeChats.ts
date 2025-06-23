@@ -421,9 +421,26 @@ const useRealtimeChat = ({
 
             scrollToBottom();
 
-          
-               
-              
+            // ADDED: Timeout fallback to clear loading state
+            setTimeout(() => {
+                if (isProcessingResponseRef.current && currentLoadingIdRef.current === loadingMessageId) {
+                    console.log('Timeout fallback: clearing loading state');
+                    clearAIResponding();
+                    
+                    setMessages(prev => {
+                        const withoutLoading = prev.filter(msg => msg.id !== loadingMessageId);
+                        const timeoutMessage: Message = {
+                            id: `timeout-${Date.now()}`,
+                            text: 'Request timed out. Please try again.',
+                            user: false,
+                            created_at: new Date().toISOString(),
+                            timestamp: new Date().toISOString(),
+                            sender: 'assistant'
+                        };
+                        return [...withoutLoading, timeoutMessage];
+                    });
+                }
+            }, 60000); // 1 minute timeout
         },
         onSuccess: async (data) => {
             console.log('Message sent successfully:', data);

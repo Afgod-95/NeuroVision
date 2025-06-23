@@ -133,38 +133,62 @@ Provide a detailed summary:`;
             throw new Error('AI service returned empty summary');
         }
 
-        // Enhanced title generation with fallback
-        const titlePrompt = `Generate a concise title for this conversation (maximum 8 words):
+        // Enhanced title generation with better prompt and fallback
+        const titlePrompt = `Create a concise, descriptive title for this conversation summary. Focus on the main topic or purpose discussed.
 
-${summary.substring(0, 400)}`;
+Requirements:
+- Maximum 6 words
+- Capture the primary subject/theme
+- Be specific and clear
+- Examples: "Project Status Discussion", "Budget Planning Meeting", "Feature Development Review"
+
+Summary: ${summary.substring(0, 400)}
+
+Title:`;
 
         console.log('🏷️ Generating title with Gemini...');
         const titleRaw = await geminiService.sendMessage(titlePrompt, [], {
-            temperature: 0.4, // Slightly higher temperature
-            maxTokens: 50     // More tokens for flexibility
+            temperature: 0.3,
+            maxTokens: 40
         });
 
         console.log(`🏷️ Generated title raw: "${titleRaw}"`);
 
-        // Clean up the title with fallback
+        // Clean up the title thoroughly
         let title = titleRaw
             ?.trim()
-            ?.replace(/^["']|["']$/g, '')
-            ?.replace(/^Title:\s*/i, '')
-            ?.replace(/^\d+\.\s*/, '')
+            ?.replace(/^["']|["']$/g, '') // Remove quotes
+            ?.replace(/^Title:\s*/i, '') // Remove "Title:" prefix
+            ?.replace(/^Generate.*?:\s*/i, '') // Remove prompt echoes
+            ?.replace(/^\d+\.\s*/, '') // Remove numbered list
+            ?.replace(/^-\s*/, '') // Remove dash prefix
             ?.trim();
 
-        // Add fallback if still empty
+        // Smart fallback based on conversation content
         if (!title || title.length === 0) {
-            title = `Conversation ${new Date().toISOString().split('T')[0]}`;
-            console.log(`🏷️ Using fallback title: "${title}"`);
+            // Try to create a meaningful title from the summary
+            const summaryStart = summary.trim().substring(0, 100).toLowerCase();
+
+            if (summaryStart.includes('project')) {
+                title = 'Project Discussion';
+            } else if (summaryStart.includes('budget') || summaryStart.includes('cost')) {
+                title = 'Budget Discussion';
+            } else if (summaryStart.includes('plan') || summaryStart.includes('strategy')) {
+                title = 'Planning Session';
+            } else if (summaryStart.includes('review') || summaryStart.includes('feedback')) {
+                title = 'Review Discussion';
+            } else if (summaryStart.includes('problem') || summaryStart.includes('issue')) {
+                title = 'Problem Solving';
+            } else {
+                title = 'General Discussion';
+            }
+
+            console.log(`🏷️ Using smart fallback title: "${title}"`);
         }
 
         console.log(`🏷️ Final title: "${title}"`);
 
-        if (!title || title.length === 0) {
-            throw new Error('AI service returned empty title after cleaning');
-        }
+        // ✅ Remove the redundant error check - title is guaranteed to exist now
 
         // Store the summary in database
         console.log('💾 Storing summary in database...');
