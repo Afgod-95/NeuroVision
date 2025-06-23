@@ -295,26 +295,25 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
         // Handle AI conversation summary ONLY if both messages were stored successfully
         if (useDatabase && conversationId && userId && userMessageStored && assistantMessageStored) {
             console.log('Starting summary generation process...');
-            
+
             // Get actual message count from database instead of using in-memory history
             try {
-                const { data: messageCount, error: countError } = await supabase
+                const { count: actualMessageCount, error: countError } = await supabase
                     .from('messages')
-                    .select('id', { count: 'exact', head: true })
+                    .select('*', { count: 'exact', head: true })
                     .eq('conversation_id', conversationId)
                     .eq('user_id', userId);
 
                 if (countError) {
                     console.error('Error getting message count:', countError);
                 } else {
-                    const actualMessageCount = messageCount?.length || 0;
                     console.log(`Actual message count in DB: ${actualMessageCount}`);
 
-                    // Check if we should generate a summary based on actual message count
+                    // Use actualMessageCount (which is the count) instead of messageCount?.length
                     const shouldGenerate = await shouldUpdateSummary(
-                        conversationId, 
-                        parseInt(userId.toString()), 
-                        actualMessageCount
+                        conversationId,
+                        parseInt(userId.toString()),
+                        actualMessageCount || 0
                     );
                     console.log(`Should generate summary: ${shouldGenerate}`);
 
@@ -325,13 +324,13 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                         setTimeout(async () => {
                             try {
                                 console.log('🚀 Starting delayed summary generation...');
-                                
+
                                 const result = await generateConversationSummary(
-                                    conversationId, 
-                                    userId, 
-                                    undefined // Let the function create its own prompt
+                                    conversationId,
+                                    userId,
+                                    undefined 
                                 );
-                                
+
                                 if (result?.success) {
                                     console.log("✅ Summary generated successfully:", {
                                         title: result.title,
@@ -350,7 +349,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                                     actualMessageCount
                                 });
                             }
-                        }, 2000); // 2-second delay to ensure database consistency
+                        }, 2000); 
                     } else {
                         console.log('Skipping summary generation (conditions not met)');
                     }
@@ -368,7 +367,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                 });
             }
         }
-        
+
         // Enhanced response format
         res.json({
             success: true,
