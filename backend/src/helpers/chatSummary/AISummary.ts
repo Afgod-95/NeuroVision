@@ -176,7 +176,6 @@ ${summary.substring(0, 400)}`;
                 title,
                 summary,
                 summary_type: 'auto',
-                message_count: messages.length,
                 updated_at: new Date().toISOString()
             });
 
