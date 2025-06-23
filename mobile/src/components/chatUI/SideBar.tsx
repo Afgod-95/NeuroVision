@@ -69,7 +69,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     }, [userCredentials?.id]);
 
 
-    
+    console.log(userCredentials?.id)
 
     //getting username from redux state
     const username = userCredentials?.username

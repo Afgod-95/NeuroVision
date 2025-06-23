@@ -112,7 +112,7 @@ export const generateConversationSummary = async (
 
         // Create conversation text for summarization
         const conversationText = messages
-            .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+            .map(msg => `${msg.role?.toUpperCase()}: ${msg.content}`)
             .join('\n\n');
 
         console.log(`Conversation text length: ${conversationText.length} characters`);
