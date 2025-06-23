@@ -3,14 +3,7 @@ import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
 import { isValidUUID } from "../../middlewares/isValidUUID";
-
-// Initialize Gemini service 
-const geminiService = new GeminiAIService({
-    apiKey: process.env.GEMINI_API_KEY || "",
-    model: "gemini-2.0-flash-exp",
-    maxTokens: 8192,
-    temperature: 0.7
-});
+import geminiService from "../../services/GeminiInitiation";
 
 interface GenerateConversationSummaryRequest extends Request {
     body: {

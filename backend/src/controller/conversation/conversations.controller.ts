@@ -6,15 +6,7 @@ import supabase from "../../lib/supabase";
 import { v4 as uuidv4 } from 'uuid';
 import { isValidUUID } from "../../middlewares/isValidUUID";
 import { generateConversationSummary, shouldUpdateSummary } from "../../helpers/chatSummary/AISummary";
-
-
-// Initialize Gemini service with enhanced system prompt for coding assistance
-const geminiService = new GeminiAIService({
-    apiKey: process.env.GEMINI_API_KEY || "",
-    model: "gemini-2.5-flash",
-    maxTokens: 8192,
-    temperature: 0.7
-});
+import geminiService from "../../services/GeminiInitiation";
 
 // Enhanced system prompt for better coding, debugging, and text generation assistance
 const DEFAULT_SYSTEM_PROMPT = `You are an advanced AI assistant specialized in:
@@ -298,13 +290,10 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             console.log(`Summary params - conversationId: ${conversationId}, userId: ${userId}, historyLength: ${updatedHistory.length}`);
             
             // Check if we should generate a summary based on message count
-            const shouldGenerate = await shouldUpdateSummary(conversationId, parseInt(userId.toString()), updatedHistory.length);
-            console.log(`Should generate summary: ${shouldGenerate}`);
+            //const shouldGenerate = await shouldUpdateSummary(conversationId, parseInt(userId.toString()), updatedHistory.length);
+            //console.log(`Should generate summary: ${shouldGenerate}`);
             
-            if (shouldGenerate) {
-                console.log('Generating conversation summary...');
-                
-                // Use the updated history instead of recreating conversation text
+            // Use the updated history instead of recreating conversation text
                 const conversationText = updatedHistory
                     .map(msg => `${msg?.role.toUpperCase()}: ${msg.content}`)
                     .join('\n\n');
@@ -313,13 +302,14 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
 
                 const customPrompt = `Please summarize the following conversation in a clear and concise manner:
 
-${conversationText}
+                ${conversationText}
 
-SUMMARY:`;
+                SUMMARY:`;
 
                 // Add more detailed error handling for summary generation
                 generateConversationSummary(conversationId, userId, customPrompt)
-                    .then(() => {
+                    .then((data) => {
+                       console.log('Summary generated successfully', data);
                         console.log("✅ Summary generated successfully");
                     })
                     .catch(err => {
@@ -333,11 +323,8 @@ SUMMARY:`;
                             conversationTextLength: conversationText.length
                         });
                     });
-            } else {
-                console.log('⏭️ Skipping summary generation (conditions not met)');
-            }
         } else {
-            console.log('⏭️ Skipping summary generation (database not enabled or missing params)');
+            console.log('Skipping summary generation (database not enabled or missing params)');
         }
 
         // Enhanced response format

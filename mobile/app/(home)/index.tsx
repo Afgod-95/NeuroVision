@@ -288,6 +288,7 @@ const onScroll = useCallback((event: any) => {
                     updateCellsBatchingPeriod={50}
                     initialNumToRender={10}
                     windowSize={10}
+                    nestedScrollEnabled = {true}
                     decelerationRate="normal"
                     scrollEventThrottle={16}
                     onScroll = {onScroll}

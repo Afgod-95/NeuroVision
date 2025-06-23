@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
   titleBar: {
     height: 16,
     width: '70%',
-    backgroundColor: '#2e2e2e',
+    backgroundColor: 'white',
     borderRadius: 4,
   },
 });

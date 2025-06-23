@@ -1,21 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
-  Animated,
   Alert,
   Share,
   Dimensions,
   ActivityIndicator,
-  Pressable,
   Image,
   Modal,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  withSequence,
+  Easing,
+  runOnJS,
+} from 'react-native-reanimated';
 import Markdown from 'react-native-markdown-display';
-import Octicons from '@expo/vector-icons/Octicons';
+import { ScrollView } from 'react-native-gesture-handler';
 import { Colors } from '@/src/constants/Colors';
 import { Feather } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -62,27 +68,101 @@ const AdvancedAIResponse = ({
   const [showActions, setShowActions] = useState(false);
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({});
   const [expandedBlocks, setExpandedBlocks] = useState<{ [key: string]: boolean }>({});
-  const [showMetadata, setShowMetadata] = useState(false);
   const [mainCopied, setMainCopied] = useState(false);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  
+  // Reanimated shared values
+  const fadeOpacity = useSharedValue(0);
+  const dot1Opacity = useSharedValue(0.3);
+  const dot2Opacity = useSharedValue(0.3);
+  const dot3Opacity = useSharedValue(0.3);
+  const modalOpacity = useSharedValue(0);
+  const modalScale = useSharedValue(0.8);
 
+  // Animated styles
+  const fadeStyle = useAnimatedStyle(() => ({
+    opacity: fadeOpacity.value,
+  }));
+
+  const dot1Style = useAnimatedStyle(() => ({
+    opacity: dot1Opacity.value,
+  }));
+
+  const dot2Style = useAnimatedStyle(() => ({
+    opacity: dot2Opacity.value,
+  }));
+
+  const dot3Style = useAnimatedStyle(() => ({
+    opacity: dot3Opacity.value,
+  }));
+
+  const modalStyle = useAnimatedStyle(() => ({
+    opacity: modalOpacity.value,
+  }));
+
+  const modalContentStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: modalScale.value }],
+  }));
+
+  // Start typing animation
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    if (loading) {
+      // Start typing dots animation
+      const startTypingAnimation = () => {
+        dot1Opacity.value = withRepeat(
+          withSequence(
+            withTiming(1, { duration: 400 }),
+            withTiming(0.3, { duration: 400 })
+          ),
+          -1,
+          false
+        );
+        
+        dot2Opacity.value = withRepeat(
+          withSequence(
+            withTiming(0.3, { duration: 200 }),
+            withTiming(1, { duration: 400 }),
+            withTiming(0.3, { duration: 200 })
+          ),
+          -1,
+          false
+        );
+        
+        dot3Opacity.value = withRepeat(
+          withSequence(
+            withTiming(0.3, { duration: 400 }),
+            withTiming(1, { duration: 400 }),
+            withTiming(0.3, { duration: 200 })
+          ),
+          -1,
+          false
+        );
+      };
+
+      startTypingAnimation();
+    } else {
+      // Fade in content when loading is done
+      fadeOpacity.value = withTiming(1, {
+        duration: 300,
+        easing: Easing.out(Easing.quad),
+      });
+    }
+  }, [loading]);
+
+  // Modal animation effect
+  useEffect(() => {
+    if (selectedImage) {
+      modalOpacity.value = withTiming(1, { duration: 200 });
+      modalScale.value = withTiming(1, { 
+        duration: 200, 
+        easing: Easing.out(Easing.back(1.1)) 
+      });
+    } else {
+      modalOpacity.value = withTiming(0, { duration: 150 });
+      modalScale.value = withTiming(0.8, { duration: 150 });
+    }
+  }, [selectedImage]);
 
   const handleLike = (type: 'like' | 'dislike') => {
     const newState = isLiked === type ? null : type;
@@ -105,8 +185,6 @@ const AdvancedAIResponse = ({
           setMainCopied(false);
         }, 2000);
       }
-
-      // No alert needed - visual feedback is sufficient
     } catch (error) {
       Alert.alert('Error', 'Failed to copy content');
     }
@@ -116,7 +194,7 @@ const AdvancedAIResponse = ({
     try {
       await Share.share({
         message: message,
-        title: 'AI Response from NeuroVision',
+        title: 'AI Response',
       });
     } catch (error) {
       console.error('Error sharing:', error);
@@ -148,7 +226,7 @@ const AdvancedAIResponse = ({
   };
 
   const extractCodeBlocks = (text: string) => {
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+    const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
     const blocks = [];
     let match;
 
@@ -166,52 +244,29 @@ const AdvancedAIResponse = ({
 
   const CodeBlock = ({ code, language, blockId }: { code: string; language: string; blockId: string }) => {
     const isCopied = copiedStates[blockId];
-    const isExpanded = expandedBlocks[blockId];
-    const shouldTruncate = code.split('\n').length > 10;
-    const displayCode = shouldTruncate && !isExpanded
-      ? code.split('\n').slice(0, 10).join('\n') + '\n...'
-      : code;
 
     return (
       <View style={styles.codeBlockContainer}>
         <View style={styles.codeHeader}>
-          <View style={styles.codeLanguage}>
-            <Text style={styles.codeLanguageText}>{language}</Text>
-          </View>
-          <View style={styles.codeActions}>
-            {shouldTruncate && (
-              <TouchableOpacity
-                style={styles.codeActionButton}
-                onPress={() => setExpandedBlocks(prev => ({ ...prev, [blockId]: !isExpanded }))}
-              >
-                <Feather
-                  name={isExpanded ? "chevron-up" : "chevron-down"}
-                  size={14}
-                  color="#6b7280"
-                />
-                <Text style={styles.codeActionText}>
-                  {isExpanded ? 'Collapse' : 'Expand'}
-                </Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.codeActionButton, isCopied && styles.copiedButton]}
-              onPress={() => handleCopy(code, blockId)}
-            >
-              <Feather
-                name={isCopied ? "check" : "copy"}
-                size={14}
-                color={isCopied ? "#10b981" : "#6b7280"}
-              />
-              <Text style={[styles.codeActionText, isCopied && styles.copiedText]}>
-                {isCopied ? 'Copied' : 'Copy'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.codeLanguage}>{language}</Text>
+          <TouchableOpacity
+            style={styles.copyButton}
+            onPress={() => handleCopy(code, blockId)}
+          >
+            <Feather
+              name={isCopied ? "check" : "copy"}
+              size={16}
+              color={isCopied ? "#10b981" : "#666"}
+            />
+          </TouchableOpacity>
         </View>
-        <View style={styles.codeContainer}>
-          <Text style={styles.codeText}>{displayCode}</Text>
-        </View>
+        <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.codeScrollView}
+      >
+        <Text style={styles.codeText}>{code}</Text>
+      </ScrollView>
       </View>
     );
   };
@@ -221,20 +276,12 @@ const AdvancedAIResponse = ({
 
     return (
       <View style={styles.imageGalleryContainer}>
-        <View style={styles.imageGalleryHeader}>
-          <Feather name="image" size={16} color={Colors.dark.txtSecondary} />
-          <Text style={styles.imageGalleryTitle}>Generated Images</Text>
-          <Text style={styles.imageCount}>
-            {images.length} {images.length === 1 ? 'image' : 'images'}
-          </Text>
-        </View>
-        
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.imageScrollContainer}
         >
-          {images.map((image, index) => (
+          {images.map((image) => (
             <TouchableOpacity
               key={image.id}
               style={styles.imageContainer}
@@ -244,7 +291,7 @@ const AdvancedAIResponse = ({
               <View style={styles.imageWrapper}>
                 {imageLoadingStates[image.id] && (
                   <View style={styles.imageLoadingOverlay}>
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color="#666" />
                   </View>
                 )}
                 <Image
@@ -254,20 +301,6 @@ const AdvancedAIResponse = ({
                   onLoadEnd={() => setImageLoadingStates(prev => ({ ...prev, [image.id]: false }))}
                   onError={() => setImageLoadingStates(prev => ({ ...prev, [image.id]: false }))}
                 />
-                <View style={styles.imageOverlay}>
-                  <TouchableOpacity
-                    style={styles.imageActionButton}
-                    onPress={() => handleImageShare(image)}
-                  >
-                    <Feather name="share-2" size={14} color="#fff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.imageActionButton}
-                    onPress={() => handleImageSave(image.uri)}
-                  >
-                    <Feather name="download" size={14} color="#fff" />
-                  </TouchableOpacity>
-                </View>
               </View>
               {image.prompt && (
                 <Text style={styles.imagePrompt} numberOfLines={2}>
@@ -289,7 +322,6 @@ const AdvancedAIResponse = ({
     }
 
     let processedText = text;
-    const components = [];
 
     codeBlocks.forEach((block, index) => {
       const placeholder = `__CODE_BLOCK_${index}__`;
@@ -321,14 +353,13 @@ const AdvancedAIResponse = ({
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.messageContainer}>
+        <View style={styles.messageContent}>
           <View style={styles.loadingContainer}>
             <View style={styles.typingIndicator}>
-              <View style={[styles.typingDot, { animationDelay: '0ms' }]} />
-              <View style={[styles.typingDot, { animationDelay: '150ms' }]} />
-              <View style={[styles.typingDot, { animationDelay: '300ms' }]} />
+              <Animated.View style={[styles.typingDot, dot1Style]} />
+              <Animated.View style={[styles.typingDot, dot2Style]} />
+              <Animated.View style={[styles.typingDot, dot3Style]} />
             </View>
-            <Text style={styles.loadingText}>Thinking...</Text>
           </View>
         </View>
       </View>
@@ -336,131 +367,83 @@ const AdvancedAIResponse = ({
   }
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
-    >
-      <View style={styles.messageContainer}>
-        {/* Metadata */}
-        {showMetadata && (
-          <View style={styles.metadata}>
-            <Text style={styles.metadataText}>
-              {timestamp.toLocaleString()} • {tokensUsed} tokens
-              {responseTime && ` • ${responseTime}ms`}
-            </Text>
-          </View>
-        )}
-
+    <Animated.View style={[styles.container, fadeStyle]}>
+      <View style={styles.messageContent}>
         {/* Generated Images */}
         <ImageGallery images={generatedImages} />
 
         {/* Content */}
-        <Pressable>
-          <View style={styles.contentContainer}>
-            {renderCustomMarkdown(message)}
-          </View>
-        </Pressable>
+        <View style={styles.contentContainer}>
+          {renderCustomMarkdown(message)}
+        </View>
 
         {/* Action Bar */}
         <View style={styles.actionBar}>
-          <View style={styles.primaryActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, isLiked === 'like' && styles.likedButton]}
-              onPress={() => handleLike('like')}
-            >
-              <Octicons
-                name="thumbsup"
-                size={16}
-                color={isLiked === 'like' ? '#22c55e' : Colors.dark.txtSecondary}
-              />
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
+            onPress={() => handleCopy(message)}
+          >
+            <Feather
+              name={mainCopied ? "check" : "copy"}
+              size={16}
+              color={mainCopied ? "#10b981" : "#8e8ea0"}
+            />
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, isLiked === 'dislike' && styles.dislikedButton]}
-              onPress={() => handleLike('dislike')}
-            >
-              <Octicons
-                name="thumbsdown"
-                size={16}
-                color={isLiked === 'dislike' ? '#ef4444' : Colors.dark.txtSecondary}
-              />
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
+            onPress={() => handleLike('like')}
+          >
+            <Feather
+              name="thumbs-up"
+              size={16}
+              color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
+            />
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, mainCopied && styles.copiedButton]}
-              onPress={() => handleCopy(message)}
-            >
-              <Feather
-                name={mainCopied ? "check" : "copy"}
-                size={16}
-                color={mainCopied ? "#22c55e" : Colors.dark.txtSecondary}
-              />
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
+            onPress={() => handleLike('dislike')}
+          >
+            <Feather
+              name="thumbs-down"
+              size={16}
+              color={isLiked === 'dislike' ? "#ef4444" : "#8e8ea0"}
+            />
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleShare}
-            >
-              <Feather name="share-2" size={16} color={Colors.dark.txtSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setShowActions(!showActions)}
-            >
-              <Feather name="more-horizontal" size={16} color={Colors.dark.txtSecondary} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleShare}
+          >
+            <Feather name="share" size={16} color="#8e8ea0" />
+          </TouchableOpacity>
 
           {onRegenerate && (
             <TouchableOpacity
-              style={styles.regenerateButton}
+              style={styles.actionButton}
               onPress={onRegenerate}
             >
-              <MaterialIcons name="refresh" size={14} color="#fff" />
-              <Text style={styles.regenerateText}>Regenerate</Text>
+              <MaterialIcons name="refresh" size={16} color="#8e8ea0" />
             </TouchableOpacity>
           )}
         </View>
-
-        {/* Extended Actions */}
-        {showActions && (
-          <Animated.View style={styles.extendedActions}>
-            <TouchableOpacity style={styles.extendedAction}>
-              <Ionicons name="bookmark-outline" size={16} color={Colors.dark.txtSecondary} />
-              <Text style={styles.extendedActionText}>Save Response</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.extendedAction}>
-              <Ionicons name="flag-outline" size={16} color={Colors.dark.txtSecondary} />
-              <Text style={styles.extendedActionText}>Report Issue</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.extendedAction}>
-              <Feather name="edit-3" size={16} color={Colors.dark.txtSecondary} />
-              <Text style={styles.extendedActionText}>Edit & Retry</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
       </View>
 
       {/* Image Modal */}
       <Modal
         visible={selectedImage !== null}
         transparent={true}
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setSelectedImage(null)}
       >
-        <View style={styles.modalOverlay}>
+        <Animated.View style={[styles.modalOverlay, modalStyle]}>
           <TouchableOpacity
             style={styles.modalBackground}
             activeOpacity={1}
             onPress={() => setSelectedImage(null)}
           >
-            <View style={styles.modalContent}>
+            <Animated.View style={[styles.modalContent, modalContentStyle]}>
               {selectedImage && (
                 <>
                   <Image
@@ -498,9 +481,9 @@ const AdvancedAIResponse = ({
                   )}
                 </>
               )}
-            </View>
+            </Animated.View>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </Modal>
     </Animated.View>
   );
@@ -509,100 +492,75 @@ const AdvancedAIResponse = ({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    marginVertical: 8,
+    paddingVertical: 12,
   },
-  messageContainer: {
-    backgroundColor: Colors.dark.bgSecondary,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+  messageContent: {
+    flex: 1,
+    minWidth: 0,
   },
-  header: {
+  contentContainer: {
+    paddingBottom: 12,
+  },
+  loadingContainer: {
+    paddingVertical: 8,
+  },
+  typingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    gap: 4,
   },
-  aiAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#3b82f6',
-    justifyContent: 'center',
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#8e8ea0',
+  },
+  // Code Block Styles
+  codeBlockContainer: {
+    marginVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: Colors.dark.borderColor,
+    overflow: 'hidden',
+  },
+  codeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 20,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  aiName: {
-    color: Colors.dark.txtPrimary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modelName: {
-    color: Colors.dark.txtSecondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  metadataToggle: {
-    padding: 8,
-  },
-  metadataToggleText: {
-    color: Colors.dark.txtSecondary,
-    fontSize: 16,
-  },
-  metadata: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingVertical: 12,
+    backgroundColor: Colors.dark.bgPrimary,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: Colors.dark.borderColor,
   },
-  metadataText: {
-    color: Colors.dark.txtSecondary,
-    fontSize: 11,
-    fontFamily: 'monospace',
+  codeLanguage: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '500',
+    textTransform: 'lowercase',
+  },
+  copyButton: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: Colors.dark.bgPrimary,
+  },
+  codeScrollView: {
+    maxHeight: 400,
+  },
+  codeText: {
+    color: '#e2e8f0',
+    fontFamily: 'Courier',
+    fontSize: 14,
+    lineHeight: 20,
+    padding: 16,
   },
   // Image Gallery Styles
   imageGalleryContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    paddingVertical: 16,
-  },
-  imageGalleryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
-  },
-  imageGalleryTitle: {
-    color: Colors.dark.txtPrimary,
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  imageCount: {
-    color: Colors.dark.txtSecondary,
-    fontSize: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    marginBottom: 16,
   },
   imageScrollContainer: {
-    paddingHorizontal: 16,
+    paddingVertical: 8,
     gap: 12,
   },
   imageContainer: {
@@ -611,42 +569,48 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     position: 'relative',
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#f7f7f8',
   },
   generatedImage: {
     width: 200,
     height: 200,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   imageLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
   },
-  imageOverlay: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    gap: 6,
-  },
-  imageActionButton: {
-    width: 32,
-    height: 32,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   imagePrompt: {
-    color: Colors.dark.txtSecondary,
+    color: '#6b7280',
     fontSize: 12,
     marginTop: 8,
     lineHeight: 16,
+  },
+  // Action Bar Styles
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  actionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  actionButtonActive: {
+    backgroundColor: '#f7f7f8',
+    borderColor: '#d1d5db',
   },
   // Modal Styles
   modalOverlay: {
@@ -705,244 +669,121 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  contentContainer: {
-    padding: 16,
-    minHeight: 60,
-  },
-  scrollContentContainer: {
-    flexGrow: 1,
-  },
-  loadingContainer: {
-    padding: 20,
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.dark.txtSecondary,
-    marginHorizontal: 2,
-  },
-  loadingText: {
-    color: Colors.dark.txtSecondary,
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  codeBlockContainer: {
-    marginVertical: 12,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#0d1117',
-    borderWidth: 1,
-    borderColor: '#30363d',
-  },
-  codeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#161b22',
-    borderBottomWidth: 1,
-    borderBottomColor: '#21262d',
-  },
-  codeLanguage: {
-    backgroundColor: 'rgba(110, 118, 129, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(110, 118, 129, 0.2)',
-  },
-  codeLanguageText: {
-    color: '#8b949e',
-    fontSize: 12,
-    fontWeight: '500',
-    textTransform: 'lowercase',
-  },
-  codeActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  codeActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: 'transparent',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#30363d',
-  },
-  copiedButton: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  codeActionText: {
-    color: '#8b949e',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  copiedText: {
-    color: '#10b981',
-  },
-  codeContainer: {
-    maxHeight: 300,
-    backgroundColor: '#0d1117',
-  },
-  codeText: {
-    color: '#e6edf3',
-    fontFamily: 'Monaco',
-    fontSize: 14,
-    lineHeight: 20,
-    padding: 16,
-    backgroundColor: '#0d1117',
-  },
-  actionBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-  },
-  primaryActions: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  likedButton: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-  },
-  dislikedButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  actionIcon: {
-    fontSize: 16,
-  },
-  likedIcon: {
-    // Additional styling for liked state
-  },
-  dislikedIcon: {
-    // Additional styling for disliked state
-  },
-  regenerateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#3b82f6',
-    gap: 6,
-  },
-  regenerateIcon: {
-    fontSize: 14,
-  },
-  regenerateText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  extendedActions: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    paddingVertical: 8,
-  },
-  extendedAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  extendedActionText: {
-    color: Colors.dark.txtSecondary,
-    fontSize: 14,
-  },
 });
 
 const markdownStyles = StyleSheet.create({
   text: {
-    color: Colors.dark.txtPrimary,
-    fontSize: 15,
-    lineHeight: 22,
+    color: '#ffffff',
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily: 'System',
   },
   paragraph: {
-    marginBottom: 12,
+    marginBottom: 16,
+    color: '#ffffff',
   },
   heading1: {
-    color: Colors.dark.txtPrimary,
-    fontSize: 24,
-    fontWeight: 'bold',
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '700',
     marginBottom: 16,
-    marginTop: 8,
+    marginTop: 24,
+    lineHeight: 36,
   },
   heading2: {
-    color: Colors.dark.txtPrimary,
-    fontSize: 20,
-    fontWeight: 'bold',
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '600',
     marginBottom: 12,
-    marginTop: 8,
+    marginTop: 20,
+    lineHeight: 32,
   },
   heading3: {
-    color: Colors.dark.txtPrimary,
-    fontSize: 18,
+    color: '#ffffff',
+    fontSize: 20,
     fontWeight: '600',
     marginBottom: 10,
-    marginTop: 8,
+    marginTop: 16,
+    lineHeight: 28,
+  },
+  heading4: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 14,
+    lineHeight: 26,
   },
   code_inline: {
-    backgroundColor: '#2d2d2d',
-    color: '#f8f8f2',
+    backgroundColor: '#1e1e1e',
+    color: '#10b981',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     fontFamily: 'Courier',
-    fontSize: 13,
+    fontSize: 14,
   },
   blockquote: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#1f2937',
     borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+    borderLeftColor: '#4b5563',
     paddingLeft: 16,
     paddingVertical: 12,
-    marginVertical: 12,
+    marginVertical: 16,
     borderRadius: 4,
   },
   list_item: {
-    marginBottom: 6,
+    marginBottom: 8,
+    color: '#ffffff',
   },
   bullet_list: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   ordered_list: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   strong: {
     fontWeight: '600',
-    color: Colors.dark.txtPrimary,
+    color: '#ffffff',
   },
   em: {
-    fontStyle: "italic",
-    color: Colors.dark.txtPrimary,
+    fontStyle: 'italic',
+    color: '#ffffff',
   },
   link: {
     color: '#3b82f6',
     textDecorationLine: 'underline',
   },
-})
+  hr: {
+    backgroundColor: '#374151',
+    height: 1,
+    marginVertical: 24,
+  },
+  table: {
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 6,
+    marginVertical: 16,
+  },
+  thead: {
+    backgroundColor: '#111827',
+  },
+  tbody: {},
+  th: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  td: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#1f2937',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#d1d5db',
+  },
+});
 
 export default AdvancedAIResponse;
