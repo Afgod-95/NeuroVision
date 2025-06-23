@@ -300,7 +300,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             try {
                 const { count: actualMessageCount, error: countError } = await supabase
                     .from('messages')
-                    .select('*', { count: 'exact', head: true })
+                    .select('content', { count: 'exact', head: true }) //selecting content to get actual message count
                     .eq('conversation_id', conversationId)
                     .eq('user_id', userId);
 
