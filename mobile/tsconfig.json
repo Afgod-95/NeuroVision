@@ -13,5 +13,5 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-, "metro.config.js"  ]
+, "metro.config.js", "../backend/src/utils/AIPrompts.ts"  ]
 }
