@@ -367,7 +367,7 @@ const AdvancedAIResponse = ({
   }
 
   return (
-    <Pressable>
+    
       <Animated.View style={[styles.container, fadeStyle]}>
         <View style={styles.messageContent}>
           {/* Generated Images */}
@@ -487,8 +487,7 @@ const AdvancedAIResponse = ({
           </Animated.View>
         </Modal>
       </Animated.View>
-    </Pressable>
-
+  
   );
 };
 
@@ -599,7 +598,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 8,
   },
   actionButton: {
     width: 32,

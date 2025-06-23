@@ -440,7 +440,7 @@ const useRealtimeChat = ({
                         return [...withoutLoading, timeoutMessage];
                     });
                 }
-            }, 30000); // 30 second timeout
+            }, 60000); // 1 minute timeout
         },
         onSuccess: async (data) => {
             console.log('Message sent successfully:', data);

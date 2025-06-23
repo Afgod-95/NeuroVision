@@ -133,37 +133,34 @@ Provide a detailed summary:`;
             throw new Error('AI service returned empty summary');
         }
 
-        // Enhanced title generation prompt
-        const titlePrompt = `Based on this conversation summary, create a brief, descriptive title.
+        // Enhanced title generation with fallback
+        const titlePrompt = `Generate a concise title for this conversation (maximum 8 words):
 
-Requirements:
-- Maximum 8 words
-- Clear and descriptive
-- Captures the main topic
-- No quotes or special formatting
-
-Summary: "${summary.substring(0, 500)}${summary.length > 500 ? '...' : ''}"
-
-Title:`;
+${summary.substring(0, 400)}`;
 
         console.log('🏷️ Generating title with Gemini...');
         const titleRaw = await geminiService.sendMessage(titlePrompt, [], {
-            temperature: 0.2,
-            maxTokens: 30
+            temperature: 0.4, // Slightly higher temperature
+            maxTokens: 50     // More tokens for flexibility
         });
 
         console.log(`🏷️ Generated title raw: "${titleRaw}"`);
 
-        // Clean up the title thoroughly
-        const title = titleRaw
+        // Clean up the title with fallback
+        let title = titleRaw
             ?.trim()
-            ?.replace(/^["']|["']$/g, '') // Remove quotes
-            ?.replace(/^Title:\s*/i, '') // Remove "Title:" prefix
-            ?.replace(/^Generate title:\s*/i, '') // Remove prompt echo
-            ?.replace(/^\d+\.\s*/, '') // Remove numbered list format
+            ?.replace(/^["']|["']$/g, '')
+            ?.replace(/^Title:\s*/i, '')
+            ?.replace(/^\d+\.\s*/, '')
             ?.trim();
 
-        console.log(`🏷️ Cleaned title: "${title}"`);
+        // Add fallback if still empty
+        if (!title || title.length === 0) {
+            title = `Conversation ${new Date().toISOString().split('T')[0]}`;
+            console.log(`🏷️ Using fallback title: "${title}"`);
+        }
+
+        console.log(`🏷️ Final title: "${title}"`);
 
         if (!title || title.length === 0) {
             throw new Error('AI service returned empty title after cleaning');
