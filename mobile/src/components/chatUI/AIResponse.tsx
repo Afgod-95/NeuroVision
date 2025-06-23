@@ -21,7 +21,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import Markdown from 'react-native-markdown-display';
-import { ScrollView } from 'react-native-gesture-handler';
+import { Pressable, ScrollView } from 'react-native-gesture-handler';
 import { Colors } from '@/src/constants/Colors';
 import { Feather } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -367,7 +367,8 @@ const AdvancedAIResponse = ({
   }
 
   return (
-    <Animated.View style={[styles.container, fadeStyle]}>
+    <Pressable>
+        <Animated.View style={[styles.container, fadeStyle]}>
       <View style={styles.messageContent}>
         {/* Generated Images */}
         <ImageGallery images={generatedImages} />
@@ -486,6 +487,8 @@ const AdvancedAIResponse = ({
         </Animated.View>
       </Modal>
     </Animated.View>
+    </Pressable>
+    
   );
 };
 

@@ -290,10 +290,13 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             console.log(`Summary params - conversationId: ${conversationId}, userId: ${userId}, historyLength: ${updatedHistory.length}`);
             
             // Check if we should generate a summary based on message count
-            //const shouldGenerate = await shouldUpdateSummary(conversationId, parseInt(userId.toString()), updatedHistory.length);
-            //console.log(`Should generate summary: ${shouldGenerate}`);
+            const shouldGenerate = await shouldUpdateSummary(conversationId, parseInt(userId.toString()), updatedHistory.length);
+            console.log(`Should generate summary: ${shouldGenerate}`);
             
-            // Use the updated history instead of recreating conversation text
+            if (shouldGenerate) {
+                console.log('Generating conversation summary...');
+                
+                // Use the updated history instead of recreating conversation text
                 const conversationText = updatedHistory
                     .map(msg => `${msg?.role.toUpperCase()}: ${msg.content}`)
                     .join('\n\n');
@@ -302,14 +305,13 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
 
                 const customPrompt = `Please summarize the following conversation in a clear and concise manner:
 
-                ${conversationText}
+${conversationText}
 
-                SUMMARY:`;
+SUMMARY:`;
 
                 // Add more detailed error handling for summary generation
                 generateConversationSummary(conversationId, userId, customPrompt)
-                    .then((data) => {
-                       console.log('Summary generated successfully', data);
+                    .then(() => {
                         console.log("✅ Summary generated successfully");
                     })
                     .catch(err => {
@@ -323,8 +325,11 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                             conversationTextLength: conversationText.length
                         });
                     });
+            } else {
+                console.log('⏭️ Skipping summary generation (conditions not met)');
+            }
         } else {
-            console.log('Skipping summary generation (database not enabled or missing params)');
+            console.log('⏭️ Skipping summary generation (database not enabled or missing params)');
         }
 
         // Enhanced response format
