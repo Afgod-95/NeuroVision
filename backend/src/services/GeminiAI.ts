@@ -1,6 +1,6 @@
 // services/GeminiAI.ts
 import OpenAI from "openai";
-import { GeminiMessage, GeminiResponse, GeminiAIConfig } from "../types/gemini";
+import { GeminiAIConfig, GeminiMessage } from "../interfaces/typescriptInterfaces";
 
 class GeminiAIService {
     private openai: OpenAI;
