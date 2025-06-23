@@ -291,6 +291,7 @@ const onScroll = useCallback((event: any) => {
                     decelerationRate="normal"
                     scrollEventThrottle={16}
                     onScroll = {onScroll}
+                    nestedScrollEnabled = {true}
                     
                     getItemLayout={undefined}
                     

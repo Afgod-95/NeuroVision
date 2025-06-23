@@ -71,7 +71,7 @@ const AdvancedAIResponse = ({
   const [mainCopied, setMainCopied] = useState(false);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
-  
+
   // Reanimated shared values
   const fadeOpacity = useSharedValue(0);
   const dot1Opacity = useSharedValue(0.3);
@@ -118,7 +118,7 @@ const AdvancedAIResponse = ({
           -1,
           false
         );
-        
+
         dot2Opacity.value = withRepeat(
           withSequence(
             withTiming(0.3, { duration: 200 }),
@@ -128,7 +128,7 @@ const AdvancedAIResponse = ({
           -1,
           false
         );
-        
+
         dot3Opacity.value = withRepeat(
           withSequence(
             withTiming(0.3, { duration: 400 }),
@@ -154,9 +154,9 @@ const AdvancedAIResponse = ({
   useEffect(() => {
     if (selectedImage) {
       modalOpacity.value = withTiming(1, { duration: 200 });
-      modalScale.value = withTiming(1, { 
-        duration: 200, 
-        easing: Easing.out(Easing.back(1.1)) 
+      modalScale.value = withTiming(1, {
+        duration: 200,
+        easing: Easing.out(Easing.back(1.1))
       });
     } else {
       modalOpacity.value = withTiming(0, { duration: 150 });
@@ -260,13 +260,13 @@ const AdvancedAIResponse = ({
             />
           </TouchableOpacity>
         </View>
-        <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.codeScrollView}
-      >
-        <Text style={styles.codeText}>{code}</Text>
-      </ScrollView>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          style={styles.codeScrollView}
+        >
+          <Text style={styles.codeText}>{code}</Text>
+        </ScrollView>
       </View>
     );
   };
@@ -276,8 +276,8 @@ const AdvancedAIResponse = ({
 
     return (
       <View style={styles.imageGalleryContainer}>
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.imageScrollContainer}
         >
@@ -368,127 +368,127 @@ const AdvancedAIResponse = ({
 
   return (
     <Pressable>
-        <Animated.View style={[styles.container, fadeStyle]}>
-      <View style={styles.messageContent}>
-        {/* Generated Images */}
-        <ImageGallery images={generatedImages} />
+      <Animated.View style={[styles.container, fadeStyle]}>
+        <View style={styles.messageContent}>
+          {/* Generated Images */}
+          <ImageGallery images={generatedImages} />
 
-        {/* Content */}
-        <View style={styles.contentContainer}>
-          {renderCustomMarkdown(message)}
-        </View>
+          {/* Content */}
+          <View style={styles.contentContainer}>
+            {renderCustomMarkdown(message)}
+          </View>
 
-        {/* Action Bar */}
-        <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
-            onPress={() => handleCopy(message)}
-          >
-            <Feather
-              name={mainCopied ? "check" : "copy"}
-              size={16}
-              color={mainCopied ? "#10b981" : "#8e8ea0"}
-            />
-          </TouchableOpacity>
+          {/* Action Bar */}
+          <View style={styles.actionBar}>
+            <TouchableOpacity
+              style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
+              onPress={() => handleCopy(message)}
+            >
+              <Feather
+                name={mainCopied ? "check" : "copy"}
+                size={16}
+                color={mainCopied ? "#10b981" : "#8e8ea0"}
+              />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
-            onPress={() => handleLike('like')}
-          >
-            <Feather
-              name="thumbs-up"
-              size={16}
-              color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
-            />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
+              onPress={() => handleLike('like')}
+            >
+              <Feather
+                name="thumbs-up"
+                size={16}
+                color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
+              />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
-            onPress={() => handleLike('dislike')}
-          >
-            <Feather
-              name="thumbs-down"
-              size={16}
-              color={isLiked === 'dislike' ? "#ef4444" : "#8e8ea0"}
-            />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
+              onPress={() => handleLike('dislike')}
+            >
+              <Feather
+                name="thumbs-down"
+                size={16}
+                color={isLiked === 'dislike' ? "#ef4444" : "#8e8ea0"}
+              />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleShare}
-          >
-            <Feather name="share" size={16} color="#8e8ea0" />
-          </TouchableOpacity>
-
-          {onRegenerate && (
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={onRegenerate}
+              onPress={handleShare}
             >
-              <MaterialIcons name="refresh" size={16} color="#8e8ea0" />
+              <Feather name="share" size={16} color="#8e8ea0" />
             </TouchableOpacity>
-          )}
-        </View>
-      </View>
 
-      {/* Image Modal */}
-      <Modal
-        visible={selectedImage !== null}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setSelectedImage(null)}
-      >
-        <Animated.View style={[styles.modalOverlay, modalStyle]}>
-          <TouchableOpacity
-            style={styles.modalBackground}
-            activeOpacity={1}
-            onPress={() => setSelectedImage(null)}
-          >
-            <Animated.View style={[styles.modalContent, modalContentStyle]}>
-              {selectedImage && (
-                <>
-                  <Image
-                    source={{ uri: selectedImage.uri }}
-                    style={styles.modalImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.modalActionButton}
-                      onPress={() => handleImageShare(selectedImage)}
-                    >
-                      <Feather name="share-2" size={20} color="#fff" />
-                      <Text style={styles.modalActionText}>Share</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.modalActionButton}
-                      onPress={() => handleImageSave(selectedImage.uri)}
-                    >
-                      <Feather name="download" size={20} color="#fff" />
-                      <Text style={styles.modalActionText}>Save</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.modalActionButton}
-                      onPress={() => setSelectedImage(null)}
-                    >
-                      <Feather name="x" size={20} color="#fff" />
-                      <Text style={styles.modalActionText}>Close</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {selectedImage.prompt && (
-                    <View style={styles.modalPrompt}>
-                      <Text style={styles.modalPromptText}>{selectedImage.prompt}</Text>
+            {onRegenerate && (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={onRegenerate}
+              >
+                <MaterialIcons name="refresh" size={16} color="#8e8ea0" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Image Modal */}
+        <Modal
+          visible={selectedImage !== null}
+          transparent={true}
+          animationType="none"
+          onRequestClose={() => setSelectedImage(null)}
+        >
+          <Animated.View style={[styles.modalOverlay, modalStyle]}>
+            <TouchableOpacity
+              style={styles.modalBackground}
+              activeOpacity={1}
+              onPress={() => setSelectedImage(null)}
+            >
+              <Animated.View style={[styles.modalContent, modalContentStyle]}>
+                {selectedImage && (
+                  <>
+                    <Image
+                      source={{ uri: selectedImage.uri }}
+                      style={styles.modalImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        style={styles.modalActionButton}
+                        onPress={() => handleImageShare(selectedImage)}
+                      >
+                        <Feather name="share-2" size={20} color="#fff" />
+                        <Text style={styles.modalActionText}>Share</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.modalActionButton}
+                        onPress={() => handleImageSave(selectedImage.uri)}
+                      >
+                        <Feather name="download" size={20} color="#fff" />
+                        <Text style={styles.modalActionText}>Save</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.modalActionButton}
+                        onPress={() => setSelectedImage(null)}
+                      >
+                        <Feather name="x" size={20} color="#fff" />
+                        <Text style={styles.modalActionText}>Close</Text>
+                      </TouchableOpacity>
                     </View>
-                  )}
-                </>
-              )}
-            </Animated.View>
-          </TouchableOpacity>
-        </Animated.View>
-      </Modal>
-    </Animated.View>
+                    {selectedImage.prompt && (
+                      <View style={styles.modalPrompt}>
+                        <Text style={styles.modalPromptText}>{selectedImage.prompt}</Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </Animated.View>
+            </TouchableOpacity>
+          </Animated.View>
+        </Modal>
+      </Animated.View>
     </Pressable>
-    
+
   );
 };
 

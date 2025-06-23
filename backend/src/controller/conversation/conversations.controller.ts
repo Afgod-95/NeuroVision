@@ -288,14 +288,14 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
         if (useDatabase && conversationId && userId) {
             console.log('Starting summary generation process...');
             console.log(`Summary params - conversationId: ${conversationId}, userId: ${userId}, historyLength: ${updatedHistory.length}`);
-            
+
             // Check if we should generate a summary based on message count
             const shouldGenerate = await shouldUpdateSummary(conversationId, parseInt(userId.toString()), updatedHistory.length);
             console.log(`Should generate summary: ${shouldGenerate}`);
-            
+
             if (shouldGenerate) {
                 console.log('Generating conversation summary...');
-                
+
                 // Use the updated history instead of recreating conversation text
                 const conversationText = updatedHistory
                     .map(msg => `${msg?.role.toUpperCase()}: ${msg.content}`)
@@ -305,17 +305,21 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
 
                 const customPrompt = `Please summarize the following conversation in a clear and concise manner:
 
-${conversationText}
-
-SUMMARY:`;
+                ${conversationText}
+                SUMMARY:`;
 
                 // Add more detailed error handling for summary generation
                 generateConversationSummary(conversationId, userId, customPrompt)
-                    .then(() => {
-                        console.log("✅ Summary generated successfully");
+                    .then((result) => {
+                        if (result?.success) {
+                            console.log("✅ Summary generated successfully");
+                        } else {
+                            console.warn("⚠️ Summary generation finished, but no confirmation of success.");
+                        }
                     })
+
                     .catch(err => {
-                        console.error("❌ Summary generation failed:");
+                        console.error("Summary generation failed:");
                         console.error("Error message:", err.message);
                         console.error("Error stack:", err.stack);
                         console.error("Summary params used:", {
@@ -326,12 +330,9 @@ SUMMARY:`;
                         });
                     });
             } else {
-                console.log('⏭️ Skipping summary generation (conditions not met)');
+                console.log('Skipping summary generation (conditions not met)');
             }
-        } else {
-            console.log('⏭️ Skipping summary generation (database not enabled or missing params)');
-        }
-
+        } 
         // Enhanced response format
         res.json({
             success: true,
@@ -342,9 +343,9 @@ SUMMARY:`;
                 messageStored: useDatabase,
                 historyLength: updatedHistory.length,
                 responseLength: response.length,
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-2.5-flash",
                 timestamp: new Date().toISOString(),
-                summaryProcessed: useDatabase 
+                summaryProcessed: useDatabase
             }
         });
 
@@ -386,7 +387,7 @@ SUMMARY:`;
 export const forceGenerateSummary = async (req: Request, res: Response): Promise<void> => {
     try {
         const { conversationId, userId } = req.body;
-        
+
         if (!conversationId || !userId) {
             res.status(400).json({
                 success: false,
@@ -396,22 +397,22 @@ export const forceGenerateSummary = async (req: Request, res: Response): Promise
         }
 
         console.log(`🔧 Force generating summary for conversation ${conversationId}, user ${userId}`);
-        
+
         // Get current message count
         const { data: messages, error } = await supabase
             .from('messages')
             .select('id')
             .eq('conversation_id', conversationId)
             .eq('user_id', userId);
-            
+
         if (error) {
             throw error;
         }
-        
+
         console.log(`Found ${messages?.length || 0} messages in conversation`);
-        
+
         await generateConversationSummary(conversationId, userId, undefined, req, res);
-        
+
     } catch (error: any) {
         console.error('Force generate summary error:', error);
         res.status(500).json({
@@ -600,7 +601,7 @@ export const getConversationMessages = async (req: Request, res: Response): Prom
 
         // Get messages for this conversation
         const { data: messages, error } = await supabase
-            .from('messages') 
+            .from('messages')
             .select('*')
             .eq('conversation_id', conversationId)
             .eq('user_id', parseInt(userId as string))
