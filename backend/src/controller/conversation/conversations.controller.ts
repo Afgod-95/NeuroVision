@@ -306,7 +306,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                 
                 // Use the updated history instead of recreating conversation text
                 const conversationText = updatedHistory
-                    .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
+                    .map(msg => `${msg?.role.toUpperCase()}: ${msg.content}`)
                     .join('\n\n');
 
                 console.log(`Conversation text length: ${conversationText.length} characters`);

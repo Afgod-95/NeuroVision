@@ -118,7 +118,7 @@ const useRealtimeChat = ({
         };
     }, []);
 
-    // FIXED: Enhanced realtime subscription with better state management
+    //Enhanced realtime subscription with better state management
     useEffect(() => {
         if (!conversationId || !userDetails?.id) return;
 
