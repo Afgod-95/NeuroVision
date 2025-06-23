@@ -1,7 +1,6 @@
 
 import { Request, Response } from "express";
-import GeminiAIService from "../../services/GeminiAI";
-import { ChatRequest, GeminiMessage } from "../../types/gemini";
+import { ChatRequest, GeminiMessage } from "../../interfaces/typescriptInterfaces";
 import supabase from "../../lib/supabase";
 import { v4 as uuidv4 } from 'uuid';
 import { isValidUUID } from "../../middlewares/isValidUUID";
@@ -165,8 +164,6 @@ const getOrCreateConversationId = (conversationId?: string): string => {
 };
 
 
-
-
 /**
  * Chat message handler with better error handling and response formatting
  */
@@ -246,13 +243,18 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
         // Enhanced system prompt for better assistance
         const enhancedSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-        // Store user message if using database (async, don't block response)
-        const shouldStoreUserMessage = useDatabase && conversationId && userId;
-        if (shouldStoreUserMessage) {
+        // Store user message if using database - WAIT for completion
+        let userMessageStored = false;
+        if (useDatabase && conversationId && userId) {
             console.log('Storing user message...');
-            storeMessage(conversationId, userId, 'user', message).catch(error => {
-                console.error('Failed to store user message:', error);
-            });
+            try {
+                await storeMessage(conversationId, userId, 'user', message);
+                userMessageStored = true;
+                console.log('✅ User message stored successfully');
+            } catch (error) {
+                console.error('❌ Failed to store user message:', error);
+                // Continue without blocking the response
+            }
         }
 
         // Send message to Gemini with enhanced configuration
@@ -269,12 +271,18 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
 
         console.log(`Received response from Gemini (${response.length} characters)`);
 
-        // Store assistant response if using database 
+        // Store assistant response if using database - WAIT for completion
+        let assistantMessageStored = false;
         if (useDatabase && conversationId && userId && response) {
             console.log('Storing assistant message...');
-            storeMessage(conversationId, userId, 'assistant', response).catch(error => {
-                console.error('Failed to store assistant message:', error);
-            });
+            try {
+                await storeMessage(conversationId, userId, 'assistant', response);
+                assistantMessageStored = true;
+                console.log('✅ Assistant message stored successfully');
+            } catch (error) {
+                console.error('❌ Failed to store assistant message:', error);
+                // Continue without blocking the response
+            }
         }
 
         // Prepare updated conversation history for response 
@@ -284,55 +292,83 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             { role: 'assistant' as const, content: response }
         ];
 
-        // Handle AI conversation summary (async, don't block response)
-        if (useDatabase && conversationId && userId) {
+        // Handle AI conversation summary ONLY if both messages were stored successfully
+        if (useDatabase && conversationId && userId && userMessageStored && assistantMessageStored) {
             console.log('Starting summary generation process...');
-            console.log(`Summary params - conversationId: ${conversationId}, userId: ${userId}, historyLength: ${updatedHistory.length}`);
+            
+            // Get actual message count from database instead of using in-memory history
+            try {
+                const { data: messageCount, error: countError } = await supabase
+                    .from('messages')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('conversation_id', conversationId)
+                    .eq('user_id', userId);
 
-            // Check if we should generate a summary based on message count
-            const shouldGenerate = await shouldUpdateSummary(conversationId, parseInt(userId.toString()), updatedHistory.length);
-            console.log(`Should generate summary: ${shouldGenerate}`);
+                if (countError) {
+                    console.error('Error getting message count:', countError);
+                } else {
+                    const actualMessageCount = messageCount?.length || 0;
+                    console.log(`Actual message count in DB: ${actualMessageCount}`);
 
-            if (shouldGenerate) {
-                console.log('Generating conversation summary...');
+                    // Check if we should generate a summary based on actual message count
+                    const shouldGenerate = await shouldUpdateSummary(
+                        conversationId, 
+                        parseInt(userId.toString()), 
+                        actualMessageCount
+                    );
+                    console.log(`Should generate summary: ${shouldGenerate}`);
 
-                // Use the updated history instead of recreating conversation text
-                const conversationText = updatedHistory
-                    .map(msg => `${msg?.role.toUpperCase()}: ${msg.content}`)
-                    .join('\n\n');
+                    if (shouldGenerate) {
+                        console.log('Generating conversation summary...');
 
-                console.log(`Conversation text length: ${conversationText.length} characters`);
-
-                const customPrompt = `Please summarize the following conversation in a clear and concise manner:
-
-                ${conversationText}
-                SUMMARY:`;
-
-                // Add more detailed error handling for summary generation
-                generateConversationSummary(conversationId, userId, customPrompt)
-                    .then((result) => {
-                        if (result?.success) {
-                            console.log("✅ Summary generated successfully");
-                        } else {
-                            console.warn("⚠️ Summary generation finished, but no confirmation of success.");
-                        }
-                    })
-
-                    .catch(err => {
-                        console.error("Summary generation failed:");
-                        console.error("Error message:", err.message);
-                        console.error("Error stack:", err.stack);
-                        console.error("Summary params used:", {
-                            conversationId,
-                            userId,
-                            customPromptLength: customPrompt.length,
-                            conversationTextLength: conversationText.length
-                        });
-                    });
-            } else {
-                console.log('Skipping summary generation (conditions not met)');
+                        // Generate summary asynchronously with proper delay
+                        setTimeout(async () => {
+                            try {
+                                console.log('🚀 Starting delayed summary generation...');
+                                
+                                const result = await generateConversationSummary(
+                                    conversationId, 
+                                    userId, 
+                                    undefined // Let the function create its own prompt
+                                );
+                                
+                                if (result?.success) {
+                                    console.log("✅ Summary generated successfully:", {
+                                        title: result.title,
+                                        summaryLength: result.summary?.length || 0
+                                    });
+                                } else {
+                                    console.warn("⚠️ Summary generation completed but returned no success confirmation");
+                                }
+                            } catch (err: any) {
+                                console.error("❌ Summary generation failed:");
+                                console.error("Error message:", err.message);
+                                console.error("Error stack:", err.stack);
+                                console.error("Summary params used:", {
+                                    conversationId,
+                                    userId,
+                                    actualMessageCount
+                                });
+                            }
+                        }, 2000); // 2-second delay to ensure database consistency
+                    } else {
+                        console.log('Skipping summary generation (conditions not met)');
+                    }
+                }
+            } catch (error) {
+                console.error('Error in summary generation process:', error);
             }
-        } 
+        } else {
+            if (useDatabase) {
+                console.log('Skipping summary generation due to message storage issues:', {
+                    userMessageStored,
+                    assistantMessageStored,
+                    conversationId: !!conversationId,
+                    userId: !!userId
+                });
+            }
+        }
+        
         // Enhanced response format
         res.json({
             success: true,
@@ -340,7 +376,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             conversationHistory: updatedHistory,
             conversationId,
             metadata: {
-                messageStored: useDatabase,
+                messageStored: useDatabase && userMessageStored && assistantMessageStored,
                 historyLength: updatedHistory.length,
                 responseLength: response.length,
                 model: "gemini-2.5-flash",

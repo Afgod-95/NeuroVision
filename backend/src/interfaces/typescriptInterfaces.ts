@@ -1,4 +1,4 @@
-// types/gemini
+import { Request } from "express";
 export interface GeminiMessage {
     role: 'user' | 'assistant' | 'system';
     content: string;
@@ -39,4 +39,30 @@ export interface ChatRequest {
     systemPrompt?: string;
     temperature?: number;
     maxTokens?: number;
+}
+
+
+export interface GenerateConversationSummaryRequest extends Request {
+    body: {
+        conversationId: string;
+        userId: number | string;
+        customPrompt?: string;
+    };
+}
+
+export interface ConversationInfo {
+    message_count: number;
+    last_message_at: string;
+    [key: string]: any;
+}
+
+export interface AiConversationSummary {
+    id?: number;
+    conversation_id: string;
+    user_id: number;
+    title: string;
+    summary: string;
+    summary_type: string;
+    updated_at: string;
+    [key: string]: any;
 }

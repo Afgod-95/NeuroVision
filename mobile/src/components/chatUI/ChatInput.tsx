@@ -541,7 +541,6 @@ const handleSendMessage = useCallback(async () => {
             value={message}
             onChangeText={setMessage}
             multiline
-            maxLength={500}
             editable={!isTranscribing}
           />
         </View>
