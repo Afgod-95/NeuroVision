@@ -8,7 +8,6 @@ import { router } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import { useLoginUserMutation } from '@/src/hooks/auth/AuthMutation';
 import { useDispatch } from 'react-redux';
 import axios from 'axios';
 import { login } from '@/src/redux/slices/authSlice';

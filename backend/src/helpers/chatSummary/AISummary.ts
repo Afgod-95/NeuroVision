@@ -1,17 +1,12 @@
-// controllers/geminiController.ts
+// Enhanced title generation system inspired by Claude AI
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
 import { isValidUUID } from "../../middlewares/isValidUUID";
 import geminiService from "../../services/GeminiInitiation";
+import { GenerateConversationSummaryRequest } from "../../interfaces/typescriptInterfaces";
 
-interface GenerateConversationSummaryRequest extends Request {
-    body: {
-        conversationId: string;
-        userId: number | string;
-        customPrompt?: string;
-    };
-}
+
 
 interface ConversationInfo {
     message_count: number;
@@ -31,10 +26,180 @@ interface AiConversationSummary {
 }
 
 /**
- * Enhanced conversation summary generation with better conversation handling
+ * Generate a meaningful conversation title using advanced AI prompting
+ * Inspired by Claude AI's title generation approach
  */
+const generateMeaningfulTitle = async (
+    conversationText: string,
+    summary: string
+): Promise<string> => {
+    try {
+        // Extract key themes and topics from the conversation
+        const themeAnalysisPrompt = `Analyze this conversation and identify the main themes, topics, and purpose. Focus on:
+
+1. Primary subject matter
+2. Key concepts discussed
+3. Type of interaction (question/answer, brainstorming, problem-solving, etc.)
+4. Specific domains (technical, creative, business, personal, etc.)
+5. Notable entities, tools, or technologies mentioned
+
+Conversation snippet:
+${conversationText.substring(0, 1000)}
+
+Summary:
+${summary.substring(0, 300)}
+
+Provide a brief analysis of the main themes and topics:`;
+
+        const themeAnalysis = await geminiService.sendMessage(themeAnalysisPrompt, [], {
+            temperature: 0.2,
+            maxTokens: 200
+        });
+
+        // Generate title based on theme analysis
+        const titlePrompt = `Based on the following theme analysis, create a descriptive and engaging conversation title that follows these principles:
+
+TITLE GUIDELINES:
+- Be specific and descriptive (not generic)
+- Capture the essence of what was discussed
+- Use natural, conversational language
+- Avoid generic words like "discussion", "conversation", "chat"
+- Maximum 8 words, minimum 3 words
+- Make it sound like something a human would naturally say
+
+EXAMPLES OF GOOD TITLES:
+- "Building a React authentication system"
+- "Debugging Python import errors"
+- "Planning a weekend camping trip"
+- "Optimizing database query performance"
+- "Learning TypeScript generics"
+- "Designing a mobile app interface"
+- "Troubleshooting network connectivity issues"
+- "Creating a marketing campaign strategy"
+
+EXAMPLES OF BAD TITLES:
+- "General Discussion" (too vague)
+- "Q&A Session" (too generic)
+- "Problem Solving" (not specific)
+- "Technical Discussion" (lacks detail)
+
+Theme Analysis:
+${themeAnalysis}
+
+Generate one perfect title:`;
+
+        const generatedTitle = await geminiService.sendMessage(titlePrompt, [], {
+            temperature: 0.3,
+            maxTokens: 50
+        });
+
+        // Clean and validate the generated title
+        let title = generatedTitle
+            ?.trim()
+            ?.replace(/^["']|["']$/g, '') // Remove quotes
+            ?.replace(/^Title:\s*/i, '') // Remove "Title:" prefix
+            ?.replace(/^Generate.*?:\s*/i, '') // Remove prompt echoes
+            ?.replace(/^\d+\.\s*/, '') // Remove numbered list
+            ?.replace(/^-\s*/, '') // Remove dash prefix
+            ?.replace(/\.$/, '') // Remove trailing period
+            ?.trim();
+
+        // Validate title quality
+        if (title && title.length > 0 && title.length <= 50) {
+            // Check if title is meaningful (not just generic words)
+            const genericWords = ['discussion', 'conversation', 'chat', 'talk', 'session', 'meeting'];
+            const isGeneric = genericWords.some(word => 
+                title.toLowerCase().includes(word) && title.split(' ').length <= 3
+            );
+            
+            if (!isGeneric) {
+                return title;
+            }
+        }
+
+        // Fallback to smart title generation based on content analysis
+        return generateSmartFallbackTitle(conversationText, summary);
+
+    } catch (error) {
+        console.error('Error generating meaningful title:', error);
+        return generateSmartFallbackTitle(conversationText, summary);
+    }
+};
+
 /**
- * Enhanced conversation summary generation with better conversation handling
+ * Generate smart fallback titles based on content analysis
+ */
+const generateSmartFallbackTitle = (conversationText: string, summary: string): string => {
+    const content = (conversationText + ' ' + summary).toLowerCase();
+    
+    // Technology and Programming
+    if (content.includes('react') || content.includes('jsx')) return 'React development help';
+    if (content.includes('python') && content.includes('error')) return 'Python error troubleshooting';
+    if (content.includes('javascript') || content.includes('js')) return 'JavaScript coding assistance';
+    if (content.includes('typescript') || content.includes('ts')) return 'TypeScript development help';
+    if (content.includes('database') || content.includes('sql')) return 'Database query optimization';
+    if (content.includes('api') && content.includes('integration')) return 'API integration guidance';
+    if (content.includes('docker') || content.includes('container')) return 'Docker containerization help';
+    if (content.includes('git') && content.includes('merge')) return 'Git merge conflict resolution';
+    if (content.includes('aws') || content.includes('cloud')) return 'Cloud infrastructure setup';
+    if (content.includes('machine learning') || content.includes('ml')) return 'Machine learning implementation';
+    
+    // Business and Strategy
+    if (content.includes('marketing') && content.includes('campaign')) return 'Marketing campaign planning';
+    if (content.includes('business') && content.includes('plan')) return 'Business strategy development';
+    if (content.includes('budget') || content.includes('financial')) return 'Financial planning discussion';
+    if (content.includes('team') && content.includes('management')) return 'Team management strategies';
+    if (content.includes('project') && content.includes('timeline')) return 'Project timeline planning';
+    
+    // Creative and Design
+    if (content.includes('design') && content.includes('ui')) return 'UI design feedback';
+    if (content.includes('logo') || content.includes('branding')) return 'Brand identity creation';
+    if (content.includes('website') && content.includes('layout')) return 'Website layout design';
+    if (content.includes('color') && content.includes('palette')) return 'Color scheme selection';
+    
+    // Writing and Content
+    if (content.includes('essay') || content.includes('writing')) return 'Writing assistance and feedback';
+    if (content.includes('blog') && content.includes('post')) return 'Blog content creation';
+    if (content.includes('email') && content.includes('template')) return 'Email template design';
+    if (content.includes('resume') || content.includes('cv')) return 'Resume optimization help';
+    
+    // Learning and Education
+    if (content.includes('learn') && content.includes('tutorial')) return 'Learning resource recommendations';
+    if (content.includes('study') && content.includes('plan')) return 'Study plan development';
+    if (content.includes('course') || content.includes('curriculum')) return 'Course curriculum advice';
+    
+    // Personal and Lifestyle
+    if (content.includes('travel') && content.includes('itinerary')) return 'Travel itinerary planning';
+    if (content.includes('recipe') || content.includes('cooking')) return 'Cooking recipe suggestions';
+    if (content.includes('fitness') || content.includes('workout')) return 'Fitness routine planning';
+    if (content.includes('book') && content.includes('recommendation')) return 'Book recommendations';
+    
+    // Problem Solving
+    if (content.includes('debug') || content.includes('troubleshoot')) return 'Technical troubleshooting';
+    if (content.includes('optimize') || content.includes('improve')) return 'Performance optimization';
+    if (content.includes('fix') && content.includes('issue')) return 'Issue resolution help';
+    
+    // Generic but meaningful fallbacks
+    if (content.includes('how to')) return 'Step-by-step guidance';
+    if (content.includes('best practices')) return 'Best practices advice';
+    if (content.includes('comparison') || content.includes('vs')) return 'Comparison and analysis';
+    if (content.includes('recommendation')) return 'Personalized recommendations';
+    
+    // Final fallback - try to extract a meaningful phrase
+    const words = content.split(' ').filter(word => word.length > 3);
+    const meaningfulWords = words.filter(word => 
+        !['this', 'that', 'with', 'from', 'they', 'have', 'will', 'been', 'said', 'each', 'which', 'their', 'time', 'would', 'there', 'could', 'other'].includes(word)
+    );
+    
+    if (meaningfulWords.length >= 2) {
+        return `${meaningfulWords[0]} ${meaningfulWords[1]} help`.replace(/ing\s+/g, ' ');
+    }
+    
+    return 'Helpful conversation';
+};
+
+/**
+ * Enhanced conversation summary generation with meaningful titles
  */
 export const generateConversationSummary = async (
     conversationId: string,
@@ -133,62 +298,10 @@ Provide a detailed summary:`;
             throw new Error('AI service returned empty summary');
         }
 
-        // Enhanced title generation with better prompt and fallback
-        const titlePrompt = `Create a concise, descriptive title for this conversation summary. Focus on the main topic or purpose discussed.
-
-Requirements:
-- Maximum 6 words
-- Capture the primary subject/theme
-- Be specific and clear
-- Examples: "Project Status Discussion", "Budget Planning Meeting", "Feature Development Review"
-
-Summary: ${summary.substring(0, 400)}
-
-Title:`;
-
-        console.log('🏷️ Generating title with Gemini...');
-        const titleRaw = await geminiService.sendMessage(titlePrompt, [], {
-            temperature: 0.3,
-            maxTokens: 40
-        });
-
-        console.log(`🏷️ Generated title raw: "${titleRaw}"`);
-
-        // Clean up the title thoroughly
-        let title = titleRaw
-            ?.trim()
-            ?.replace(/^["']|["']$/g, '') // Remove quotes
-            ?.replace(/^Title:\s*/i, '') // Remove "Title:" prefix
-            ?.replace(/^Generate.*?:\s*/i, '') // Remove prompt echoes
-            ?.replace(/^\d+\.\s*/, '') // Remove numbered list
-            ?.replace(/^-\s*/, '') // Remove dash prefix
-            ?.trim();
-
-        // Smart fallback based on conversation content
-        if (!title || title.length === 0) {
-            // Try to create a meaningful title from the summary
-            const summaryStart = summary.trim().substring(0, 100).toLowerCase();
-
-            if (summaryStart.includes('project')) {
-                title = 'Project Discussion';
-            } else if (summaryStart.includes('budget') || summaryStart.includes('cost')) {
-                title = 'Budget Discussion';
-            } else if (summaryStart.includes('plan') || summaryStart.includes('strategy')) {
-                title = 'Planning Session';
-            } else if (summaryStart.includes('review') || summaryStart.includes('feedback')) {
-                title = 'Review Discussion';
-            } else if (summaryStart.includes('problem') || summaryStart.includes('issue')) {
-                title = 'Problem Solving';
-            } else {
-                title = 'General Discussion';
-            }
-
-            console.log(`🏷️ Using smart fallback title: "${title}"`);
-        }
-
-        console.log(`🏷️ Final title: "${title}"`);
-
-        // ✅ Remove the redundant error check - title is guaranteed to exist now
+        // Generate meaningful title using the enhanced system
+        console.log('🏷️ Generating meaningful title...');
+        const title = await generateMeaningfulTitle(conversationText, summary);
+        console.log(`🏷️ Final meaningful title: "${title}"`);
 
         // Store the summary in database
         console.log('💾 Storing summary in database...');
@@ -248,7 +361,6 @@ Title:`;
     }
 };
 
-
 /**
  * Check if summary should be updated based on conversation activity
  */
@@ -283,4 +395,4 @@ export const shouldUpdateSummary = async (
         console.log('Error checking summary update status:', error);
         return false;
     }
-}
+};

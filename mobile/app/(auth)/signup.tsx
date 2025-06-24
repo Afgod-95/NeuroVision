@@ -4,13 +4,10 @@ import Button from '@/src/components/button/CustomButton';
 import AnimatedTextInput from '@/src/components/textInputs/Input';
 import { Colors } from '@/src/constants/Colors';
 import { emailRegex, usernameRegex } from '@/src/constants/Regex';
-import { FIREBASE_AUTH } from '@/src/lib/FirebaseConfig';
 import { router } from 'expo-router';
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { useSignupMutation } from '@/src/hooks/auth/AuthMutation';
 
 const { width } = Dimensions.get('screen');
@@ -30,8 +27,7 @@ const SignUp = () => {
 
   const [isDisabled, setIsDisabled] = useState<boolean>(true);
 
-  // Ref for Recaptcha
-  const recaptchaVerifier = useRef<FirebaseRecaptchaVerifierModal>(null);
+
 
   useEffect(() => {
     const isFilled =
@@ -69,10 +65,7 @@ const SignUp = () => {
   return (
     <AuthWrapper>
       {/*Recaptcha Modal */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={FIREBASE_AUTH.app.options}
-      />
+     
 
       <Animated.View style={styles.innerContainer}>
         <Animated.Text
