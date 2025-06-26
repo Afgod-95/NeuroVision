@@ -3,6 +3,7 @@ import { generateCompletion, getConversation, getConversationMessages, getModels
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
 import { getMessages } from '../controller/messages/messages';
 import { bulkGenerateSummaries, getUserConversationSummaries } from '../controller/conversation/conversation.summaries';
+import { tts } from '../controller/tts/textToSpeech.controller';
 
 
 const chatsRouter = express.Router()
@@ -45,6 +46,11 @@ chatsRouter.post('/summaries/bulk-generate', bulkGenerateSummaries);
  * GET CONVERSATION SUMMARIES FOR A SPECIFIC USER
 */
 chatsRouter.get('/user/summaries/', getUserConversationSummaries);
+
+/**
+ * TEXT TO SPEECH ENDPOINT
+ */
+chatsRouter.post('/messages/text-to-speech', tts as RequestHandler);
 
 
 export default chatsRouter;

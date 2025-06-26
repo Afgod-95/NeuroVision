@@ -12,6 +12,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.4.0",
     "@supabase/supabase-js": "^2.49.8",
     "axios": "^1.9.0",
     "bcrypt": "^6.0.0",

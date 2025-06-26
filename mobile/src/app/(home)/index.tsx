@@ -32,7 +32,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { setOptions } from 'expo-splash-screen';
-import SpeechBanner from '@/src/components/chatUI/SpeechToText';
+import SpeechBanner from '@/src/components/chatUI/AudioBanner';
+import * as FileSystem from 'expo-file-system';
+import { Buffer } from 'buffer';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = OriginalUploadedAudioFile & {
@@ -65,10 +67,15 @@ const Index = () => {
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
   const { conversation_id } = useLocalSearchParams();
   console.log(`Conversation ID: ${conversation_id}`);
-  
-  //speech state
-  const [openExpoSpeech, setOpenExpoSpeech] = useState<boolean>(false);
-  const [speechText, setSpeechText] = useState<string>('')
+
+  // Speech Banner State
+  const [speechBanner, setSpeechBanner] = useState({
+    visible: false,
+    audioUrl: '',
+    message: '',
+    isGenerating: false
+  });
+
   const queryClient = useQueryClient();
 
   // Get the actual conversation ID
@@ -118,6 +125,122 @@ const Index = () => {
     enableSampleMessages: true,
   });
 
+  // Fixed generateTextToSpeech function
+const generateTextToSpeech = async (text: string) => {
+  try {
+    const response = await fetch('/api/tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: text
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+    }
+
+    // Get the audio data as array buffer
+    const arrayBuffer = await response.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Create a unique filename with timestamp
+    const timestamp = Date.now();
+    const fileUri = `${FileSystem.documentDirectory}tts_audio_${timestamp}.mp3`;
+    
+    // Write the audio file
+    await FileSystem.writeAsStringAsync(
+      fileUri,
+      Buffer.from(uint8Array).toString('base64'),
+      { encoding: FileSystem.EncodingType.Base64 }
+    );
+
+    console.log('Audio file saved to:', fileUri);
+    
+    // Return the file URI
+    return { audioUrl: fileUri };
+    
+  } catch (error) {
+    console.error('TTS Generation Error:', error);
+    throw error; 
+  }
+};
+
+// Updated speechHandler function with better error handling
+const speechHandler = useCallback(async (text: string) => {
+  if (!text.trim()) {
+    console.log('No text provided for speech synthesis');
+    return;
+  }
+
+  try {
+    setSpeechBanner(prev => ({ ...prev, isGenerating: true }));
+    
+    const response = await generateTextToSpeech(text);
+    
+    if (response.audioUrl) {
+      setSpeechBanner({
+        visible: true,
+        audioUrl: response.audioUrl,
+        message: text.length > 100 ? text.substring(0, 100) + '...' : text,
+        isGenerating: false
+      });
+    }
+  } catch (error) {
+    console.error('Error generating speech:', error);
+    setSpeechBanner(prev => ({ ...prev, isGenerating: false }));
+    setSpeechBanner({
+      visible: false,
+      audioUrl: '',
+      message: '',
+      isGenerating: false
+    });
+  }
+}, []);
+
+// Enhanced speech banner close handler to clean up files
+const handleSpeechBannerClose = useCallback(async () => {
+  setSpeechBanner(prev => {
+    // Cleanup local audio file
+    if (prev.audioUrl && prev.audioUrl.startsWith('file://')) {
+      FileSystem.deleteAsync(prev.audioUrl, { idempotent: true })
+        .catch(error => console.warn('Failed to delete audio file:', error));
+    }
+    
+    // Cleanup blob URL if it exists
+    if (prev.audioUrl && prev.audioUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(prev.audioUrl);
+    }
+    
+    return {
+      visible: false,
+      audioUrl: '',
+      message: '',
+      isGenerating: false
+    };
+  });
+}, []);
+
+// Add this cleanup effect to your useEffect
+useEffect(() => {
+  return () => {
+    console.log('Cleaning up chat component');
+    
+    // Cleanup any local audio files
+    if (speechBanner.audioUrl && speechBanner.audioUrl.startsWith('file://')) {
+      FileSystem.deleteAsync(speechBanner.audioUrl, { idempotent: true })
+        .catch(error => console.warn('Failed to delete audio file:', error));
+    }
+    
+    // Cleanup blob URLs
+    if (speechBanner.audioUrl && speechBanner.audioUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(speechBanner.audioUrl);
+    }
+  };
+}, [conversationId, speechBanner.audioUrl]);
+
   // Function to transform API messages to internal Message format
   const transformApiMessages = useCallback((apiMessages: ApiMessage[]): Message[] => {
     return apiMessages.map((apiMsg) => ({
@@ -159,8 +282,8 @@ const Index = () => {
           });
           return response.data;
         },
-        staleTime: 1000 * 60 * 5, // 5 minutes
-        gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+        staleTime: 1000 * 60 * 5, 
+        gcTime: 1000 * 60 * 10, 
       });
 
       if (data && data.messages) {
@@ -186,15 +309,6 @@ const Index = () => {
       );
     }
   }, [actualConversationId, userCredentials?.id, prefetchMessages]);
-
-
-  /**
-   * handle speech launch 
-   */
-  const speechHandler = (text: string) => {
-    setOpenExpoSpeech(true);
-    setSpeechText(text)
-  }
   
   /**
    * scroll to bottom
@@ -277,12 +391,12 @@ const Index = () => {
           message={item.text}
           loading={finalLoadingState}
           onRegenerate={() => handleRegenerate(item.id)}
-          disableReadAloud={false}
-          openReadAloud={() => {speechHandler(item.text)}}
+          disableReadAloud={speechBanner.isGenerating}
+          openReadAloud={() => speechHandler(item.text)}
         />
       );
     }
-  }, [handleRegenerate, isAIResponding, messages.length]);
+  }, [handleRegenerate, isAIResponding, messages.length, speechBanner.isGenerating, speechHandler]);
 
   // Add debug logging to track loading state changes
   useEffect(() => {
@@ -303,8 +417,12 @@ const Index = () => {
   useEffect(() => {
     return () => {
       console.log('Cleaning up chat component');
+      // Cleanup any blob URLs
+      if (speechBanner.audioUrl && speechBanner.audioUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(speechBanner.audioUrl);
+      }
     };
-  }, [conversationId]);
+  }, [conversationId, speechBanner.audioUrl]);
 
   const keyExtractor = useCallback((item: Message) => {
     // Ensure unique keys - add sender info to make it more unique
@@ -351,10 +469,17 @@ const Index = () => {
             keyboardVerticalOffset={0}
           >
             <SafeAreaView style={styles.safeAreaContainer}>
-               {/*  AI Text to Speech */}
-          
+              {/* Speech Banner - Positioned at the top */}
+              <SpeechBanner
+                audioUrl={speechBanner.audioUrl}
+                message={speechBanner.message}
+                visible={speechBanner.visible}
+                autoDismiss={true}
+                onClose={handleSpeechBannerClose}
+              />
+
               {/* Header - Fixed at top */}
-              <View style={styles.header}>
+              <View style={[styles.header, speechBanner.visible && styles.headerWithBanner]}>
                 <TouchableOpacity onPress={handleToggleSidebar}>
                   <Image
                     source={require('@/src/assets/images/menu.png')}
@@ -382,7 +507,10 @@ const Index = () => {
                     data={messages}
                     keyExtractor={keyExtractor}
                     renderItem={renderItem}
-                    contentContainerStyle={styles.flatListContent}
+                    contentContainerStyle={[
+                      styles.flatListContent,
+                      speechBanner.visible && styles.flatListContentWithBanner
+                    ]}
                     removeClippedSubviews={true}
                     maxToRenderPerBatch={10}
                     updateCellsBatchingPeriod={50}
@@ -410,8 +538,6 @@ const Index = () => {
               userMessage={true}
               editMessage={handleEditMessageCallback}
             />
-
-             {openExpoSpeech && <SpeechBanner message = {speechText} onDone={() => setOpenExpoSpeech(false)}/>}
 
             {/* Chat input */}
             <ChatInput
@@ -461,7 +587,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     height: 60,
-    paddingTop: Platform.OS === 'android' ? 20 : undefined
+    paddingTop: Platform.OS === 'android' ? 20 : undefined,
+    zIndex: 1000, // Lower than speech banner
+  },
+  headerWithBanner: {
+    marginTop: 8, // Add some space when banner is visible
   },
   contentArea: {
     flex: 1,
@@ -498,6 +628,9 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     paddingHorizontal: 16,
+  },
+  flatListContentWithBanner: {
+    paddingTop: 8, 
   },
   aiRespondingIndicator: {
     paddingVertical: 8,

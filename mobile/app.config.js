@@ -26,11 +26,16 @@ export default {
     },
     web: {
       bundler: "metro",
-      output: "static",
+      output: "server",
       favicon: "./src/assets/images/favicon.png"
     },
     plugins: [
-      "expo-router",
+      [
+        "expo-router",
+      {
+        origin: "https://neuro-vision-kohl.vercel.app/"
+      },
+    ],
       "expo-web-browser",
       [
         "expo-splash-screen",
@@ -73,6 +78,7 @@ export default {
 
       //backed url 
       baseBackendUrl: process.env.BASE_BACKEND_URL,
+
 
       //supabase 
       supabaseUrl: process.env.SUPABASE_URL,

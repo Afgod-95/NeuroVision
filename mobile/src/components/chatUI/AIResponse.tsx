@@ -29,14 +29,13 @@ import { useCodeBlock } from './AIResponseUI/CodeBlocks';
 import useLoadingDots from './AIResponseUI/useLoadingDots';
 import { AIResponseProps, GeneratedImage } from '@/src/utils/types/Types';
 import useImageGallery from './AIResponseUI/ImageGallery';
-import SpeechBanner from './SpeechToText';
+import SpeechBanner from './AudioBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AdvancedAIResponse = ({
   message,
   openReadAloud,
-  disableReadAloud,
   loading = true,
   onRegenerate,
   onFeedback,
@@ -45,6 +44,7 @@ const AdvancedAIResponse = ({
   onImageSave,
 }: AIResponseProps) => {
   const [isLiked, setIsLiked] = useState<'like' | 'dislike' | null>(null);
+  const [audioPressed, setAudioPressed] = useState<boolean>(false)
 
   //code block component
   const {
@@ -212,14 +212,27 @@ const AdvancedAIResponse = ({
             </TouchableOpacity>
 
             <TouchableOpacity
-              disabled = {disableReadAloud}
               style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
-              onPress={openReadAloud}
+              onPress={() => handleLike('dislike')}
+            >
+              <Feather
+                name="thumbs-down"
+                size={16}
+                color={isLiked === 'dislike' ?  "#ef4444" : "#8e8ea0"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, audioPressed && styles.actionButtonActive]}
+              onPress={() => {
+                openReadAloud;
+                setAudioPressed(true)
+              }}
             >
               <Ionicons
                 name="volume-medium-outline"
                 size={20}
-                color={!disableReadAloud ? "#ef4444" : "#8e8ea0"}
+                color={ audioPressed ? "#10b981" : "#8e8ea0"}
               />
             </TouchableOpacity>
 
@@ -230,12 +243,7 @@ const AdvancedAIResponse = ({
               <Feather name="share" size={16} color="#8e8ea0" />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleShare}
-            >
-              <Feather name="share" size={16} color="#8e8ea0" />
-            </TouchableOpacity>
+           
 
             {onRegenerate && (
               <TouchableOpacity
