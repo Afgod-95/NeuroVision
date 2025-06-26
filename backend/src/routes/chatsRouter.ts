@@ -50,7 +50,7 @@ chatsRouter.get('/user/summaries/', getUserConversationSummaries);
 /**
  * TEXT TO SPEECH ENDPOINT
  */
-chatsRouter.post('/messages/text-to-speech', tts as RequestHandler);
+chatsRouter.post('/text-to-speech', tts as RequestHandler);
 
 
 export default chatsRouter;

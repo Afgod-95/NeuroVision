@@ -128,7 +128,7 @@ const Index = () => {
   // Fixed generateTextToSpeech function
 const generateTextToSpeech = async (text: string) => {
   try {
-    const response = await fetch('/api/tts', {
+    const response = await axios.post('/api/conversations/text-to-speech', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -138,7 +138,7 @@ const generateTextToSpeech = async (text: string) => {
       })
     });
 
-    if (!response.ok) {
+    if (!response.data) {
       throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
     }
 
