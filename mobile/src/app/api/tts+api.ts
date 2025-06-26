@@ -50,7 +50,7 @@ export const POST = async (request: Request) => {
       headers: {
         'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
-        'xi-api-key': "sk_4f29fc53c7144db09b675871d0a85d8119904530ac0ead49"
+        'xi-api-key': elevenLabsApiKey
       },
       body: JSON.stringify({
         text: text.trim(),
