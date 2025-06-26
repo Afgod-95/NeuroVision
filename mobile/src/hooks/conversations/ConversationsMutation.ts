@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useMutation } from "@tanstack/react-query";
 import { ConversationService } from "@/src/services/conversation/ConversationService";
+import { useQuery } from "@tanstack/react-query";
 
 export const useFetchMessagesMutation = () => {
     return useMutation({

@@ -22,7 +22,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
-import { useMessageOptions } from '@/src/hooks/UserMessageOptions';
+import { useMessageOptions } from '@/src/hooks/useMessageOptions';
 import { useDispatch } from 'react-redux';
 import { setShowOptions } from '@/src/redux/slices/messageOptionsSlice';
 import { useAudioPlayer, AudioSource } from 'expo-audio';

@@ -52,7 +52,7 @@ const EmailVerification = () => {
                                 text: 'OK',
                                 onPress: () => {
                                     router.push({
-                                        pathname: '/(auth)/reset-password',
+                                        pathname: '/(auth)/reset_password',
                                         params: { userId }
                                     });
                                 }
@@ -158,7 +158,7 @@ const EmailVerification = () => {
                         />
                     </View>
                     <Image
-                        source={require('../../../src/assets/images/CircularGradient.png')}
+                        source={require('../../../assets/images/CircularGradient.png')}
                         style={styles.image}
                     />
                 </KeyboardAvoidingView>

@@ -235,12 +235,12 @@ const SettingsScreen: React.FC = () => {
                 {
                     icon: 'shield-checkmark',
                     title: 'Privacy Policy',
-                    onPress: () => { },
+                    onPress: () => {router.push('/(home)/settings/privacy')},
                 },
                 {
                     icon: 'document-text',
                     title: 'Terms of Service',
-                    onPress: () => { },
+                    onPress: () => {router.push('/(home)/settings/terms')},
                 },
                 {
                     icon: 'save',
@@ -269,12 +269,12 @@ const SettingsScreen: React.FC = () => {
                 {
                     icon: 'help-circle',
                     title: 'Help & FAQ',
-                    onPress: () => { },
+                    onPress: () => {router.push('/(home)/settings/help')},
                 },
                 {
                     icon: 'mail',
                     title: 'Contact Support',
-                    onPress: () => { },
+                    onPress: () => {router.push('/(home)/settings/support')},
                 },
                 {
                     icon: 'star',

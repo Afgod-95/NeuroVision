@@ -21,8 +21,9 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
 import { router } from 'expo-router';
-import { useFetchConversationSummaryMutation } from '@/src/hooks/conversations/ConversationsMutation';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
@@ -35,38 +36,58 @@ type CustomSideBarProps = {
 };
 
 const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpen }) => {
-    
+
     //states
     const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
     const sidebarWidth = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const [shouldRender, setShouldRender] = useState(isVisible);
     const [isDragging, setIsDragging] = useState(false);
     const [searchbarVisible, setSearchbarVisible] = useState(false);
-    const { user: userCredentials } = useSelector((state: RootState) => state.user );
+    const { user: userCredentials } = useSelector((state: RootState) => state.user);
 
     const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
 
     //search function
     const [searchQuery, setSearchQuery] = useState('');
 
-    //fetch summary
-    const fetchUserSummaryMutation = useFetchConversationSummaryMutation();
+    const { data, isLoading, error } = useQuery({
+        queryKey: ['conversationSummaries', userCredentials?.id],
+        queryFn: () =>
+            axios
+                .get('/api/conversations/user/summaries', {
+                    params: { userId: userCredentials?.id }
+                })
+            .then(res => {
+                return res.data;
+            }),
+        enabled: !!userCredentials?.id,
+        refetchInterval: 10000, // poll every 10 seconds
+        retry: 3,
+        retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    });
+
     useEffect(() => {
-        if (userCredentials?.id !== undefined) {
-            fetchUserSummaryMutation.mutateAsync(userCredentials.id)
-            .then((data) => {
-                const { conversations } = data;
-                const summaryTitle = conversations.map((conversation: ConversationSummary) => {
-                    return {
-                        conversation_id: conversation.conversation_id,
-                        title: conversation.title,
-                        created_at: conversation.created_at
-                    }
-                });
-                setSummaryTitle(summaryTitle);
-                });
+        if (error) {
+            if ((error as any)?.message) {
+                console.log("Error fetching conversation summary", (error as any).message);
+            } else {
+                console.log("Error fetching conversation summary", error);
+            }
         }
-    }, [userCredentials?.id]);
+    }, [error]);
+
+    // ✅ Effect to update local state when data changes
+    useEffect(() => {
+        if (data?.conversations) {
+            const formatted = data.conversations.map((conversation: ConversationSummary) => ({
+                conversation_id: conversation.conversation_id,
+                title: conversation.title,
+                created_at: conversation.created_at
+            }));
+            setSummaryTitle(formatted);
+        }
+    }, [data]);
+
 
 
     console.log(userCredentials?.id)
@@ -127,7 +148,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                     } else {
                         Animated.spring(translateX, {
                             toValue: 0,
-                            useNativeDriver: false, 
+                            useNativeDriver: false,
                         }).start();
                     }
                 } else {
@@ -150,13 +171,13 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
             Animated.timing(translateX, {
                 toValue: 0,
                 duration: isDragging ? 0 : 300,
-                useNativeDriver: false, 
+                useNativeDriver: false,
             }).start();
         } else {
             Animated.timing(translateX, {
                 toValue: -SIDEBAR_WIDTH,
                 duration: isDragging ? 0 : 300,
-                useNativeDriver: false, 
+                useNativeDriver: false,
             }).start(() => {
                 setShouldRender(false);
             });
@@ -182,9 +203,9 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
             <Animated.View
                 style={[
                     styles.sidebar,
-                    { 
+                    {
                         transform: [{ translateX }],
-                        width: sidebarWidth 
+                        width: sidebarWidth
                     }
                 ]}
                 {...panResponder.panHandlers}
@@ -192,8 +213,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                 <View style={styles.contentContainer}>
                     <View style={styles.header}>
                         {/* Hide tittle if search bar is open */}
-                        {!searchbarVisible && <Text style={styles.title}>NeuraVision</Text>}
-                        
+                        {!searchbarVisible && <Text style={styles.title}>NeuroVision</Text>}
+
                         {/* Hide search icon if search bar is open */}
                         {!searchbarVisible && (
                             <TouchableOpacity onPress={searchbarOpen}>
@@ -211,26 +232,26 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                         onCancel={() => setSearchbarVisible(false)}
                     />
                 </View>
-                
+
                 {/* recent messages */}
-                <RecentMessages 
-                    isLoading = {fetchUserSummaryMutation.isPending}
-                    messages={summaryTitle} 
-                    search = {searchQuery}
+                <RecentMessages
+                    isLoading={isLoading}
+                    messages={summaryTitle}
+                    search={searchQuery}
                 />
-               
+
                 <View style={styles.bottom}>
                     <TouchableOpacity style={styles.bottomContent} onPress={openSettings}>
                         <TouchableOpacity style={styles.userCont} onPress={openSettings}>
                             <View
-                              
+
                                 style={styles.userAccountButton}
                             >
                                 <Text style={styles.userText}>{userInitials}</Text>
                             </View>
                             <Text style={styles.userText}>{username}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style = {{opacity: 0.5 }} onPress={openSettings}>
+                        <TouchableOpacity style={{ opacity: 0.5 }} onPress={openSettings}>
                             <Feather name="more-horizontal" size={24} color={Colors.dark.txtSecondary} />
                         </TouchableOpacity>
                     </TouchableOpacity>

@@ -5,6 +5,7 @@ import supabase from "../../lib/supabase";
 import { isValidUUID } from "../../middlewares/isValidUUID";
 import geminiService from "../../services/GeminiInitiation";
 import { GenerateConversationSummaryRequest } from "../../interfaces/typescriptInterfaces";
+import { SUMMARY_SYSTEM_PROMPT } from "../../utils/AIPrompts";
 
 
 
@@ -275,7 +276,7 @@ export const generateConversationSummary = async (
         }
 
         // Enhanced summary prompt
-        const summaryPrompt = customPrompt || `Analyze the following conversation and provide a comprehensive summary. Focus on:
+        const summaryPrompt = SUMMARY_SYSTEM_PROMPT || `Analyze the following conversation and provide a comprehensive summary. Focus on:
 - Main topics discussed
 - Key points and insights
 - Important decisions or conclusions

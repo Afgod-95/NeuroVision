@@ -19,7 +19,7 @@ import ChatInput from '@/src/components/chatUI/ChatInput';
 import CustomSideBar from '@/src/components/chatUI/SideBar';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
-import { Message } from '@/src/utils/interfaces/TypescriptInterfaces';
+import { Message, ApiResponse, ApiMessage } from '@/src/utils/interfaces/TypescriptInterfaces';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import UserMessageBox, { MessagePreview, MessageContent } from '@/src/components/chatUI/UserMessageBox';
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
@@ -28,13 +28,16 @@ import { uniqueConvId } from '@/src/constants/generateConversationId';
 import useRealtimeChat from '@/src/hooks/chats/RealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
 import ScrollToBottomButton from '@/src/components/chatUI/ScrollToBottomButton';
-
+import { useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+import { setOptions } from 'expo-splash-screen';
+import SpeechBanner from '@/src/components/chatUI/SpeechToText';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = OriginalUploadedAudioFile & {
   duration?: number;
 };
-
 
 // Memoized UserMessageBox with proper prop comparison
 const MemoizedUserMessageBox = React.memo(UserMessageBox, (prevProps, nextProps) => {
@@ -57,7 +60,19 @@ const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse, (prevProps, ne
 const Index = () => {
   // Get message options from Redux
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
+  const { user: userCredentials } = useSelector((state: RootState) => state.user);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
+  const { conversation_id } = useLocalSearchParams();
+  console.log(`Conversation ID: ${conversation_id}`);
+  
+  //speech state
+  const [openExpoSpeech, setOpenExpoSpeech] = useState<boolean>(false);
+  const [speechText, setSpeechText] = useState<string>('')
+  const queryClient = useQueryClient();
+
+  // Get the actual conversation ID
+  const actualConversationId = Array.isArray(conversation_id) ? conversation_id[0] : conversation_id;
 
   // Initialize the realtime chat hook
   const {
@@ -78,6 +93,7 @@ const Index = () => {
     startNewConversation,
     loadConversationHistory,
     setMessage,
+    setMessages,
     setIsRecording,
     setIsSidebarVisible,
     scrollToBottom,
@@ -102,24 +118,96 @@ const Index = () => {
     enableSampleMessages: true,
   });
 
-/**
- * scroll to bottom
- */
-const onScroll = useCallback((event: any) => {
-  const offsetY = event.nativeEvent.contentOffset.y;
-  const contentHeight = event.nativeEvent.contentSize.height;
-  const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+  // Function to transform API messages to internal Message format
+  const transformApiMessages = useCallback((apiMessages: ApiMessage[]): Message[] => {
+    return apiMessages.map((apiMsg) => ({
+      id: apiMsg.id,
+      conversation_id: apiMsg.conversation_id,
+      user_id: apiMsg.user_id ? String(apiMsg.user_id) : undefined,
+      sender: apiMsg.sender === 'ai' ? 'assistant' : apiMsg.sender,
+      text: apiMsg.content,
+      created_at: apiMsg.created_at,
+      timestamp: apiMsg.created_at,
+      user: apiMsg.sender === 'user',
+      isLoading: false,
+      content: {
+        type: 'text',
+        data: apiMsg.content
+      }
+    }));
+  }, []);
 
-  const isAtBottom = offsetY + layoutHeight >= contentHeight; 
+  // Prefetch messages for specific conversation id
+  const prefetchMessages = useCallback(async (conversationId: string, userId: string) => {
+    if (!conversationId || !userId) {
+      console.log('Missing conversationId or userId for prefetch');
+      return;
+    }
 
-  setShowScrollButton(!isAtBottom && offsetY > 200);
-}, []);
+    try {
+      setIsInitialLoading(true);
+      console.log(`Prefetching messages for conversation: ${conversationId}`);
 
+      const data = await queryClient.fetchQuery({
+        queryKey: ['conversationMessages', conversationId, userId],
+        queryFn: async () => {
+          const response = await axios.get<ApiResponse>('/api/conversations/messages', {
+            params: {
+              conversationId,
+              userId,
+            },
+          });
+          return response.data;
+        },
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+      });
 
+      if (data && data.messages) {
+        console.log(`Fetched ${data.messages.length} messages`);
+        const transformedMessages = transformApiMessages(data.messages);
+        setMessages(transformedMessages);
+        scrollToBottom()
+      }
+    } catch (error) {
+      console.error('Error prefetching messages:', error);
+    } finally {
+      setIsInitialLoading(false);
+    }
+  }, [queryClient, transformApiMessages, setMessages]);
+
+  // Effect to prefetch messages when conversation_id is available
   useEffect(() => {
-    loadConversationHistory()
-  },[loadConversationHistory])
+    if (actualConversationId && userCredentials?.id) {
+      console.log('Triggering prefetch for:', actualConversationId);
+      prefetchMessages(
+        actualConversationId,
+        String(userCredentials.id)
+      );
+    }
+  }, [actualConversationId, userCredentials?.id, prefetchMessages]);
 
+
+  /**
+   * handle speech launch 
+   */
+  const speechHandler = (text: string) => {
+    setOpenExpoSpeech(true);
+    setSpeechText(text)
+  }
+  
+  /**
+   * scroll to bottom
+   */
+  const onScroll = useCallback((event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const contentHeight = event.nativeEvent.contentSize.height;
+    const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+
+    const isAtBottom = offsetY + layoutHeight >= contentHeight;
+
+    setShowScrollButton(!isAtBottom && offsetY > 50);
+  }, []);
 
   // Sidebar handlers
   const handleToggleSidebar = useCallback(() => {
@@ -134,7 +222,7 @@ const onScroll = useCallback((event: any) => {
     setIsSidebarVisible(true);
   }, [setIsSidebarVisible]);
 
-   // Message input handlers
+  // Message input handlers
   const handleMessageOnChange = useCallback((text: string) => {
     setMessage(text);
   }, [setMessage]);
@@ -189,6 +277,8 @@ const onScroll = useCallback((event: any) => {
           message={item.text}
           loading={finalLoadingState}
           onRegenerate={() => handleRegenerate(item.id)}
+          disableReadAloud={false}
+          openReadAloud={() => {speechHandler(item.text)}}
         />
       );
     }
@@ -204,9 +294,10 @@ const onScroll = useCallback((event: any) => {
         messageIsLoading: lastMessage.isLoading,
         globalIsAIResponding: isAIResponding,
         globalLoading: loading,
+        initialLoading: isInitialLoading,
       });
     }
-  }, [messages, isAIResponding, loading]);
+  }, [messages, isAIResponding, loading, isInitialLoading]);
 
   // Add a cleanup effect when component unmounts or conversation changes
   useEffect(() => {
@@ -219,7 +310,6 @@ const onScroll = useCallback((event: any) => {
     // Ensure unique keys - add sender info to make it more unique
     return `${item.id}-${item.sender}-${item.user ? 'user' : 'ai'}`;
   }, []);
-
 
   // Memoized welcome content to prevent re-renders
   const welcomeContent = useMemo(() => (
@@ -240,6 +330,11 @@ const onScroll = useCallback((event: any) => {
     <Loading />
   ), []);
 
+  // Determine what to show based on loading states
+  const shouldShowLoading = loading || isInitialLoading;
+  const shouldShowWelcome = !shouldShowLoading && messages.length === 0;
+  const shouldShowMessages = !shouldShowLoading && messages.length > 0;
+
   return (
     <>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -256,6 +351,8 @@ const onScroll = useCallback((event: any) => {
             keyboardVerticalOffset={0}
           >
             <SafeAreaView style={styles.safeAreaContainer}>
+               {/*  AI Text to Speech */}
+          
               {/* Header - Fixed at top */}
               <View style={styles.header}>
                 <TouchableOpacity onPress={handleToggleSidebar}>
@@ -273,10 +370,13 @@ const onScroll = useCallback((event: any) => {
                 </TouchableOpacity>
               </View>
 
-              {/* Content Area - Show welcome or messages */}
-              {loading ? loadingContent : (
-                messages.length === 0 ? welcomeContent : (
-                  <>
+              {/* Content Area - Show loading, welcome, or messages */}
+              {shouldShowLoading && loadingContent}
+
+              {shouldShowWelcome && welcomeContent}
+
+              {shouldShowMessages && (
+                <>
                   <FlatList
                     ref={flatListRef}
                     data={messages}
@@ -290,21 +390,16 @@ const onScroll = useCallback((event: any) => {
                     windowSize={10}
                     decelerationRate="normal"
                     scrollEventThrottle={16}
-                    onScroll = {onScroll}
-                    nestedScrollEnabled = {true}
-                    
+                    onScroll={onScroll}
+                    nestedScrollEnabled={true}
                     getItemLayout={undefined}
-                    
                     extraData={messages.length}
                   />
-                  <ScrollToBottomButton 
-                     onPress = { scrollToBottom}
-                    visible = {showScrollButton}
+                  <ScrollToBottomButton
+                    onPress={scrollToBottom}
+                    visible={showScrollButton}
                   />
-                  </>
-                  
-
-                )
+                </>
               )}
             </SafeAreaView>
 
@@ -315,6 +410,8 @@ const onScroll = useCallback((event: any) => {
               userMessage={true}
               editMessage={handleEditMessageCallback}
             />
+
+             {openExpoSpeech && <SpeechBanner message = {speechText} onDone={() => setOpenExpoSpeech(false)}/>}
 
             {/* Chat input */}
             <ChatInput
@@ -381,10 +478,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: 'Manrope-ExtraBold',
-    fontSize: 20,
+    fontSize: 24,
     color: Colors.dark.txtPrimary,
   },
-  
   welcomeText: {
     fontSize: 20,
     color: Colors.dark.button,
@@ -402,7 +498,6 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
   },
   aiRespondingIndicator: {
     paddingVertical: 8,

@@ -15,6 +15,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 import SkeletonMessage from './Skeleton';
+import { router } from 'expo-router';
 
 const { width, height } = Dimensions.get('window');
 
@@ -103,7 +104,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
         const messageDate = new Date(timestamp.getFullYear(), timestamp.getMonth(), timestamp.getDate());
-        
+
         if (messageDate.getTime() === today.getTime()) {
             return 'Today';
         } else if (messageDate.getTime() === yesterday.getTime()) {
@@ -112,7 +113,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             const diffInDays = Math.floor((today.getTime() - messageDate.getTime()) / (1000 * 60 * 60 * 24));
             const diffInWeeks = Math.floor(diffInDays / 7);
             const diffInMonths = Math.floor(diffInDays / 30);
-            
+
             if (diffInDays < 7) {
                 return `${diffInDays} days ago`;
             } else if (diffInWeeks === 1) {
@@ -131,23 +132,23 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         if (messages.length === 0) return [];
 
         // Filter messages based on search if provided
-        const filteredMessages = search 
-            ? messages.filter(message => 
+        const filteredMessages = search
+            ? messages.filter(message =>
                 message.title.toLowerCase().includes(search.toLowerCase())
-              )
+            )
             : messages;
 
         // Sort messages by timestamp (newest first)
         const sortedMessages = [...filteredMessages].sort(
             (a, b) => new Date(b.created_at).getTime() - new Date(a.updated_at).getTime()
         );
-        
+
         const grouped: GroupedMessage[] = [];
         let currentGroup: string | null = null;
 
         sortedMessages.forEach((message) => {
             const dateLabel = getDateLabel(new Date(message.created_at));
-            
+
             if (currentGroup !== dateLabel) {
                 // Add header for new group
                 grouped.push({
@@ -157,7 +158,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                 });
                 currentGroup = dateLabel;
             }
-            
+
             // Add message
             grouped.push({
                 type: 'message',
@@ -171,8 +172,13 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
     const handleMessagePress = (messageId: string) => {
         setPressedMessage(messageId);
+
         onMessagePress?.(messageId);
-        
+        router.push({
+            pathname: `/(home)`,
+            params: { conversation_id: messageId },
+        })
+
         // Reset the pressed state after a short delay
         setTimeout(() => {
             setPressedMessage(null);
@@ -200,7 +206,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
         const message = item.message!;
         const isPressed = pressedMessage === message.conversation_id;
-        
+
         return (
             <Pressable
                 style={[
@@ -232,55 +238,43 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
     const getItemLayout = (data: ArrayLike<GroupedMessage> | null | undefined, index: number) => {
         if (!data) return { length: 0, offset: 0, index };
-        
+
         const item = data[index];
         const height = item.type === 'header' ? 50 : 72;
-        
+
         let offset = 0;
         for (let i = 0; i < index; i++) {
             offset += data[i].type === 'header' ? 50 : 72;
         }
-        
+
         return { length: height, offset, index };
     };
 
     return (
         <View style={styles.container}>
-            {isLoading ? 
-                groupedMessages.map((_, index: number) => {
-                    return (
-                        <View
-                            key={index}
-                            style={{
-                                height: 72,
-                                marginHorizontal: 20,
-                                marginVertical: 8,
-                                borderRadius: 10,
-                                backgroundColor: '#1f2937',
-                                opacity: 0.5,
-                            }}
-                        >
-                            <SkeletonMessage />
-                        </View>
-                    );
-                })
-            : (
-                <FlatList
-                    data={groupedMessages}
-                    renderItem={renderItem}
-                    keyExtractor={keyExtractor}
-                    showsVerticalScrollIndicator={false}
-                    ListEmptyComponent={renderEmptyState}
-                    contentContainerStyle={groupedMessages.length === 0 ? styles.emptyListContainer : undefined}
-                    initialNumToRender={10}
-                    maxToRenderPerBatch={10}
-                    windowSize={10}
-                    removeClippedSubviews={true}
-                    getItemLayout={getItemLayout}
-                />
-            )
-        }
-            
+            {isLoading ?
+                Array(6).fill(null).map((_, index) => (
+                    <View key={index}>
+                        <SkeletonMessage />
+                    </View>
+                ))
+                : (
+                    <FlatList
+                        data={groupedMessages}
+                        renderItem={renderItem}
+                        keyExtractor={keyExtractor}
+                        showsVerticalScrollIndicator={true}
+                        ListEmptyComponent={renderEmptyState}
+                        contentContainerStyle={groupedMessages.length === 0 ? styles.emptyListContainer : undefined}
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={10}
+                        windowSize={10}
+                        removeClippedSubviews={true}
+                        getItemLayout={getItemLayout}
+                    />
+                )
+            }
+
 
             {/* Modal */}
             <Modal
@@ -294,7 +288,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                         <TouchableWithoutFeedback>
                             <View style={styles.modalContent}>
                                 <View style={styles.modalHandle} />
-                                
+
                                 {modalActions.map((action) => (
                                     <Pressable
                                         key={action.id}
@@ -358,9 +352,10 @@ const styles = StyleSheet.create({
     },
     messageText: {
         color: '#ffffff',
-        fontSize: 14,
+        fontSize: 16,
         lineHeight: 20,
-        fontFamily: 'Manrope-Regular',
+        fontFamily: 'Manrope',
+        fontWeight: '900'
     },
     fadeGradient: {
         position: 'absolute',
@@ -402,7 +397,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#1f2937',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        paddingBottom: 34, 
+        paddingBottom: 34,
         paddingTop: 8,
     },
     modalHandle: {

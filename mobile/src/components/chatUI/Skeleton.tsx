@@ -1,3 +1,4 @@
+import { Colors } from '@/src/constants/Colors';
 import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 
@@ -30,15 +31,15 @@ const SkeletonMessage = () => {
 
 const styles = StyleSheet.create({
   container: {
-    height: 60,
+    height: 90,
     justifyContent: 'center',
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
   },
   titleBar: {
     height: 16,
-    width: '70%',
-    backgroundColor: 'white',
+    width: '100%',
+    animationName: 'wave',
+    backgroundColor: Colors.dark.bgSecondary,
     borderRadius: 4,
   },
 });

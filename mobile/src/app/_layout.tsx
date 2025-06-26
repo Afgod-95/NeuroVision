@@ -22,9 +22,9 @@ const queryClient = new QueryClient();
 
 export default function RootLayout() {
   const [loaded] = useFonts({
-    'Manrope-Regular': require('../src/assets/fonts/Manrope-Regular.ttf'),
-    'Manrope-ExtraBold': require('../src/assets/fonts/Manrope-ExtraBold.ttf'),
-    'Manrope-Medium': require('../src/assets/fonts/Manrope-Medium.ttf'),
+    'Manrope-Regular': require('../assets/fonts/Manrope-Regular.ttf'),
+    'Manrope-ExtraBold': require('../assets/fonts/Manrope-ExtraBold.ttf'),
+    'Manrope-Medium': require('../assets/fonts/Manrope-Medium.ttf'),
   });
 
   useEffect(() => {

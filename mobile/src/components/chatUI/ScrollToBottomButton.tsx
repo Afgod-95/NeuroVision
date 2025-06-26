@@ -49,8 +49,9 @@ const ScrollToBottomButton: React.FC<Props> = ({ onPress, visible }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    right: 0,
-    bottom: 10,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    bottom: 50,
     zIndex: 10,
   },
   button: {

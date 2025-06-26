@@ -71,11 +71,22 @@ interface Message {
     metadata?: any; 
 }
 
-interface ApiResponse<T> {
-    success: boolean;
-    data?: T;
-    error?: string;
-    timestamp: string;
+// API Message interface to match backend response
+interface ApiMessage {
+  id: string;
+  conversation_id: string;
+  user_id: number;
+  sender: 'user' | 'assistant' | 'ai';
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// API Response interface
+interface ApiResponse {
+  success: boolean;
+  conversationId: string;
+  messages: ApiMessage[];
 }
 
 interface SupabaseMessage {
@@ -88,7 +99,7 @@ interface SupabaseMessage {
 }
 
 
-interface ConversationListResponse extends ApiResponse<ConversationSummary[]> {
+interface ConversationListResponse extends ApiResponse {
     conversations: ConversationSummary[];
     totalCount: number;
     page: number;
@@ -96,7 +107,8 @@ interface ConversationListResponse extends ApiResponse<ConversationSummary[]> {
     hasMore: boolean;
 }
 
-interface ConversationMessagesResponse extends ApiResponse<Message[]> {
+interface ConversationMessagesResponse {
+    success: boolean;
     conversationId: string;
     messages: Message[];
     messageCount: number;
@@ -109,6 +121,7 @@ export {
     ConversationSummary,
     Message,
     ApiResponse,
+    ApiMessage,
     SupabaseMessage,
     MessageContent,
     UploadedAudioFile,

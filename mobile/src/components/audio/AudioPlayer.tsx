@@ -88,16 +88,11 @@ const AudioPlayer = ({
   const player = useAudioPlayer(audioSource);
   const BAR_COUNT = 20;
 
-  // Custom hook to create an array of shared values
-  function useWaveAnimations(count: number) {
-    const sharedValues = [];
-    for (let i = 0; i < count; i++) {
-      sharedValues.push(useSharedValue(Math.random() * 0.3 + 0.2));
-    }
-    return sharedValues;
+  // Create an array of shared values (must not use hooks inside useMemo)
+  const waveAnimations: Animated.SharedValue<number>[] = [];
+  for (let i = 0; i < BAR_COUNT; i++) {
+    waveAnimations.push(useSharedValue(Math.random() * 0.3 + 0.2));
   }
-
-  const waveAnimations = useWaveAnimations(BAR_COUNT);
 
   const loadingRotation = useSharedValue(0);
   const loadingAnimatedStyle = useAnimatedStyle(() => ({
