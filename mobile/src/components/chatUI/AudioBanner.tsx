@@ -1,208 +1,393 @@
 import React, { useEffect, useState } from 'react';
-import { Text, StyleSheet, View } from 'react-native';
-import { PanGestureHandler } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  withTiming,
-  useAnimatedStyle,
-  Easing,
-  runOnJS,
-  withRepeat,
-  cancelAnimation,
-} from 'react-native-reanimated';
-
 import {
-  useAudioPlayer,           // expo-audio hook
-  useAudioPlayerStatus,     // keeps status in sync
-} from 'expo-audio';
-
-const BANNER_HEIGHT = 70;
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Easing,
+} from 'react-native';
+import { Colors } from '@/src/constants/Colors';
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 
 interface SpeechBannerProps {
-  /** Audio URL (e.g. ElevenLabs MP3) */
-  audioUrl: string;
-  /** Banner message to display */
   message: string;
-  /** Show/hide banner */
   visible: boolean;
-  /** Auto-dismiss when playback finishes (default true) */
   autoDismiss?: boolean;
-  /** Called after banner slides away */
   onClose: () => void;
+  isGenerating?: boolean;
+  isSpeaking?: boolean;
+  onStop?: () => void;
 }
 
-const SpeechBanner: React.FC<SpeechBannerProps> = ({
-  audioUrl,
+const AudioBanner: React.FC<SpeechBannerProps> = ({
   message,
   visible,
   autoDismiss = true,
   onClose,
+  isGenerating = false,
+  isSpeaking = false,
+  onStop,
 }) => {
-  /* -------------------- audio -------------------- */
-  const player = useAudioPlayer({ uri: audioUrl });
-  const status = useAudioPlayerStatus(player);
+  const [slideAnim] = useState(new Animated.Value(-100));
+  const [pulseAnim] = useState(new Animated.Value(1));
 
-  /* -------------------- animation state -------------------- */
-  const translateY = useSharedValue(-BANNER_HEIGHT);
-  const progress = useSharedValue(0);
-  const wave1 = useSharedValue(0.3);
-  const wave2 = useSharedValue(0.3);
-  const wave3 = useSharedValue(0.3);
-
-  const [mounted, setMounted] = useState(false); // prevents double hide
-
-  /* -------------------- enter / exit -------------------- */
+  // Slide animation effect
   useEffect(() => {
     if (visible) {
-      setMounted(true);
-      translateY.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) });
-      player.play(); // start audio
+      // Slide down
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
     } else {
-      hide();
+      // Slide up
+      Animated.timing(slideAnim, {
+        toValue: -100,
+        duration: 250,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
     }
-  }, [visible]);
+  }, [visible, slideAnim]);
 
-  /* -------------------- update progress & waveform -------------------- */
+  // Pulse animation for generating state
   useEffect(() => {
-    if (!status) return;
-
-    // progress bar
-    if (status.duration > 0) {
-      progress.value = withTiming(status.currentTime / status.duration);
+    if (isGenerating) {
+      const pulseAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.8,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseAnimation.start();
+      
+      return () => {
+        pulseAnimation.stop();
+        pulseAnim.setValue(1);
+      };
+    } else {
+      pulseAnim.setValue(1);
     }
+  }, [isGenerating, pulseAnim]);
 
-    // waveform animation
-    if (status.playing) startWave();
-    else stopWave();
+  // Auto dismiss functionality
+  useEffect(() => {
+    if (autoDismiss && !isSpeaking && !isGenerating && visible) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 3000); // Auto dismiss after 3 seconds when not speaking
 
-    // finished?
-    if (
-      !status.playing &&
-      status.currentTime  >= status.duration &&
-      status.duration !== 0
-    ) {
-      if (autoDismiss) hide();
+      return () => clearTimeout(timer);
     }
-  }, [status]);
+  }, [autoDismiss, isSpeaking, isGenerating, visible, onClose]);
 
-  /* -------------------- wave helpers -------------------- */
-  const startWave = () => {
-    wave1.value = withRepeat(withTiming(1.2, { duration: 600 }), -1, true);
-    wave2.value = withRepeat(withTiming(1.6, { duration: 500 }), -1, true);
-    wave3.value = withRepeat(withTiming(1.3, { duration: 700 }), -1, true);
-  };
-  const stopWave = () => {
-    cancelAnimation(wave1);
-    cancelAnimation(wave2);
-    cancelAnimation(wave3);
-    wave1.value = withTiming(0.3);
-    wave2.value = withTiming(0.3);
-    wave3.value = withTiming(0.3);
+  const handleStopSpeech = () => {
+    if (onStop && isSpeaking) {
+      onStop();
+    }
   };
 
-  /* -------------------- hide -------------------- */
-  const hide = () => {
-    if (!mounted) return;
-    translateY.value = withTiming(
-      -BANNER_HEIGHT - 10,
-      { duration: 250, easing: Easing.in(Easing.cubic) },
-      (finished) => finished && runOnJS(onClose)(),
-    );
-    setMounted(false);
-    player.pause();
-    stopWave();
+  const getStatusText = () => {
+    if (isGenerating) return 'Preparing audio...';
+    if (isSpeaking) return 'Speaking...';
+    return 'Ready';
   };
 
-  /* -------------------- controls -------------------- */
-  const togglePlay = () => (status?.playing ? player.pause() : player.play());
-  const stop = () => hide();
+  const getStatusIcon = () => {
+    if (isGenerating) return 'hourglass-half';
+    if (isSpeaking) return 'volume-high';
+    return 'check-circle';
+  };
 
-  /* -------------------- animated styles -------------------- */
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-  const progressStyle = useAnimatedStyle(() => ({
-    width: `${progress.value * 100}%`,
-  }));
-  const w1 = useAnimatedStyle(() => ({ transform: [{ scaleY: wave1.value }] }));
-  const w2 = useAnimatedStyle(() => ({ transform: [{ scaleY: wave2.value }] }));
-  const w3 = useAnimatedStyle(() => ({ transform: [{ scaleY: wave3.value }] }));
+  const getStatusColor = () => {
+    if (isGenerating) return  '#FFA500';
+    if (isSpeaking) return  '#28A745';
+    return Colors.dark.txtSecondary;
+  };
 
-  /* -------------------- render -------------------- */
+  if (!visible) return null;
+
   return (
-    <PanGestureHandler onGestureEvent={({ nativeEvent }) => {
-      if (nativeEvent.translationY < -30) hide();
-    }}>
-      <Animated.View style={[styles.banner, containerStyle]}>
-        {/* progress bar */}
-        <View style={styles.track}>
-          <Animated.View style={[styles.fill, progressStyle]} />
-        </View>
-
-        {/* content */}
-        <View style={styles.row}>
-          {/* text + wave */}
-          <View style={styles.textWrap}>
-            <Text style={styles.text} numberOfLines={2}>{message}</Text>
-            <View style={styles.waveRow}>
-              <Animated.View style={[styles.wave, w1]} />
-              <Animated.View style={[styles.wave, w2]} />
-              <Animated.View style={[styles.wave, w3]} />
-              <Animated.View style={[styles.wave, w2]} />
-              <Animated.View style={[styles.wave, w1]} />
-            </View>
-          </View>
-
-          {/* controls */}
-          <View style={styles.controls}>
-            <Text style={styles.btn} onPress={togglePlay}>
-              {status?.playing ? '⏸️' : '▶️'}
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
+      <View style={styles.content}>
+        {/* Status Section */}
+        <View style={styles.statusSection}>
+          <Animated.View
+            style={[
+              styles.statusIconContainer,
+              {
+                transform: [{ scale: pulseAnim }],
+              },
+            ]}
+          >
+            <FontAwesome6
+              name={getStatusIcon()}
+              size={16}
+              color={getStatusColor()}
+            />
+          </Animated.View>
+          <View style={styles.statusTextContainer}>
+            <Text style={styles.statusText}>{getStatusText()}</Text>
+            <Text style={styles.messageText} numberOfLines={2}>
+              {message}
             </Text>
-            <Text style={styles.stop} onPress={stop}>⏹</Text>
           </View>
         </View>
-      </Animated.View>
-    </PanGestureHandler>
+
+        {/* Controls Section */}
+        <View style={styles.controlsSection}>
+          {/* Stop Button - Only show when speaking */}
+          {isSpeaking && onStop && (
+            <TouchableOpacity
+              style={[styles.controlButton, styles.stopButton]}
+              onPress={handleStopSpeech}
+            >
+              <FontAwesome6 name="stop" size={14} color="#fff" />
+            </TouchableOpacity>
+          )}
+
+          {/* Close Button */}
+          <TouchableOpacity
+            style={[styles.controlButton, styles.closeButton]}
+            onPress={onClose}
+          >
+            <FontAwesome6 name="xmark" size={14} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Progress Bar for Speaking State */}
+      {isSpeaking && (
+        <View style={styles.progressBarContainer}>
+          <View style={styles.progressBar}>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                {
+                  transform: [{ scaleX: pulseAnim }],
+                },
+              ]}
+            />
+          </View>
+        </View>
+      )}
+    </Animated.View>
   );
 };
-
-export default SpeechBanner;
-
-/* -------------------- styles -------------------- */
 const styles = StyleSheet.create({
-  banner: {
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  progressBarContainer: {
+    height: 4,
+    width: '100%',
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  progressBar: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+  },
+  progressFill: {
+    backgroundColor: '#27AE60',
+    height: '100%',
+    width: '100%',
+    borderRadius: 2,
+    transform: [{ scaleX: 1 }],
+  },
+  controlsSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  volumeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  volumeButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  audioBanner: {
     position: 'absolute',
     top: 0,
-    left: 12,
-    right: 12,
-    height: BANNER_HEIGHT,
-    backgroundColor: '#2D2D2D',
-    borderRadius: 12,
-    marginTop: 8,
-    elevation: 6,
+    left: 0,
+    right: 0,
+    backgroundColor: '#2C3E50',
+    zIndex: 999,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 4 },
-    overflow: 'hidden',
-    zIndex: 9999,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
-  track: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  bannerContent: {
+    padding: 20,
+    paddingTop: 60, // Account for status bar
   },
-  fill: {
-    height: '100%',
-    backgroundColor: '#10A37F',
+  bannerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 16,
+    textAlign: 'center',
   },
-  row: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 6 },
-  textWrap: { flex: 1, marginRight: 12 },
-  text: { color: '#FFFFFF', fontSize: 14, marginBottom: 4 },
-  waveRow: { flexDirection: 'row', alignItems: 'center', height: 16, gap: 2 },
-  wave: { width: 3, height: 8, backgroundColor: '#10A37F', borderRadius: 1.5 },
-  controls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  btn: { fontSize: 16, color: '#FFFFFF', padding: 4 },
-  stop: { fontSize: 16, color: '#FF6B6B', padding: 4 },
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  controlButton: {
+    backgroundColor: '#34495E',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 100,
+    justifyContent: 'center',
+  },
+  mutedButton: {
+    backgroundColor: '#E74C3C',
+  },
+  playButton: {
+    backgroundColor: '#27AE60',
+  },
+  disabledButton: {
+    backgroundColor: '#7F8C8D',
+    opacity: 0.6,
+  },
+  controlButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  statusText: {
+    color: '#BDC3C7',
+    textAlign: 'center',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  closeButton: {
+    backgroundColor: '#95A5A6',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignSelf: 'center',
+  },
+  stopButton: {
+    backgroundColor: '#E74C3C',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignSelf: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  mainContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 100, // Space for the volume button
+  },
+  mainTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  description: {
+    fontSize: 16,
+    color: '#7F8C8D',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  messageText: {
+    color: '#2C3E50',
+    fontSize: 15,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  statusTextContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginLeft: 8,
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 50, // Account for status bar
+  },
+  statusSection: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
 });
+
+export default AudioBanner;

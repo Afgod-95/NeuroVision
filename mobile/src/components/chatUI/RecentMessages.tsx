@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,15 +10,14 @@ import {
     TouchableWithoutFeedback,
     FlatList,
     ListRenderItem,
+    Animated,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
-import SkeletonMessage from './Skeleton';
 import { router } from 'expo-router';
 
 const { width, height } = Dimensions.get('window');
-
 
 type ModalAction = {
     id: string;
@@ -38,6 +37,7 @@ type RecentMessagesProps = {
     messages: ConversationSummary[];
     search?: string;
     isLoading: boolean,
+    activeConversationId?: string;
     onShareChat?: (messageId: string) => void;
     onRenameChat?: (messageId: string) => void;
     onArchiveChat?: (messageId: string) => void;
@@ -45,10 +45,120 @@ type RecentMessagesProps = {
     onMessagePress?: (messageId: string) => void;
 };
 
+// Shimmer Component
+const ShimmerPlaceholder: React.FC<{ width: number; height: number; style?: any }> = ({ 
+    width, 
+    height, 
+    style 
+}) => {
+    const shimmerAnimation = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const startShimmer = () => {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(shimmerAnimation, {
+                        toValue: 1,
+                        duration: 1000,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(shimmerAnimation, {
+                        toValue: 0,
+                        duration: 1000,
+                        useNativeDriver: true,
+                    }),
+                ])
+            ).start();
+        };
+
+        startShimmer();
+    }, [shimmerAnimation]);
+
+    const opacity = shimmerAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.3, 0.7],
+    });
+
+    return (
+        <Animated.View
+            style={[
+                {
+                    width,
+                    height,
+                    backgroundColor: Colors.dark.bgSecondary,
+                    borderRadius: 4,
+                    opacity,
+                },
+                style,
+            ]}
+        />
+    );
+};
+
+// Shimmer Message Item Component - Fixed to match actual message structure
+const ShimmerMessageItem: React.FC = () => {
+    return (
+        <View style={styles.messageItemContainer}>
+            <View style={styles.messageItem}>
+                <View style={styles.messageContent}>
+                    <View style={styles.messageTextContainer}>
+                        {/* Single line shimmer for title only, matching actual message */}
+                        <ShimmerPlaceholder width={180} height={16} />
+                    </View>
+                    <View style={styles.messageActions}>
+                        <ShimmerPlaceholder width={28} height={28} style={{ borderRadius: 14 }} />
+                    </View>
+                </View>
+            </View>
+        </View>
+    );
+};
+
+// Shimmer Header Component
+const ShimmerHeader: React.FC = () => {
+    return (
+        <View style={styles.sectionHeader}>
+            <ShimmerPlaceholder width={60} height={12} />
+        </View>
+    );
+};
+
+// Shimmer Loading Component
+const ShimmerLoading: React.FC = () => {
+    const shimmerItems = [
+        { id: 'header', type: 'header' },
+        { id: 'message-1', type: 'message' },
+        { id: 'message-2', type: 'message' },
+        { id: 'message-3', type: 'message' },
+        { id: 'message-4', type: 'message' },
+        { id: 'message-5', type: 'message' },
+        { id: 'message-6', type: 'message' },
+        { id: 'message-7', type: 'message' },
+        { id: 'message-8', type: 'message' },
+    ];
+
+    return (
+        <View style={styles.container}>
+            <View style={styles.listContainer}>
+                {shimmerItems.map((item) => (
+                    <View key={item.id}>
+                        {item.type === 'header' ? (
+                            <ShimmerHeader />
+                        ) : (
+                            <ShimmerMessageItem />
+                        )}
+                    </View>
+                ))}
+            </View>
+        </View>
+    );
+};
+
 const RecentMessages: React.FC<RecentMessagesProps> = ({
     messages = [],
     search = '',
     isLoading,
+    activeConversationId,
     onShareChat,
     onRenameChat,
     onArchiveChat,
@@ -144,22 +254,18 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         );
 
         const grouped: GroupedMessage[] = [];
-        let currentGroup: string | null = null;
+        
+        // Add single "Recents" header
+        if (sortedMessages.length > 0) {
+            grouped.push({
+                type: 'header',
+                id: 'header-recents',
+                title: 'Recents',
+            });
+        }
 
+        // Add all messages without date grouping
         sortedMessages.forEach((message) => {
-            const dateLabel = getDateLabel(new Date(message.created_at));
-
-            if (currentGroup !== dateLabel) {
-                // Add header for new group
-                grouped.push({
-                    type: 'header',
-                    id: `header-${dateLabel}`,
-                    title: dateLabel,
-                });
-                currentGroup = dateLabel;
-            }
-
-            // Add message
             grouped.push({
                 type: 'message',
                 id: message.conversation_id,
@@ -206,31 +312,49 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
         const message = item.message!;
         const isPressed = pressedMessage === message.conversation_id;
+        const isActive = activeConversationId === message.conversation_id;
 
         return (
-            <Pressable
-                style={[
-                    styles.messageItem,
-                    isPressed && styles.messageItemPressed
-                ]}
-                onPress={() => handleMessagePress(message.conversation_id)}
-                onLongPress={() => handleLongPress(message.conversation_id)}
-                delayLongPress={500}
-            >
-                <View style={[styles.messageContent]}>
-                    <Text style={styles.messageText} numberOfLines={2}>
-                        {message.title}
-                    </Text>
-                </View>
-            </Pressable>
+            <View style={styles.messageItemContainer}>
+                <Pressable
+                    style={[
+                        styles.messageItem,
+                        (isPressed || isActive) && styles.messageItemActive
+                    ]}
+                    onPress={() => handleMessagePress(message.conversation_id)}
+                    onLongPress={() => handleLongPress(message.conversation_id)}
+                    delayLongPress={500}
+                >
+                    <View style={styles.messageContent}>
+                        <View style={styles.messageTextContainer}>
+                            <Text style={styles.messageText} numberOfLines={1}>
+                                {message.title}
+                            </Text>
+                        </View>
+                        <View style={styles.messageActions}>
+                            <TouchableOpacity
+                                style={styles.actionButton}
+                                onPress={() => handleLongPress(message.conversation_id)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Feather name="more-horizontal" size={16} color="#6b7280" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Pressable>
+            </View>
         );
     };
 
     const renderEmptyState = () => (
         <View style={styles.emptyState}>
-            <Feather name="message-circle" size={48} color="#4b5563" />
-            <Text style={styles.emptyStateText}>No messages yet</Text>
-            <Text style={styles.emptyStateSubtext}>Start a conversation to see your recent chats</Text>
+            <View style={styles.emptyStateIcon}>
+                <Feather name="message-circle" size={48} color="#374151" />
+            </View>
+            <Text style={styles.emptyStateText}>No conversations yet</Text>
+            <Text style={styles.emptyStateSubtext}>
+                Start chatting to see your conversation history here
+            </Text>
         </View>
     );
 
@@ -240,41 +364,36 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         if (!data) return { length: 0, offset: 0, index };
 
         const item = data[index];
-        const height = item.type === 'header' ? 50 : 72;
+        const height = item.type === 'header' ? 44 : 52;
 
         let offset = 0;
         for (let i = 0; i < index; i++) {
-            offset += data[i].type === 'header' ? 50 : 72;
+            offset += data[i].type === 'header' ? 44 : 52;
         }
 
         return { length: height, offset, index };
     };
 
+    // Show shimmer loading when isLoading is true
+    if (isLoading) {
+        return <ShimmerLoading />;
+    }
+
     return (
         <View style={styles.container}>
-            {isLoading ?
-                Array(6).fill(null).map((_, index) => (
-                    <View key={index}>
-                        <SkeletonMessage />
-                    </View>
-                ))
-                : (
-                    <FlatList
-                        data={groupedMessages}
-                        renderItem={renderItem}
-                        keyExtractor={keyExtractor}
-                        showsVerticalScrollIndicator={true}
-                        ListEmptyComponent={renderEmptyState}
-                        contentContainerStyle={groupedMessages.length === 0 ? styles.emptyListContainer : undefined}
-                        initialNumToRender={10}
-                        maxToRenderPerBatch={10}
-                        windowSize={10}
-                        removeClippedSubviews={true}
-                        getItemLayout={getItemLayout}
-                    />
-                )
-            }
-
+            <FlatList
+                data={groupedMessages}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={renderEmptyState}
+                contentContainerStyle={groupedMessages.length === 0 ? styles.emptyListContainer : styles.listContainer}
+                initialNumToRender={15}
+                maxToRenderPerBatch={15}
+                windowSize={10}
+                removeClippedSubviews={true}
+                getItemLayout={getItemLayout}
+            />
 
             {/* Modal */}
             <Modal
@@ -288,7 +407,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                         <TouchableWithoutFeedback>
                             <View style={styles.modalContent}>
                                 <View style={styles.modalHandle} />
-
+                                
                                 {modalActions.map((action) => (
                                     <Pressable
                                         key={action.id}
@@ -299,19 +418,21 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                                         ]}
                                         onPress={() => selectedMessage && action.onPress(selectedMessage)}
                                     >
-                                        <Feather
-                                            name={action.icon as any}
-                                            size={20}
-                                            color={action.id === 'delete' ? '#ef4444' : '#d1d5db'}
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.modalActionText,
-                                                action.id === 'delete' && styles.deleteActionText,
-                                            ]}
-                                        >
-                                            {action.label}
-                                        </Text>
+                                        <View style={styles.modalActionContent}>
+                                            <Feather
+                                                name={action.icon as any}
+                                                size={20}
+                                                color={action.id === 'delete' ? '#ef4444' : Colors.dark.txtSecondary}
+                                            />
+                                            <Text
+                                                style={[
+                                                    styles.modalActionText,
+                                                    action.id === 'delete' && styles.deleteActionText,
+                                                ]}
+                                            >
+                                                {action.label}
+                                            </Text>
+                                        </View>
                                     </Pressable>
                                 ))}
                             </View>
@@ -328,105 +449,151 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#000000',
     },
+    listContainer: {
+        paddingTop: 8,
+    },
     sectionHeader: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: '#000000',
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.dark.borderColor,
+        marginBottom: 4,
     },
     sectionHeaderText: {
-        color: 'gray',
-        fontSize: 16,
-        fontFamily: 'Manrope-ExtraBold',
+        color: '#6b7280',
+        fontSize: 12,
+        fontFamily: 'Manrope-SemiBold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    messageItemContainer: {
+        paddingHorizontal: 12,
+        marginBottom: 2,
     },
     messageItem: {
-        paddingHorizontal: 20,
-        paddingVertical: 16,
+        borderRadius: 8,
+        backgroundColor: 'transparent',
     },
-    messageItemPressed: {
+    messageItemActive: {
         backgroundColor: Colors.dark.bgSecondary,
-        borderRadius: 10,
+        borderWidth: 1,
     },
     messageContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        minHeight: 48,
+    },
+    messageTextContainer: {
         flex: 1,
-        position: 'relative',
+        marginRight: 8,
     },
     messageText: {
-        color: '#ffffff',
-        fontSize: 16,
+        color: Colors.dark.txtPrimary,
+        fontSize: 14,
+        fontFamily: 'Manrope-Medium',
         lineHeight: 20,
-        fontFamily: 'Manrope',
-        fontWeight: '900'
     },
-    fadeGradient: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        width: 30,
-        height: '100%',
+    messageActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    actionButton: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'transparent',
     },
     emptyState: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 40,
+        paddingHorizontal: 32,
+        paddingVertical: 64,
+    },
+    emptyStateIcon: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: Colors.dark.bgSecondary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
     },
     emptyStateText: {
-        color: '#ffffff',
+        color: Colors.dark.txtPrimary,
         fontSize: 18,
-        fontFamily: 'Manrope-Medium',
-        marginTop: 16,
+        fontFamily: 'Manrope-SemiBold',
+        marginBottom: 8,
         textAlign: 'center',
     },
     emptyStateSubtext: {
-        color: '#9ca3af',
+        color: Colors.dark.txtSecondary,
         fontSize: 14,
         fontFamily: 'Manrope-Regular',
-        marginTop: 8,
         textAlign: 'center',
         lineHeight: 20,
+        maxWidth: 280,
     },
     emptyListContainer: {
         flex: 1,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: '#1f2937',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        backgroundColor: Colors.dark.bgPrimary,
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
         paddingBottom: 34,
-        paddingTop: 8,
+        paddingTop: 12,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: -4,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 5,
     },
     modalHandle: {
-        width: 40,
+        width: 36,
         height: 4,
-        backgroundColor: '#4b5563',
+        backgroundColor: Colors.dark.borderColor,
         borderRadius: 2,
         alignSelf: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
     },
     modalAction: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 16,
-        gap: 16,
+        marginHorizontal: 16,
+        marginBottom: 4,
+        borderRadius: 8,
     },
     modalActionPressed: {
-        backgroundColor: '#374151',
+        backgroundColor: Colors.dark.bgSecondary,
+    },
+    modalActionContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        gap: 12,
     },
     modalActionText: {
-        color: '#d1d5db',
+        color: Colors.dark.txtPrimary,
         fontSize: 16,
         fontFamily: 'Manrope-Medium',
     },
     deleteAction: {
         borderTopWidth: 1,
-        borderTopColor: '#374151',
+        borderTopColor: Colors.dark.borderColor,
         marginTop: 8,
+        paddingTop: 8,
     },
     deleteActionText: {
         color: '#ef4444',

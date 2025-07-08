@@ -1,6 +1,6 @@
 import Button from "@/src/components/button/CustomButton";
 import Onboarding from "@/src/components/onboarding/Onboarding";
-import AuthWrapper from "@/src/components/wrapper/AuthWrapper";
+import AuthWrapper from "@/src/components/wrapper/ScreenWrapper";
 import { router } from "expo-router";
 
 

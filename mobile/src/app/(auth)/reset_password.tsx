@@ -1,4 +1,4 @@
-import AuthWrapper from '@/src/components/wrapper/AuthWrapper';
+import ScreenWrapper from '@/src/components/wrapper/ScreenWrapper';
 import Button from '@/src/components/button/CustomButton';
 import AnimatedTextInput from '@/src/components/textInputs/Input';
 import { Colors } from '@/src/constants/Colors';
@@ -27,7 +27,7 @@ const ResetPassword = () => {
     };
 
     return (
-        <AuthWrapper>
+        <ScreenWrapper>
             <Animated.View style={styles.innerContainer}>
                 <Animated.View>
                     <Animated.Text 
@@ -64,11 +64,16 @@ const ResetPassword = () => {
                     title='Submit'
                     disabled={false}
                     loading={false}
-                    onPress={() => router.push('/(auth)/email_verification')}
+                    onPress={() => router.push({
+                        pathname: '/(auth)/email_verification/[userId]',
+                        params: {
+                            userId: user.email 
+                        }
+                    })}
                 />
             
             </Animated.View>
-        </AuthWrapper>
+        </ScreenWrapper>
     )
 }
 

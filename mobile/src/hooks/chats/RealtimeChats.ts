@@ -15,6 +15,7 @@ import axios from 'axios';
 import { useMessageOptions } from '../useMessageOptions';
 import { useFetchMessagesMutation } from '../conversations/ConversationsMutation';
 import { uniqueConvId as startNewConversationId } from '@/src/constants/generateConversationId';
+
 const useRealtimeChat = ({
     uniqueConvId,
     systemPrompt = "You are a helpful AI Assistant",
@@ -41,8 +42,15 @@ const useRealtimeChat = ({
     const currentLoadingIdRef = useRef<string | null>(null);
     const subscriptionReadyRef = useRef<boolean>(false);
     const isSubscriptionActiveRef = useRef<boolean>(false);
-    // NEW: Track the current subscribed conversation ID
     const subscribedConversationIdRef = useRef<string | null>(null);
+    
+    // New refs for typing animation
+    const typingIntervalRef = useRef<NodeJS.Timeout | number | null>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
+    const currentTypingMessageIdRef = useRef<string | null>(null);
+
+    //new state for typing state
+    const [isTyping, setIsTyping] = useState<boolean>(false);
 
     const { user: userDetails } = useSelector((state: RootState) => state.user);
     const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
@@ -50,9 +58,68 @@ const useRealtimeChat = ({
 
     const username = useMemo(() => userDetails?.username?.split(" ")[0], [userDetails?.username]);
 
-    // FIXED: Stable callback references
+    // Cleanup typing animation
+    const cleanupTypingAnimation = useCallback(() => {
+        if (typingIntervalRef.current) {
+            clearInterval(typingIntervalRef.current);
+            typingIntervalRef.current = null;
+        }
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = null;
+        }
+        currentTypingMessageIdRef.current = null;
+        setIsTyping(false);
+    }, []);
+
+    // Start typing animation for AI response
+    const startTypingAnimation = useCallback((fullText: string, messageId: string) => {
+        cleanupTypingAnimation();
+        setIsTyping(true);
+        currentTypingMessageIdRef.current = messageId;
+        let currentIndex = 0;
+        const typingSpeed = 30; 
+
+        const typeNextCharacter = () => {
+            if (currentIndex <= fullText.length && currentTypingMessageIdRef.current === messageId) {
+                const currentText = fullText.substring(0, currentIndex);
+                
+                setMessages(prev => 
+                    prev.map(msg => 
+                        msg.id === messageId 
+                            ? { ...msg, text: currentText, isTyping: currentIndex < fullText.length }
+                            : msg
+                    )
+                );
+
+                if (currentIndex < fullText.length) {
+                    currentIndex++;
+                    typingIntervalRef.current = setTimeout(typeNextCharacter, typingSpeed);
+                } else {
+                    // Typing animation complete
+                    cleanupTypingAnimation();
+                    setMessages(prev => 
+                        prev.map(msg => 
+                            msg.id === messageId 
+                                ? { ...msg, isTyping: false }
+                                : msg
+                        )
+                    );
+                }
+                
+                // Auto-scroll during typing
+                scrollToBottom();
+            }
+        };
+
+        typeNextCharacter();
+    }, [cleanupTypingAnimation]);
+
+   
     const clearAIResponding = useCallback(() => {
         console.log('Clearing AI responding state');
+        
+        cleanupTypingAnimation();
         
         setIsAIResponding(prevState => {
             if (prevState) {
@@ -69,7 +136,7 @@ const useRealtimeChat = ({
             isProcessingResponseRef.current = false;
             currentLoadingIdRef.current = null;
         }, 100);
-    }, []);
+    }, [cleanupTypingAnimation]);
 
     const scrollToBottom = useCallback(() => {
         setTimeout(() => {
@@ -183,7 +250,7 @@ const useRealtimeChat = ({
         subscriptionReadyRef.current = false;
 
         const channel = supabase
-            .channel(`messages_${conversationId}_${Date.now()}`) // Add timestamp to ensure unique channel names
+            .channel(`messages_${conversationId}_${Date.now()}`)
             .on(
                 'postgres_changes',
                 {
@@ -227,7 +294,7 @@ const useRealtimeChat = ({
                         }
 
                         if (newMessage.sender === 'assistant') {
-                            console.log('AI message received, clearing loading state');
+                            console.log('AI message received, starting typing animation');
                             
                             if (currentLoadingIdRef.current) {
                                 newMessages = newMessages.filter(msg => msg.id !== currentLoadingIdRef.current);
@@ -235,7 +302,17 @@ const useRealtimeChat = ({
                                 newMessages = newMessages.filter(msg => !msg.isLoading);
                             }
 
+                            // Create message with empty text first, then start typing animation
+                            const messageWithEmptyText = { ...transformedMessage, text: '', isTyping: true };
+                            const updatedMessages = [...newMessages, messageWithEmptyText];
+                            
+                            // Start typing animation
+                            setTimeout(() => {
+                                startTypingAnimation(transformedMessage.text, transformedMessage.id);
+                            }, 100);
+
                             clearAIResponding();
+                            return updatedMessages;
                         }
 
                         return [...newMessages, transformedMessage];
@@ -272,7 +349,20 @@ const useRealtimeChat = ({
 
                         if (updatedMessage.sender === 'assistant') {
                             updatedMessages = updatedMessages.filter(msg => !msg.isLoading);
+                            
+                            // Start typing animation for updated assistant message
+                            const messageWithEmptyText = updatedMessages.map(msg =>
+                                msg.id === transformedMessage.id 
+                                    ? { ...msg, text: '', isTyping: true }
+                                    : msg
+                            );
+                            
+                            setTimeout(() => {
+                                startTypingAnimation(transformedMessage.text, transformedMessage.id);
+                            }, 100);
+                            
                             clearAIResponding();
+                            return messageWithEmptyText;
                         }
 
                         return updatedMessages;
@@ -285,7 +375,6 @@ const useRealtimeChat = ({
                     subscriptionReadyRef.current = true;
                     console.log('Realtime subscription ready for conversation:', conversationId);
                 } else if (status === 'CLOSED') {
-                    // Only reset if this is for the current conversation
                     if (subscribedConversationIdRef.current === conversationId) {
                         isSubscriptionActiveRef.current = false;
                         subscribedConversationIdRef.current = null;
@@ -293,7 +382,6 @@ const useRealtimeChat = ({
                     console.log('Subscription closed for conversation:', conversationId);
                 } else if (status === 'CHANNEL_ERROR') {
                     console.error('Channel error for conversation:', conversationId);
-                    // Reset subscription state on error
                     if (subscribedConversationIdRef.current === conversationId) {
                         isSubscriptionActiveRef.current = false;
                         subscribedConversationIdRef.current = null;
@@ -306,9 +394,9 @@ const useRealtimeChat = ({
         return () => {
             console.log('Cleaning up realtime subscription via useEffect cleanup');
             cleanupSubscription();
+            cleanupTypingAnimation();
         };
-    }, [conversationId, userDetails?.id, loading, cleanupSubscription, transformSupabaseMessage, clearAIResponding, scrollToBottom]);
-
+    }, [conversationId, userDetails?.id, loading, cleanupSubscription, transformSupabaseMessage, clearAIResponding, scrollToBottom, startTypingAnimation, cleanupTypingAnimation]);
 
     const extractAIResponseText = useCallback((aiResponse: any): string => {
         const possibleFields = [
@@ -434,26 +522,6 @@ const useRealtimeChat = ({
             setIsAIResponding(true);
 
             scrollToBottom();
-
-            setTimeout(() => {
-                if (isProcessingResponseRef.current && currentLoadingIdRef.current === loadingMessageId) {
-                    console.log('Timeout fallback: clearing loading state');
-                    clearAIResponding();
-                    
-                    setMessages(prev => {
-                        const withoutLoading = prev.filter(msg => msg.id !== loadingMessageId);
-                        const timeoutMessage: Message = {
-                            id: `timeout-${Date.now()}`,
-                            text: 'Request timed out. Please try again.',
-                            user: false,
-                            created_at: new Date().toISOString(),
-                            timestamp: new Date().toISOString(),
-                            sender: 'assistant'
-                        };
-                        return [...withoutLoading, timeoutMessage];
-                    });
-                }
-            }, 60000);
         },
         onSuccess: async (data) => {
             console.log('Message sent successfully:', data);
@@ -471,6 +539,7 @@ const useRealtimeChat = ({
 
                 console.log('AI response received, waiting for realtime update...');
 
+                // Fallback in case realtime doesn't work - but no timeout
                 setTimeout(() => {
                     if (isProcessingResponseRef.current) {
                         console.log('Realtime fallback: manually clearing loading state');
@@ -488,12 +557,19 @@ const useRealtimeChat = ({
                             if (!responseExists) {
                                 const fallbackMessage: Message = {
                                     id: `fallback-${Date.now()}`,
-                                    text: aiResponseText,
+                                    text: '',
                                     user: false,
                                     created_at: new Date().toISOString(),
                                     timestamp: new Date().toISOString(),
-                                    sender: 'assistant'
+                                    sender: 'assistant',
+                                    isTyping: true
                                 };
+                                
+                                // Start typing animation for fallback message
+                                setTimeout(() => {
+                                    startTypingAnimation(aiResponseText, fallbackMessage.id);
+                                }, 100);
+                                
                                 return [...withoutLoading, fallbackMessage];
                             }
                             
@@ -605,9 +681,10 @@ const useRealtimeChat = ({
     }, [sendMessageMutation]);
 
     const startNewConversation = useCallback(() => {
-        const newConvId = startNewConversationId ;
-        // Clean up current subscription
+        const newConvId = startNewConversationId;
+        // Clean up current subscription and typing animation
         cleanupSubscription();
+        cleanupTypingAnimation();
         
         // Reset all state
         setConversationId(newConvId);
@@ -616,8 +693,8 @@ const useRealtimeChat = ({
         currentLoadingIdRef.current = null;
         processedMessageIds.current.clear();
         clearAIResponding();
-        setLoading(true); // Set loading to true so the new conversation can initialize
-    }, [startNewConversationId, clearAIResponding, cleanupSubscription]);
+        setLoading(true);
+    }, [startNewConversationId, clearAIResponding, cleanupSubscription, cleanupTypingAnimation]);
 
     const loadConversationHistoryMutation = useFetchMessagesMutation();
 
@@ -691,6 +768,7 @@ const useRealtimeChat = ({
                     throw new Error('AI response is empty or invalid');
                 }
 
+                // Fallback without timeout
                 setTimeout(() => {
                     if (isProcessingResponseRef.current && currentLoadingIdRef.current === loadingMessageId) {
                         console.log('Regeneration fallback: manually clearing loading state');
@@ -701,12 +779,19 @@ const useRealtimeChat = ({
                             
                             const fallbackMessage: Message = {
                                 id: `regen-fallback-${Date.now()}`,
-                                text: aiResponseText,
+                                text: '',
                                 user: false,
                                 created_at: new Date().toISOString(),
                                 timestamp: new Date().toISOString(),
-                                sender: 'assistant'
+                                sender: 'assistant',
+                                isTyping: true
                             };
+                            
+                            // Start typing animation for regenerated message
+                            setTimeout(() => {
+                                startTypingAnimation(aiResponseText, fallbackMessage.id);
+                            }, 100);
+                            
                             return [...withoutLoading, fallbackMessage];
                         });
                     }
@@ -800,6 +885,7 @@ const useRealtimeChat = ({
         isAIResponding,
         isRecording,
         message,
+        isTyping,
         isSidebarVisible,
         conversationId,
         username,

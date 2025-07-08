@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import AuthWrapper from '@/src/components/wrapper/AuthWrapper';
+import ScreenWrapper from '@/src/components/wrapper/ScreenWrapper';
 import Button from '@/src/components/button/CustomButton';
 import AnimatedTextInput from '@/src/components/textInputs/Input';
 import { Colors } from '@/src/constants/Colors';
@@ -62,7 +62,7 @@ const ForgotPassword = () => {
     }
 
     return (
-        <AuthWrapper>
+        <ScreenWrapper>
             <Animated.View style={styles.innerContainer}>
                 <Animated.View>
                     <Animated.Text 
@@ -94,7 +94,7 @@ const ForgotPassword = () => {
                     onPress={handleForgotPassword}
                 />
             </Animated.View>
-        </AuthWrapper>
+        </ScreenWrapper>
     )
 }
 

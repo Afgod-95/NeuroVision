@@ -68,6 +68,7 @@ interface Message {
     user: boolean;
     content?: MessageContent;
     isLoading?: boolean;
+    isTyping?: boolean,
     metadata?: any; 
 }
 

@@ -1,4 +1,4 @@
-import AuthWrapper from '@/src/components/wrapper/AuthWrapper';
+import ScreenWrapper from '@/src/components/wrapper/ScreenWrapper';
 import ContinueWithGoogle from '@/src/components/button/ContinueWithGoogle';
 import Button from '@/src/components/button/CustomButton';
 import AnimatedTextInput from '@/src/components/textInputs/Input';
@@ -63,7 +63,7 @@ const SignUp = () => {
   };
 
   return (
-    <AuthWrapper>
+    <ScreenWrapper>
       {/*Recaptcha Modal */}
      
 
@@ -126,7 +126,7 @@ const SignUp = () => {
 
         <ContinueWithGoogle />
       </Animated.View>
-    </AuthWrapper>
+    </ScreenWrapper>
   );
 };
 

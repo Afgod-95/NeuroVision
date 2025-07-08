@@ -32,14 +32,20 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { setOptions } from 'expo-splash-screen';
-import SpeechBanner from '@/src/components/chatUI/AudioBanner';
-import * as FileSystem from 'expo-file-system';
-import { Buffer } from 'buffer';
+
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = OriginalUploadedAudioFile & {
   duration?: number;
 };
+
+// Speech Banner State Interface - Updated for local TTS
+interface SpeechBannerState {
+  visible: boolean;
+  message: string;
+  isGenerating: boolean;
+  isSpeaking: boolean;
+}
 
 // Memoized UserMessageBox with proper prop comparison
 const MemoizedUserMessageBox = React.memo(UserMessageBox, (prevProps, nextProps) => {
@@ -65,16 +71,10 @@ const Index = () => {
   const { user: userCredentials } = useSelector((state: RootState) => state.user);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
+  const [isSending, setIsSending] = useState<boolean>(false);
   const { conversation_id } = useLocalSearchParams();
   console.log(`Conversation ID: ${conversation_id}`);
 
-  // Speech Banner State
-  const [speechBanner, setSpeechBanner] = useState({
-    visible: false,
-    audioUrl: '',
-    message: '',
-    isGenerating: false
-  });
 
   const queryClient = useQueryClient();
 
@@ -91,6 +91,7 @@ const Index = () => {
     message,
     isSidebarVisible,
     conversationId,
+    isTyping,
     username,
 
     // Actions
@@ -125,121 +126,24 @@ const Index = () => {
     enableSampleMessages: true,
   });
 
-  // Fixed generateTextToSpeech function
-const generateTextToSpeech = async (text: string) => {
-  try {
-    const response = await axios.post('/api/conversations/text-to-speech', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text: text
-      })
-    });
-
-    if (!response.data) {
-      throw new Error(`TTS request failed: ${response.status} ${response.statusText}`);
+  // Stop message handler
+  const handleStopMessage = useCallback(() => {
+    try {
+      // Stop the current message generation
+      if (sendMessageMutation?.reset) {
+        sendMessageMutation.reset();
+      }
+      
+      // Update sending state
+      setIsSending(false);
+      
+      // You might want to add additional cleanup here
+      console.log('Message generation stopped');
+    } catch (error) {
+      console.error('Error stopping message:', error);
     }
+  }, [sendMessageMutation]);
 
-    // Get the audio data as array buffer
-    const arrayBuffer = await response.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    // Create a unique filename with timestamp
-    const timestamp = Date.now();
-    const fileUri = `${FileSystem.documentDirectory}tts_audio_${timestamp}.mp3`;
-    
-    // Write the audio file
-    await FileSystem.writeAsStringAsync(
-      fileUri,
-      Buffer.from(uint8Array).toString('base64'),
-      { encoding: FileSystem.EncodingType.Base64 }
-    );
-
-    console.log('Audio file saved to:', fileUri);
-    
-    // Return the file URI
-    return { audioUrl: fileUri };
-    
-  } catch (error) {
-    console.error('TTS Generation Error:', error);
-    throw error; 
-  }
-};
-
-// Updated speechHandler function with better error handling
-const speechHandler = useCallback(async (text: string) => {
-  if (!text.trim()) {
-    console.log('No text provided for speech synthesis');
-    return;
-  }
-
-  try {
-    setSpeechBanner(prev => ({ ...prev, isGenerating: true }));
-    
-    const response = await generateTextToSpeech(text);
-    
-    if (response.audioUrl) {
-      setSpeechBanner({
-        visible: true,
-        audioUrl: response.audioUrl,
-        message: text.length > 100 ? text.substring(0, 100) + '...' : text,
-        isGenerating: false
-      });
-    }
-  } catch (error) {
-    console.error('Error generating speech:', error);
-    setSpeechBanner(prev => ({ ...prev, isGenerating: false }));
-    setSpeechBanner({
-      visible: false,
-      audioUrl: '',
-      message: '',
-      isGenerating: false
-    });
-  }
-}, []);
-
-// Enhanced speech banner close handler to clean up files
-const handleSpeechBannerClose = useCallback(async () => {
-  setSpeechBanner(prev => {
-    // Cleanup local audio file
-    if (prev.audioUrl && prev.audioUrl.startsWith('file://')) {
-      FileSystem.deleteAsync(prev.audioUrl, { idempotent: true })
-        .catch(error => console.warn('Failed to delete audio file:', error));
-    }
-    
-    // Cleanup blob URL if it exists
-    if (prev.audioUrl && prev.audioUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(prev.audioUrl);
-    }
-    
-    return {
-      visible: false,
-      audioUrl: '',
-      message: '',
-      isGenerating: false
-    };
-  });
-}, []);
-
-// Add this cleanup effect to your useEffect
-useEffect(() => {
-  return () => {
-    console.log('Cleaning up chat component');
-    
-    // Cleanup any local audio files
-    if (speechBanner.audioUrl && speechBanner.audioUrl.startsWith('file://')) {
-      FileSystem.deleteAsync(speechBanner.audioUrl, { idempotent: true })
-        .catch(error => console.warn('Failed to delete audio file:', error));
-    }
-    
-    // Cleanup blob URLs
-    if (speechBanner.audioUrl && speechBanner.audioUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(speechBanner.audioUrl);
-    }
-  };
-}, [conversationId, speechBanner.audioUrl]);
 
   // Function to transform API messages to internal Message format
   const transformApiMessages = useCallback((apiMessages: ApiMessage[]): Message[] => {
@@ -290,14 +194,14 @@ useEffect(() => {
         console.log(`Fetched ${data.messages.length} messages`);
         const transformedMessages = transformApiMessages(data.messages);
         setMessages(transformedMessages);
-        scrollToBottom()
+        scrollToBottom();
       }
     } catch (error) {
       console.error('Error prefetching messages:', error);
     } finally {
       setIsInitialLoading(false);
     }
-  }, [queryClient, transformApiMessages, setMessages]);
+  }, [queryClient, transformApiMessages, setMessages, scrollToBottom]);
 
   // Effect to prefetch messages when conversation_id is available
   useEffect(() => {
@@ -309,16 +213,21 @@ useEffect(() => {
       );
     }
   }, [actualConversationId, userCredentials?.id, prefetchMessages]);
+
+  // Track sending state based on mutation status
+  useEffect(() => {
+    if (sendMessageMutation) {
+      setIsSending(sendMessageMutation.isPending || sendMessageMutation.isPending);
+    }
+  }, [sendMessageMutation?.isPending, sendMessageMutation?.isPending]);
   
-  /**
-   * scroll to bottom
-   */
+  // Scroll to bottom handler
   const onScroll = useCallback((event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     const contentHeight = event.nativeEvent.contentSize.height;
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
 
-    const isAtBottom = offsetY + layoutHeight >= contentHeight;
+    const isAtBottom = offsetY + layoutHeight >= contentHeight - 50; // Add some tolerance
 
     setShowScrollButton(!isAtBottom && offsetY > 50);
   }, []);
@@ -350,6 +259,7 @@ useEffect(() => {
     handleSendMessage(messageText, audioFile);
   }, [handleSendMessage]);
 
+  // Keyboard animation effects
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardWillShow', () => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -364,7 +274,7 @@ useEffect(() => {
     };
   }, []);
 
-  // SINGLE renderItem function - Remove all other render functions
+  // Render item function for FlatList
   const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => {
     console.log(`Rendering message ${index}:`, { id: item.id, user: item.user, sender: item.sender });
 
@@ -388,17 +298,16 @@ useEffect(() => {
 
       return (
         <MemoizedAdvancedAIResponse
+          isTyping={isTyping}
           message={item.text}
           loading={finalLoadingState}
           onRegenerate={() => handleRegenerate(item.id)}
-          disableReadAloud={speechBanner.isGenerating}
-          openReadAloud={() => speechHandler(item.text)}
         />
       );
     }
-  }, [handleRegenerate, isAIResponding, messages.length, speechBanner.isGenerating, speechHandler]);
+  }, [handleRegenerate, isAIResponding, messages.length, ]);
 
-  // Add debug logging to track loading state changes
+  // Debug logging for loading states
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
@@ -413,23 +322,12 @@ useEffect(() => {
     }
   }, [messages, isAIResponding, loading, isInitialLoading]);
 
-  // Add a cleanup effect when component unmounts or conversation changes
-  useEffect(() => {
-    return () => {
-      console.log('Cleaning up chat component');
-      // Cleanup any blob URLs
-      if (speechBanner.audioUrl && speechBanner.audioUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(speechBanner.audioUrl);
-      }
-    };
-  }, [conversationId, speechBanner.audioUrl]);
-
+  // Key extractor for FlatList
   const keyExtractor = useCallback((item: Message) => {
-    // Ensure unique keys - add sender info to make it more unique
     return `${item.id}-${item.sender}-${item.user ? 'user' : 'ai'}`;
   }, []);
 
-  // Memoized welcome content to prevent re-renders
+  // Memoized content components
   const welcomeContent = useMemo(() => (
     <View style={styles.contentArea}>
       <View style={styles.welcomeContainer}>
@@ -469,17 +367,10 @@ useEffect(() => {
             keyboardVerticalOffset={0}
           >
             <SafeAreaView style={styles.safeAreaContainer}>
-              {/* Speech Banner - Positioned at the top */}
-              <SpeechBanner
-                audioUrl={speechBanner.audioUrl}
-                message={speechBanner.message}
-                visible={speechBanner.visible}
-                autoDismiss={true}
-                onClose={handleSpeechBannerClose}
-              />
 
-              {/* Header - Fixed at top */}
-              <View style={[styles.header, speechBanner.visible && styles.headerWithBanner]}>
+              <View style={[
+                styles.header, 
+              ]}>
                 <TouchableOpacity onPress={handleToggleSidebar}>
                   <Image
                     source={require('@/src/assets/images/menu.png')}
@@ -489,7 +380,6 @@ useEffect(() => {
 
                 <Text style={styles.headerTitle}>NeuroVision</Text>
 
-                {/* Optional: Add new conversation button */}
                 <TouchableOpacity onPress={startNewConversation}>
                   <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
                 </TouchableOpacity>
@@ -509,7 +399,7 @@ useEffect(() => {
                     renderItem={renderItem}
                     contentContainerStyle={[
                       styles.flatListContent,
-                      speechBanner.visible && styles.flatListContentWithBanner
+                     styles.flatListContentWithBanner
                     ]}
                     removeClippedSubviews={true}
                     maxToRenderPerBatch={10}
@@ -523,10 +413,13 @@ useEffect(() => {
                     getItemLayout={undefined}
                     extraData={messages.length}
                   />
-                  <ScrollToBottomButton
-                    onPress={scrollToBottom}
-                    visible={showScrollButton}
-                  />
+                  {!isTyping &&  
+                    <ScrollToBottomButton
+                      onPress={scrollToBottom}
+                      visible={showScrollButton}
+                    />
+                  }
+                  
                 </>
               )}
             </SafeAreaView>
@@ -542,11 +435,13 @@ useEffect(() => {
             {/* Chat input */}
             <ChatInput
               message={message}
-              setMessage={handleMessageOnChange}
-              isRecording={isRecording}
-              setIsRecording={handleIsRecording}
+              setMessage={setMessage}
               isEdited={isEdited}
-              onSendMessage={handleSendMessageWithAudio}
+              isRecording={isRecording}
+              setIsRecording={setIsRecording}
+              onSendMessage={handleSendMessage}
+              onStopMessage={handleStopMessage}
+              isSending={isSending}
             />
           </KeyboardAvoidingView>
         </View>
@@ -588,10 +483,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     height: 60,
     paddingTop: Platform.OS === 'android' ? 20 : undefined,
-    zIndex: 1000, // Lower than speech banner
+    zIndex: 999, 
   },
   headerWithBanner: {
-    marginTop: 8, // Add some space when banner is visible
+    marginTop: 8, 
   },
   contentArea: {
     flex: 1,

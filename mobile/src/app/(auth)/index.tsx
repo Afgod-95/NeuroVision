@@ -1,4 +1,4 @@
-import AuthWrapper from '@/src/components/wrapper/AuthWrapper';
+import ScreenWrapper from '@/src/components/wrapper/ScreenWrapper';
 import ContinueWithGoogle from '@/src/components/button/ContinueWithGoogle';
 import Button from '@/src/components/button/CustomButton';
 import AnimatedTextInput from '@/src/components/textInputs/Input';
@@ -91,7 +91,7 @@ const Index = () => {
     }
 
     return (
-        <AuthWrapper>
+        <ScreenWrapper>
             <Animated.View style={styles.innerContainer}>
                 <Animated.Text style={[styles.textHeader, { color: Colors.dark.txtPrimary }]}
                     entering={FadeInUp.duration(600).springify()}
@@ -151,7 +151,7 @@ const Index = () => {
                 <ContinueWithGoogle />
             </Animated.View>
 
-        </AuthWrapper>
+        </ScreenWrapper>
     )
 }
 

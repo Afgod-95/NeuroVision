@@ -357,7 +357,6 @@ const markdownStyles = StyleSheet.create({
     backgroundColor: 'rgba(33, 38, 45, 0.6)',
     borderLeftWidth: 4,
     borderLeftColor: '#f78166',
-    paddingLeft: 16,
     paddingVertical: 12,
     paddingRight: 16,
     marginVertical: 16,
@@ -365,15 +364,14 @@ const markdownStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#30363d',
   },
-  // Lists - Fixed to ensure proper visibility
   bullet_list: {
     marginBottom: 16,
-    paddingLeft: 0,
+    paddingLeft: 20,
     backgroundColor: 'transparent',
   },
   ordered_list: {
     marginBottom: 16,
-    paddingLeft: 0,
+    paddingLeft: 20,
     backgroundColor: 'transparent',
   },
   list_item: {
@@ -381,20 +379,28 @@ const markdownStyles = StyleSheet.create({
     backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'flex-start',
+    paddingLeft: 0,
+    marginLeft: -20,
   },
   bullet_list_icon: {
     color: '#8e8ea0',
-    fontSize: 16,
+    fontSize: 18,
+    lineHeight: 24,
     marginRight: 8,
-    marginTop: 4,
+    marginTop: 0,
     backgroundColor: 'transparent',
+    textAlign: 'left',
+    width: 12,
   },
   ordered_list_icon: {
     color: '#8e8ea0',
     fontSize: 16,
+    lineHeight: 24,
     marginRight: 8,
-    marginTop: 4,
+    marginTop: 0,
     backgroundColor: 'transparent',
+    textAlign: 'left',
+    minWidth: 12,
   },
   bullet_list_content: {
     color: '#f0f6fc',
@@ -402,6 +408,7 @@ const markdownStyles = StyleSheet.create({
     lineHeight: 24,
     flex: 1,
     backgroundColor: 'transparent',
+    marginTop: 0,
   },
   ordered_list_content: {
     color: '#f0f6fc',
@@ -409,6 +416,7 @@ const markdownStyles = StyleSheet.create({
     lineHeight: 24,
     flex: 1,
     backgroundColor: 'transparent',
+    marginTop: 0,
   },
   // Text formatting
   strong: {

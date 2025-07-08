@@ -9,8 +9,7 @@ type GeneratedImage = {
 
 type AIResponseProps = {
   message: string;
-  disableReadAloud: boolean;
-  openReadAloud: () => void;
+  isTyping: boolean,
   loading?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (type: 'like' | 'dislike', messageId?: string) => void;

@@ -29,22 +29,20 @@ import { useCodeBlock } from './AIResponseUI/CodeBlocks';
 import useLoadingDots from './AIResponseUI/useLoadingDots';
 import { AIResponseProps, GeneratedImage } from '@/src/utils/types/Types';
 import useImageGallery from './AIResponseUI/ImageGallery';
-import SpeechBanner from './AudioBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AdvancedAIResponse = ({
   message,
-  openReadAloud,
   loading = true,
   onRegenerate,
   onFeedback,
+  isTyping,
   messageId,
   generatedImages = [],
   onImageSave,
 }: AIResponseProps) => {
   const [isLiked, setIsLiked] = useState<'like' | 'dislike' | null>(null);
-  const [audioPressed, setAudioPressed] = useState<boolean>(false)
 
   //code block component
   const {
@@ -187,73 +185,61 @@ const AdvancedAIResponse = ({
             {renderCustomMarkdown(message)}
           </View>
 
-          {/* Action Bar */}
-          <View style={styles.actionBar}>
-            <TouchableOpacity
-              style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
-              onPress={() => handleCopy(message)}
-            >
-              <Feather
-                name={mainCopied ? "check" : "copy"}
-                size={16}
-                color={mainCopied ? "#10b981" : "#8e8ea0"}
-              />
-            </TouchableOpacity>
+          {/* Action Bar - Only show when not loading */}
+          {!isTyping && (
+            <View style={styles.actionBar}>
+              <TouchableOpacity
+                style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
+                onPress={() => handleCopy(message)}
+              >
+                <Feather
+                  name={mainCopied ? "check" : "copy"}
+                  size={16}
+                  color={mainCopied ? "#10b981" : "#8e8ea0"}
+                />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
-              onPress={() => handleLike('like')}
-            >
-              <Feather
-                name="thumbs-up"
-                size={16}
-                color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
-              />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
+                onPress={() => handleLike('like')}
+              >
+                <Feather
+                  name="thumbs-up"
+                  size={16}
+                  color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
+                />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
-              onPress={() => handleLike('dislike')}
-            >
-              <Feather
-                name="thumbs-down"
-                size={16}
-                color={isLiked === 'dislike' ?  "#ef4444" : "#8e8ea0"}
-              />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
+                onPress={() => handleLike('dislike')}
+              >
+                <Feather
+                  name="thumbs-down"
+                  size={16}
+                  color={isLiked === 'dislike' ?  "#ef4444" : "#8e8ea0"}
+                />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, audioPressed && styles.actionButtonActive]}
-              onPress={() => {
-                openReadAloud;
-                setAudioPressed(true)
-              }}
-            >
-              <Ionicons
-                name="volume-medium-outline"
-                size={20}
-                color={ audioPressed ? "#10b981" : "#8e8ea0"}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleShare}
-            >
-              <Feather name="share" size={16} color="#8e8ea0" />
-            </TouchableOpacity>
-
-           
-
-            {onRegenerate && (
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={onRegenerate}
+                onPress={handleShare}
               >
-                <MaterialIcons name="refresh" size={20} color="#8e8ea0" />
+                <Feather name="share" size={16} color="#8e8ea0" />
               </TouchableOpacity>
-            )}
-          </View>
+
+             
+
+              {onRegenerate && (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={onRegenerate}
+                >
+                  <MaterialIcons name="refresh" size={20} color="#8e8ea0" />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Image Modal */}

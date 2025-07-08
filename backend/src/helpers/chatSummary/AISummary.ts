@@ -1,4 +1,4 @@
-// Enhanced title generation system inspired by Claude AI
+// Enhanced title generation system inspired by Claude AI and ChatGPT
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
@@ -6,8 +6,6 @@ import { isValidUUID } from "../../middlewares/isValidUUID";
 import geminiService from "../../services/GeminiInitiation";
 import { GenerateConversationSummaryRequest } from "../../interfaces/typescriptInterfaces";
 import { SUMMARY_SYSTEM_PROMPT } from "../../utils/AIPrompts";
-
-
 
 interface ConversationInfo {
     message_count: number;
@@ -28,73 +26,59 @@ interface AiConversationSummary {
 
 /**
  * Generate a meaningful conversation title using advanced AI prompting
- * Inspired by Claude AI's title generation approach
+ * Similar to how ChatGPT and Claude AI generate titles
  */
 const generateMeaningfulTitle = async (
     conversationText: string,
     summary: string
 ): Promise<string> => {
     try {
-        // Extract key themes and topics from the conversation
-        const themeAnalysisPrompt = `Analyze this conversation and identify the main themes, topics, and purpose. Focus on:
+        // Advanced title generation prompt that mimics ChatGPT/Claude approach
+        const titlePrompt = `You are an expert at creating concise, meaningful conversation titles. Analyze the following conversation and generate a title that captures its essence.
 
-1. Primary subject matter
-2. Key concepts discussed
-3. Type of interaction (question/answer, brainstorming, problem-solving, etc.)
-4. Specific domains (technical, creative, business, personal, etc.)
-5. Notable entities, tools, or technologies mentioned
+CONVERSATION CONTENT:
+${conversationText.substring(0, 2000)}
 
-Conversation snippet:
-${conversationText.substring(0, 1000)}
+SUMMARY:
+${summary.substring(0, 500)}
 
-Summary:
-${summary.substring(0, 300)}
-
-Provide a brief analysis of the main themes and topics:`;
-
-        const themeAnalysis = await geminiService.sendMessage(themeAnalysisPrompt, [], {
-            temperature: 0.2,
-            maxTokens: 200
-        });
-
-        // Generate title based on theme analysis
-        const titlePrompt = `Based on the following theme analysis, create a descriptive and engaging conversation title that follows these principles:
-
-TITLE GUIDELINES:
-- Be specific and descriptive (not generic)
-- Capture the essence of what was discussed
-- Use natural, conversational language
-- Avoid generic words like "discussion", "conversation", "chat"
-- Maximum 8 words, minimum 3 words
-- Make it sound like something a human would naturally say
+TITLE GENERATION RULES:
+1. Create a title that immediately tells someone what the conversation was about
+2. Use natural language that sounds conversational and human
+3. Be specific about the main topic, task, or question discussed
+4. Keep it between 3-8 words
+5. Avoid generic words like "discussion", "conversation", "chat", "help", "assistance"
+6. Focus on the core subject matter, not the interaction type
+7. Use present tense when possible
+8. Make it sound like something a human would naturally say to describe the conversation
 
 EXAMPLES OF GOOD TITLES:
-- "Building a React authentication system"
-- "Debugging Python import errors"
-- "Planning a weekend camping trip"
-- "Optimizing database query performance"
+- "Setting up React authentication"
+- "Python async/await best practices"
+- "Designing a mobile checkout flow"
+- "Debugging CSS grid layouts"
+- "Planning a marketing campaign"
+- "Optimizing database queries"
+- "Creating a REST API"
+- "Building a recommendation system"
+- "Troubleshooting Docker containers"
 - "Learning TypeScript generics"
-- "Designing a mobile app interface"
-- "Troubleshooting network connectivity issues"
-- "Creating a marketing campaign strategy"
 
 EXAMPLES OF BAD TITLES:
-- "General Discussion" (too vague)
-- "Q&A Session" (too generic)
-- "Problem Solving" (not specific)
-- "Technical Discussion" (lacks detail)
+- "Technical discussion" (too vague)
+- "Getting help with coding" (focuses on interaction, not content)
+- "Q&A session" (generic)
+- "Problem solving" (not specific)
+- "General assistance" (meaningless)
 
-Theme Analysis:
-${themeAnalysis}
-
-Generate one perfect title:`;
+Generate ONE perfect title that captures what this conversation was really about:`;
 
         const generatedTitle = await geminiService.sendMessage(titlePrompt, [], {
-            temperature: 0.3,
-            maxTokens: 50
+            temperature: 0.4,
+            maxTokens: 60
         });
 
-        // Clean and validate the generated title
+        // Clean the generated title
         let title = generatedTitle
             ?.trim()
             ?.replace(/^["']|["']$/g, '') // Remove quotes
@@ -103,104 +87,155 @@ Generate one perfect title:`;
             ?.replace(/^\d+\.\s*/, '') // Remove numbered list
             ?.replace(/^-\s*/, '') // Remove dash prefix
             ?.replace(/\.$/, '') // Remove trailing period
+            ?.replace(/^Here's a title:\s*/i, '') // Remove common AI prefixes
+            ?.replace(/^A good title would be:\s*/i, '')
+            ?.replace(/^The title is:\s*/i, '')
             ?.trim();
 
         // Validate title quality
-        if (title && title.length > 0 && title.length <= 50) {
-            // Check if title is meaningful (not just generic words)
-            const genericWords = ['discussion', 'conversation', 'chat', 'talk', 'session', 'meeting'];
-            const isGeneric = genericWords.some(word => 
-                title.toLowerCase().includes(word) && title.split(' ').length <= 3
-            );
+        if (title && title.length > 0 && title.length <= 60) {
+            // Additional quality checks
+            const wordCount = title.split(/\s+/).length;
+            const hasContent = title.length > 10; // Minimum meaningful length
+            const notTooGeneric = !isGenericTitle(title);
             
-            if (!isGeneric) {
+            if (wordCount >= 3 && wordCount <= 8 && hasContent && notTooGeneric) {
                 return title;
             }
         }
 
-        // Fallback to smart title generation based on content analysis
-        return generateSmartFallbackTitle(conversationText, summary);
+        // If first attempt failed, try with more specific context
+        return await generateFocusedTitle(conversationText, summary);
 
     } catch (error) {
         console.error('Error generating meaningful title:', error);
-        return generateSmartFallbackTitle(conversationText, summary);
+        return await generateFocusedTitle(conversationText, summary);
     }
 };
 
 /**
- * Generate smart fallback titles based on content analysis
+ * Generate a more focused title using key conversation elements
  */
-const generateSmartFallbackTitle = (conversationText: string, summary: string): string => {
-    const content = (conversationText + ' ' + summary).toLowerCase();
-    
-    // Technology and Programming
-    if (content.includes('react') || content.includes('jsx')) return 'React development help';
-    if (content.includes('python') && content.includes('error')) return 'Python error troubleshooting';
-    if (content.includes('javascript') || content.includes('js')) return 'JavaScript coding assistance';
-    if (content.includes('typescript') || content.includes('ts')) return 'TypeScript development help';
-    if (content.includes('database') || content.includes('sql')) return 'Database query optimization';
-    if (content.includes('api') && content.includes('integration')) return 'API integration guidance';
-    if (content.includes('docker') || content.includes('container')) return 'Docker containerization help';
-    if (content.includes('git') && content.includes('merge')) return 'Git merge conflict resolution';
-    if (content.includes('aws') || content.includes('cloud')) return 'Cloud infrastructure setup';
-    if (content.includes('machine learning') || content.includes('ml')) return 'Machine learning implementation';
-    
-    // Business and Strategy
-    if (content.includes('marketing') && content.includes('campaign')) return 'Marketing campaign planning';
-    if (content.includes('business') && content.includes('plan')) return 'Business strategy development';
-    if (content.includes('budget') || content.includes('financial')) return 'Financial planning discussion';
-    if (content.includes('team') && content.includes('management')) return 'Team management strategies';
-    if (content.includes('project') && content.includes('timeline')) return 'Project timeline planning';
-    
-    // Creative and Design
-    if (content.includes('design') && content.includes('ui')) return 'UI design feedback';
-    if (content.includes('logo') || content.includes('branding')) return 'Brand identity creation';
-    if (content.includes('website') && content.includes('layout')) return 'Website layout design';
-    if (content.includes('color') && content.includes('palette')) return 'Color scheme selection';
-    
-    // Writing and Content
-    if (content.includes('essay') || content.includes('writing')) return 'Writing assistance and feedback';
-    if (content.includes('blog') && content.includes('post')) return 'Blog content creation';
-    if (content.includes('email') && content.includes('template')) return 'Email template design';
-    if (content.includes('resume') || content.includes('cv')) return 'Resume optimization help';
-    
-    // Learning and Education
-    if (content.includes('learn') && content.includes('tutorial')) return 'Learning resource recommendations';
-    if (content.includes('study') && content.includes('plan')) return 'Study plan development';
-    if (content.includes('course') || content.includes('curriculum')) return 'Course curriculum advice';
-    
-    // Personal and Lifestyle
-    if (content.includes('travel') && content.includes('itinerary')) return 'Travel itinerary planning';
-    if (content.includes('recipe') || content.includes('cooking')) return 'Cooking recipe suggestions';
-    if (content.includes('fitness') || content.includes('workout')) return 'Fitness routine planning';
-    if (content.includes('book') && content.includes('recommendation')) return 'Book recommendations';
-    
-    // Problem Solving
-    if (content.includes('debug') || content.includes('troubleshoot')) return 'Technical troubleshooting';
-    if (content.includes('optimize') || content.includes('improve')) return 'Performance optimization';
-    if (content.includes('fix') && content.includes('issue')) return 'Issue resolution help';
-    
-    // Generic but meaningful fallbacks
-    if (content.includes('how to')) return 'Step-by-step guidance';
-    if (content.includes('best practices')) return 'Best practices advice';
-    if (content.includes('comparison') || content.includes('vs')) return 'Comparison and analysis';
-    if (content.includes('recommendation')) return 'Personalized recommendations';
-    
-    // Final fallback - try to extract a meaningful phrase
-    const words = content.split(' ').filter(word => word.length > 3);
-    const meaningfulWords = words.filter(word => 
-        !['this', 'that', 'with', 'from', 'they', 'have', 'will', 'been', 'said', 'each', 'which', 'their', 'time', 'would', 'there', 'could', 'other'].includes(word)
-    );
-    
-    if (meaningfulWords.length >= 2) {
-        return `${meaningfulWords[0]} ${meaningfulWords[1]} help`.replace(/ing\s+/g, ' ');
+const generateFocusedTitle = async (conversationText: string, summary: string): Promise<string> => {
+    try {
+        const focusedPrompt = `Create a specific, engaging title for this conversation. Focus on the main action, topic, or problem being addressed.
+
+CONVERSATION EXCERPT:
+${conversationText.substring(0, 1500)}
+
+SUMMARY:
+${summary.substring(0, 400)}
+
+Instructions:
+- Identify the primary subject or task
+- Use action words when appropriate (building, creating, fixing, learning, etc.)
+- Be specific about technologies, topics, or domains mentioned
+- Keep it natural and conversational
+- 3-7 words maximum
+- Don't use generic helper words
+
+Examples of the style I want:
+- "Implementing user authentication"
+- "Fixing responsive design issues"
+- "Creating data visualization dashboard"
+- "Optimizing React component performance"
+- "Building automated testing suite"
+- "Designing database schema"
+- "Configuring CI/CD pipeline"
+- "Analyzing user behavior patterns"
+
+Generate one focused title:`;
+
+        const focusedTitle = await geminiService.sendMessage(focusedPrompt, [], {
+            temperature: 0.3,
+            maxTokens: 40
+        });
+
+        let title = focusedTitle
+            ?.trim()
+            ?.replace(/^["']|["']$/g, '')
+            ?.replace(/^Title:\s*/i, '')
+            ?.replace(/^\d+\.\s*/, '')
+            ?.replace(/^-\s*/, '')
+            ?.replace(/\.$/, '')
+            ?.trim();
+
+        if (title && title.length > 0 && title.length <= 50 && !isGenericTitle(title)) {
+            return title;
+        }
+
+        // Final fallback - extract key terms and create a simple title
+        return await generateSimpleTitle(conversationText, summary);
+
+    } catch (error) {
+        console.error('Error generating focused title:', error);
+        return await generateSimpleTitle(conversationText, summary);
     }
-    
-    return 'Helpful conversation';
 };
 
 /**
- * Enhanced conversation summary generation with meaningful titles
+ * Generate a simple but meaningful title from key conversation elements
+ */
+const generateSimpleTitle = async (conversationText: string, summary: string): Promise<string> => {
+    try {
+        const simplePrompt = `Extract the main topic from this conversation and create a simple, clear title.
+
+CONTENT:
+${conversationText.substring(0, 1000)}
+${summary.substring(0, 300)}
+
+Rules:
+- Use the most important nouns and verbs from the conversation
+- 2-5 words only
+- Focus on the main subject matter
+- Be specific, not generic
+- Use simple, clear language
+
+Generate a simple title:`;
+
+        const simpleTitle = await geminiService.sendMessage(simplePrompt, [], {
+            temperature: 0.2,
+            maxTokens: 30
+        });
+
+        let title = simpleTitle
+            ?.trim()
+            ?.replace(/^["']|["']$/g, '')
+            ?.replace(/^Title:\s*/i, '')
+            ?.replace(/^\d+\.\s*/, '')
+            ?.replace(/^-\s*/, '')
+            ?.replace(/\.$/, '')
+            ?.trim();
+
+        if (title && title.length > 0 && title.length <= 40 && !isGenericTitle(title)) {
+            return title;
+        }
+
+        // Ultimate fallback
+        return "Conversation summary";
+
+    } catch (error) {
+        console.error('Error generating simple title:', error);
+        return "Conversation summary";
+    }
+};
+
+/**
+ * Check if a title is too generic
+ */
+const isGenericTitle = (title: string): boolean => {
+    const genericPatterns = [
+        /^(general|basic|simple|quick|help|assistance|support|question|discussion|conversation|chat|talk|session|meeting)$/i,
+        /^(help with|assistance with|question about|discussion about|conversation about)/i,
+        /^(general discussion|basic help|simple question|quick chat)/i,
+        /^(getting help|asking for help|need help|seeking assistance)/i
+    ];
+
+    return genericPatterns.some(pattern => pattern.test(title.toLowerCase()));
+};
+
+/**
+ * Enhanced conversation summary generation with AI-powered titles
  */
 export const generateConversationSummary = async (
     conversationId: string,
@@ -276,16 +311,18 @@ export const generateConversationSummary = async (
         }
 
         // Enhanced summary prompt
-        const summaryPrompt = SUMMARY_SYSTEM_PROMPT || `Analyze the following conversation and provide a comprehensive summary. Focus on:
+        const summaryPrompt = customPrompt || SUMMARY_SYSTEM_PROMPT || `Analyze the following conversation and provide a comprehensive summary. Focus on:
 - Main topics discussed
 - Key points and insights
 - Important decisions or conclusions
 - Overall context and purpose
+- Specific technologies, tools, or methods mentioned
+- Any problems solved or questions answered
 
 Conversation:
 ${conversationText}
 
-Provide a detailed summary:`;
+Provide a detailed, well-structured summary:`;
 
         console.log('🤖 Generating summary with Gemini...');
         const summary = await geminiService.sendMessage(summaryPrompt, [], {
@@ -299,10 +336,10 @@ Provide a detailed summary:`;
             throw new Error('AI service returned empty summary');
         }
 
-        // Generate meaningful title using the enhanced system
-        console.log('🏷️ Generating meaningful title...');
+        // Generate meaningful title using the enhanced AI system
+        console.log('🏷️ Generating AI-powered title...');
         const title = await generateMeaningfulTitle(conversationText, summary);
-        console.log(`🏷️ Final meaningful title: "${title}"`);
+        console.log(`🏷️ Final AI-generated title: "${title}"`);
 
         // Store the summary in database
         console.log('💾 Storing summary in database...');

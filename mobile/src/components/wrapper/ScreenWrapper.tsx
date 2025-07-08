@@ -16,7 +16,7 @@ interface AuthWrapperProps {
   safeArea?: boolean;
 }
 
-const AuthWrapper = ({ children, safeArea = true }: AuthWrapperProps) => {
+const ScreenWrapper = ({ children, safeArea = true }: AuthWrapperProps) => {
   const Container = safeArea ? SafeAreaView : View;
 
   return (
@@ -63,4 +63,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AuthWrapper;
+export default ScreenWrapper;
