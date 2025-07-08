@@ -17,8 +17,8 @@ class GeminiAIService {
             baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
         });
 
-        this.model = config.model || "gemini-2.0-flash-exp";
-        this.maxTokens = config.maxTokens || 2048;
+        this.model = config.model || "gemini-2.5-flash";
+        this.maxTokens = config.maxTokens || 1048576;
         this.temperature = config.temperature || 0.7;
         this.topP = config.topP || 0.9;
         this.topK = config.topK || 40;

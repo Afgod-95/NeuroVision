@@ -20,7 +20,7 @@ const useRealtimeChat = ({
     uniqueConvId,
     systemPrompt = "You are a helpful AI Assistant",
     temperature = 0.7,
-    maxTokens = 4096,
+    maxTokens = 1048576, // Increased to handle longer responses
     onMessagesChange,
     onLoadingChange,
     initialMessages = [],
