@@ -1,4 +1,4 @@
-// Enhanced title generation system inspired by Claude AI and ChatGPT
+// Enhanced title generation system with improved error handling and debugging
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
@@ -33,6 +33,10 @@ const generateMeaningfulTitle = async (
     summary: string
 ): Promise<string> => {
     try {
+        console.log('🎯 Starting meaningful title generation...');
+        console.log(`📝 Conversation text preview: ${conversationText.substring(0, 200)}...`);
+        console.log(`📋 Summary preview: ${summary.substring(0, 200)}...`);
+
         // Advanced title generation prompt that mimics ChatGPT/Claude approach
         const titlePrompt = `You are an expert at creating concise, meaningful conversation titles. Analyze the following conversation and generate a title that captures its essence.
 
@@ -64,21 +68,17 @@ EXAMPLES OF GOOD TITLES:
 - "Troubleshooting Docker containers"
 - "Learning TypeScript generics"
 
-EXAMPLES OF BAD TITLES:
-- "Technical discussion" (too vague)
-- "Getting help with coding" (focuses on interaction, not content)
-- "Q&A session" (generic)
-- "Problem solving" (not specific)
-- "General assistance" (meaningless)
+RESPOND WITH ONLY THE TITLE, NO ADDITIONAL TEXT OR EXPLANATION.`;
 
-Generate ONE perfect title that captures what this conversation was really about:`;
-
+        console.log('🤖 Sending title generation request to Gemini...');
         const generatedTitle = await geminiService.sendMessage(titlePrompt, [], {
             temperature: 0.4,
             maxTokens: 60
         });
 
-        // Clean the generated title
+        console.log(`🎯 Raw AI response: "${generatedTitle}"`);
+
+        // Clean the generated title with improved logic
         let title = generatedTitle
             ?.trim()
             ?.replace(/^["']|["']$/g, '') // Remove quotes
@@ -90,25 +90,34 @@ Generate ONE perfect title that captures what this conversation was really about
             ?.replace(/^Here's a title:\s*/i, '') // Remove common AI prefixes
             ?.replace(/^A good title would be:\s*/i, '')
             ?.replace(/^The title is:\s*/i, '')
+            ?.replace(/^Title suggestion:\s*/i, '')
             ?.trim();
 
-        // Validate title quality
+        console.log(`🧹 Cleaned title: "${title}"`);
+
+        // Validate title quality with better checks
         if (title && title.length > 0 && title.length <= 60) {
-            // Additional quality checks
             const wordCount = title.split(/\s+/).length;
-            const hasContent = title.length > 10; // Minimum meaningful length
+            const hasContent = title.length > 5; // Minimum meaningful length
             const notTooGeneric = !isGenericTitle(title);
             
-            if (wordCount >= 3 && wordCount <= 8 && hasContent && notTooGeneric) {
+            console.log(`📊 Title validation - Length: ${title.length}, Words: ${wordCount}, Has content: ${hasContent}, Not generic: ${notTooGeneric}`);
+            
+            if (wordCount >= 2 && wordCount <= 10 && hasContent && notTooGeneric) {
+                console.log(`✅ Title passed validation: "${title}"`);
                 return title;
+            } else {
+                console.log('❌ Title failed validation, trying focused approach...');
             }
+        } else {
+            console.log('❌ Title failed basic checks, trying focused approach...');
         }
 
         // If first attempt failed, try with more specific context
         return await generateFocusedTitle(conversationText, summary);
 
     } catch (error) {
-        console.error('Error generating meaningful title:', error);
+        console.error('❌ Error in generateMeaningfulTitle:', error);
         return await generateFocusedTitle(conversationText, summary);
     }
 };
@@ -118,6 +127,8 @@ Generate ONE perfect title that captures what this conversation was really about
  */
 const generateFocusedTitle = async (conversationText: string, summary: string): Promise<string> => {
     try {
+        console.log('🎯 Starting focused title generation...');
+        
         const focusedPrompt = `Create a specific, engaging title for this conversation. Focus on the main action, topic, or problem being addressed.
 
 CONVERSATION EXCERPT:
@@ -144,12 +155,15 @@ Examples of the style I want:
 - "Configuring CI/CD pipeline"
 - "Analyzing user behavior patterns"
 
-Generate one focused title:`;
+RESPOND WITH ONLY THE TITLE, NO ADDITIONAL TEXT.`;
 
+        console.log('🤖 Sending focused title request to Gemini...');
         const focusedTitle = await geminiService.sendMessage(focusedPrompt, [], {
             temperature: 0.3,
             maxTokens: 40
         });
+
+        console.log(`🎯 Raw focused response: "${focusedTitle}"`);
 
         let title = focusedTitle
             ?.trim()
@@ -158,17 +172,24 @@ Generate one focused title:`;
             ?.replace(/^\d+\.\s*/, '')
             ?.replace(/^-\s*/, '')
             ?.replace(/\.$/, '')
+            ?.replace(/^Here's a title:\s*/i, '')
+            ?.replace(/^A good title would be:\s*/i, '')
+            ?.replace(/^The title is:\s*/i, '')
             ?.trim();
 
+        console.log(`🧹 Cleaned focused title: "${title}"`);
+
         if (title && title.length > 0 && title.length <= 50 && !isGenericTitle(title)) {
+            console.log(`✅ Focused title passed validation: "${title}"`);
             return title;
         }
 
+        console.log('❌ Focused title failed, trying simple approach...');
         // Final fallback - extract key terms and create a simple title
         return await generateSimpleTitle(conversationText, summary);
 
     } catch (error) {
-        console.error('Error generating focused title:', error);
+        console.error('❌ Error in generateFocusedTitle:', error);
         return await generateSimpleTitle(conversationText, summary);
     }
 };
@@ -178,6 +199,8 @@ Generate one focused title:`;
  */
 const generateSimpleTitle = async (conversationText: string, summary: string): Promise<string> => {
     try {
+        console.log('🎯 Starting simple title generation...');
+        
         const simplePrompt = `Extract the main topic from this conversation and create a simple, clear title.
 
 CONTENT:
@@ -191,12 +214,15 @@ Rules:
 - Be specific, not generic
 - Use simple, clear language
 
-Generate a simple title:`;
+RESPOND WITH ONLY THE TITLE, NO ADDITIONAL TEXT.`;
 
+        console.log('🤖 Sending simple title request to Gemini...');
         const simpleTitle = await geminiService.sendMessage(simplePrompt, [], {
             temperature: 0.2,
             maxTokens: 30
         });
+
+        console.log(`🎯 Raw simple response: "${simpleTitle}"`);
 
         let title = simpleTitle
             ?.trim()
@@ -205,33 +231,139 @@ Generate a simple title:`;
             ?.replace(/^\d+\.\s*/, '')
             ?.replace(/^-\s*/, '')
             ?.replace(/\.$/, '')
+            ?.replace(/^Here's a title:\s*/i, '')
+            ?.replace(/^A good title would be:\s*/i, '')
+            ?.replace(/^The title is:\s*/i, '')
             ?.trim();
 
+        console.log(`🧹 Cleaned simple title: "${title}"`);
+
         if (title && title.length > 0 && title.length <= 40 && !isGenericTitle(title)) {
+            console.log(`✅ Simple title passed validation: "${title}"`);
             return title;
         }
 
-        // Ultimate fallback
-        return "Conversation summary";
+        console.log('❌ Simple title failed, trying keyword extraction...');
+        // Try keyword extraction as final attempt
+        return await generateKeywordTitle(conversationText, summary);
 
     } catch (error) {
-        console.error('Error generating simple title:', error);
+        console.error('❌ Error in generateSimpleTitle:', error);
+        return await generateKeywordTitle(conversationText, summary);
+    }
+};
+
+/**
+ * Generate title from keyword extraction - final fallback before generic title
+ */
+const generateKeywordTitle = async (conversationText: string, summary: string): Promise<string> => {
+    try {
+        console.log('🎯 Starting keyword-based title generation...');
+        
+        // Extract keywords from conversation and summary
+        const keywords = extractKeywords(conversationText, summary);
+        console.log(`🔑 Extracted keywords: ${keywords.join(', ')}`);
+        
+        if (keywords.length > 0) {
+            // Create a simple title from top keywords
+            const keywordTitle = keywords.slice(0, 3).join(' ');
+            if (keywordTitle.length > 0 && !isGenericTitle(keywordTitle)) {
+                console.log(`✅ Keyword-based title: "${keywordTitle}"`);
+                return keywordTitle;
+            }
+        }
+
+        console.log('❌ Keyword extraction failed, using ultimate fallback...');
+        // Ultimate fallback - try to extract topic from first few messages
+        return generateTopicTitle(conversationText);
+
+    } catch (error) {
+        console.error('❌ Error in generateKeywordTitle:', error);
+        return generateTopicTitle(conversationText);
+    }
+};
+
+/**
+ * Extract topic from conversation structure - ultimate fallback
+ */
+const generateTopicTitle = (conversationText: string): string => {
+    try {
+        console.log('🎯 Generating topic-based title...');
+        
+        // Look for common patterns in conversation
+        const lines = conversationText.split('\n').filter(line => line.trim());
+        const userMessages = lines.filter(line => line.startsWith('USER:') || line.startsWith('HUMAN:'));
+        
+        if (userMessages.length > 0) {
+            const firstMessage = userMessages[0].replace(/^(USER|HUMAN):\s*/i, '').trim();
+            const words = firstMessage.split(/\s+/).filter(word => 
+                word.length > 2 && 
+                !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'how', 'what', 'when', 'where', 'why', 'with', 'this', 'that', 'have', 'from', 'they', 'will', 'been', 'each', 'which', 'their', 'would', 'there', 'could', 'other'].includes(word.toLowerCase())
+            );
+            
+            if (words.length >= 2) {
+                const topicTitle = words.slice(0, 4).join(' ');
+                console.log(`✅ Topic-based title: "${topicTitle}"`);
+                return topicTitle;
+            }
+        }
+
+        console.log('❌ All title generation methods failed, using generic fallback');
+        return "Conversation summary";
+        
+    } catch (error) {
+        console.error('❌ Error in generateTopicTitle:', error);
         return "Conversation summary";
     }
 };
 
 /**
- * Check if a title is too generic
+ * Extract keywords from text
+ */
+const extractKeywords = (conversationText: string, summary: string): string[] => {
+    const text = (conversationText + ' ' + summary).toLowerCase();
+    const words = text.match(/\b[a-z]{3,}\b/g) || [];
+    
+    // Common stop words to exclude
+    const stopWords = new Set([
+        'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'how', 'what', 'when', 'where', 'why', 'with', 'this', 'that', 'have', 'from', 'they', 'will', 'been', 'each', 'which', 'their', 'would', 'there', 'could', 'other', 'user', 'assistant', 'help', 'need', 'want', 'like', 'know', 'think', 'see', 'get', 'make', 'take', 'come', 'give', 'look', 'use', 'find', 'tell', 'ask', 'work', 'seem', 'feel', 'try', 'leave', 'call'
+    ]);
+    
+    // Count word frequency
+    const wordCount = new Map<string, number>();
+    words.forEach(word => {
+        if (!stopWords.has(word) && word.length > 2) {
+            wordCount.set(word, (wordCount.get(word) || 0) + 1);
+        }
+    });
+    
+    // Return top keywords
+    return Array.from(wordCount.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([word]) => word);
+};
+
+/**
+ * Check if a title is too generic - improved version
  */
 const isGenericTitle = (title: string): boolean => {
     const genericPatterns = [
-        /^(general|basic|simple|quick|help|assistance|support|question|discussion|conversation|chat|talk|session|meeting)$/i,
-        /^(help with|assistance with|question about|discussion about|conversation about)/i,
-        /^(general discussion|basic help|simple question|quick chat)/i,
-        /^(getting help|asking for help|need help|seeking assistance)/i
+        /^(general|basic|simple|quick|help|assistance|support|question|discussion|conversation|chat|talk|session|meeting|summary)$/i,
+        /^(help with|assistance with|question about|discussion about|conversation about|summary of)/i,
+        /^(general discussion|basic help|simple question|quick chat|conversation summary)/i,
+        /^(getting help|asking for help|need help|seeking assistance|providing help)/i,
+        /^(ai|assistant|chatbot|bot|service|system|tool|app|application)$/i,
+        /^(text|content|information|data|details|stuff|things|items)/i
     ];
 
-    return genericPatterns.some(pattern => pattern.test(title.toLowerCase()));
+    const titleLower = title.toLowerCase();
+    return genericPatterns.some(pattern => pattern.test(titleLower)) || 
+           titleLower.includes('conversation') || 
+           titleLower.includes('discussion') ||
+           titleLower.includes('summary') ||
+           titleLower.includes('chat') ||
+           titleLower.includes('help');
 };
 
 /**
@@ -305,6 +437,7 @@ export const generateConversationSummary = async (
             .join('\n\n');
 
         console.log(`📝 Conversation text length: ${conversationText.length} characters`);
+        console.log(`📝 First 300 chars of conversation: ${conversationText.substring(0, 300)}...`);
 
         if (!conversationText || conversationText.trim().length === 0) {
             throw new Error('No valid conversation content found');
@@ -331,6 +464,7 @@ Provide a detailed, well-structured summary:`;
         });
 
         console.log(`📋 Generated summary length: ${summary?.length || 0} characters`);
+        console.log(`📋 Summary preview: ${summary?.substring(0, 200)}...`);
 
         if (!summary || summary.trim().length === 0) {
             throw new Error('AI service returned empty summary');

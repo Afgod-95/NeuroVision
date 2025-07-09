@@ -99,6 +99,7 @@ const Index = () => {
     handleRegenerate,
     handleEditMessageCallback,
     startNewConversation,
+    abortMessage,
     loadConversationHistory,
     setMessage,
     setMessages,
@@ -128,20 +129,7 @@ const Index = () => {
 
   // Stop message handler
   const handleStopMessage = useCallback(() => {
-    try {
-      // Stop the current message generation
-      if (sendMessageMutation?.reset) {
-        sendMessageMutation.reset();
-      }
-      
-      // Update sending state
-      setIsSending(false);
-      
-      // You might want to add additional cleanup here
-      console.log('Message generation stopped');
-    } catch (error) {
-      console.error('Error stopping message:', error);
-    }
+    abortMessage();
   }, [sendMessageMutation]);
 
 
@@ -441,7 +429,7 @@ const Index = () => {
               setIsRecording={setIsRecording}
               onSendMessage={handleSendMessage}
               onStopMessage={handleStopMessage}
-              isSending={isSending}
+              isSending={isSending || isTyping }
             />
           </KeyboardAvoidingView>
         </View>
