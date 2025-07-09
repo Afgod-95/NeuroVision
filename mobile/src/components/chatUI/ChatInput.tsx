@@ -169,7 +169,7 @@ const ChatInput = ({
                 <Ionicons
                   name="stop"
                   size={17}
-                  color={Colors.dark.txtPrimary}
+                  color={Colors.dark.bgSecondary}
                 />
               </TouchableOpacity>
             ) : (
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.txtPrimary,
   },
   stopButton: {
-    backgroundColor: Colors.dark.bgPrimary,
+    backgroundColor: Colors.dark.txtPrimary,
   },
   iconsContainer: {
     flexDirection: 'row',

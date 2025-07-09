@@ -134,6 +134,7 @@ const useRealtimeChat = ({
 
         isProcessingResponseRef.current = false;
         currentLoadingIdRef.current = null;
+        
         // Clear abort controller
         if (abortControllerRef.current) {
             abortControllerRef.current = null;

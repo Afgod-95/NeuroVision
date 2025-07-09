@@ -29,98 +29,75 @@ interface AiConversationSummary {
  * Similar to how ChatGPT and Claude AI generate titles
  */
 const generateMeaningfulTitle = async (
-    conversationText: string,
-    summary: string
+  conversationText: string,
+  summary: string
 ): Promise<string> => {
-    try {
-        console.log('🎯 Starting meaningful title generation...');
-        console.log(`📝 Conversation text preview: ${conversationText.substring(0, 200)}...`);
-        console.log(`📋 Summary preview: ${summary.substring(0, 200)}...`);
+  try {
+    const cleanedConversation = conversationText
+      .replace(/(USER|HUMAN|ASSISTANT):/gi, '')
+      .replace(/\n+/g, ' ')
+      .trim();
 
-        // Advanced title generation prompt that mimics ChatGPT/Claude approach
-        const titlePrompt = `You are an expert at creating concise, meaningful conversation titles. Analyze the following conversation and generate a title that captures its essence.
+    const titlePrompt = `
+You are an expert at creating short, specific, human-friendly titles for conversations.
 
-CONVERSATION CONTENT:
-${conversationText.substring(0, 2000)}
+Your goal is to summarize the **core topic or task** being discussed in the fewest words possible — ideally 3 to 7 words.
 
-SUMMARY:
-${summary.substring(0, 500)}
+Conversation excerpt:
+"""${cleanedConversation.slice(0, 2000)}"""
 
-TITLE GENERATION RULES:
-1. Create a title that immediately tells someone what the conversation was about
-2. Use natural language that sounds conversational and human
-3. Be specific about the main topic, task, or question discussed
-4. Keep it between 3-8 words
-5. Avoid generic words like "discussion", "conversation", "chat", "help", "assistance"
-6. Focus on the core subject matter, not the interaction type
-7. Use present tense when possible
-8. Make it sound like something a human would naturally say to describe the conversation
+Conversation summary:
+"""${summary.slice(0, 600)}"""
 
-EXAMPLES OF GOOD TITLES:
-- "Setting up React authentication"
-- "Python async/await best practices"
-- "Designing a mobile checkout flow"
-- "Debugging CSS grid layouts"
-- "Planning a marketing campaign"
-- "Optimizing database queries"
-- "Creating a REST API"
-- "Building a recommendation system"
-- "Troubleshooting Docker containers"
-- "Learning TypeScript generics"
+Rules:
+- Avoid generic phrases like "conversation", "discussion", "help", "question", or "summary"
+- Don't include quotes or prefixes like "Title:"
+- Use specific keywords from the topic (e.g. technologies, frameworks, user goal)
+- Be concise, natural, and informative
+- Present tense preferred
+- 3 to 7 words max
 
-RESPOND WITH ONLY THE TITLE, NO ADDITIONAL TEXT OR EXPLANATION.`;
+Examples:
+- "Fixing Expo Audio Playback"
+- "Implementing Supabase Auth in React"
+- "Uploading Audio with Progress UI"
+- "Designing Onboarding for AI Assistant"
+- "Building ChatGPT-Style UI with Code Blocks"
+- "Debugging Supabase Function Calls"
 
-        console.log('🤖 Sending title generation request to Gemini...');
-        const generatedTitle = await geminiService.sendMessage(titlePrompt, [], {
-            temperature: 0.4,
-            maxTokens: 60
-        });
+Only respond with the title.`;
 
-        console.log(`🎯 Raw AI response: "${generatedTitle}"`);
+    const rawTitle = await geminiService.sendMessage(titlePrompt, [], {
+      temperature: 0.25,
+      maxTokens: 40,
+    });
 
-        // Clean the generated title with improved logic
-        let title = generatedTitle
-            ?.trim()
-            ?.replace(/^["']|["']$/g, '') // Remove quotes
-            ?.replace(/^Title:\s*/i, '') // Remove "Title:" prefix
-            ?.replace(/^Generate.*?:\s*/i, '') // Remove prompt echoes
-            ?.replace(/^\d+\.\s*/, '') // Remove numbered list
-            ?.replace(/^-\s*/, '') // Remove dash prefix
-            ?.replace(/\.$/, '') // Remove trailing period
-            ?.replace(/^Here's a title:\s*/i, '') // Remove common AI prefixes
-            ?.replace(/^A good title would be:\s*/i, '')
-            ?.replace(/^The title is:\s*/i, '')
-            ?.replace(/^Title suggestion:\s*/i, '')
-            ?.trim();
+    let title = rawTitle
+      ?.trim()
+      .replace(/^["']|["']$/g, '')
+      .replace(/^Title:\s*/i, '')
+      .replace(/^[-•\d.]+\s*/, '')
+      .replace(/\.$/, '');
 
-        console.log(`🧹 Cleaned title: "${title}"`);
+    // Validation
+    const tooShort = !title || title.length < 5;
+    const tooGeneric = isGenericTitle(title || '');
+    const tooLong = (title || '').split(/\s+/).length > 8;
 
-        // Validate title quality with better checks
-        if (title && title.length > 0 && title.length <= 60) {
-            const wordCount = title.split(/\s+/).length;
-            const hasContent = title.length > 5; // Minimum meaningful length
-            const notTooGeneric = !isGenericTitle(title);
-            
-            console.log(`📊 Title validation - Length: ${title.length}, Words: ${wordCount}, Has content: ${hasContent}, Not generic: ${notTooGeneric}`);
-            
-            if (wordCount >= 2 && wordCount <= 10 && hasContent && notTooGeneric) {
-                console.log(`✅ Title passed validation: "${title}"`);
-                return title;
-            } else {
-                console.log('❌ Title failed validation, trying focused approach...');
-            }
-        } else {
-            console.log('❌ Title failed basic checks, trying focused approach...');
-        }
-
-        // If first attempt failed, try with more specific context
-        return await generateFocusedTitle(conversationText, summary);
-
-    } catch (error) {
-        console.error('❌ Error in generateMeaningfulTitle:', error);
-        return await generateFocusedTitle(conversationText, summary);
+    if (tooShort || tooGeneric || tooLong) {
+      console.warn(`❌ Title rejected: "${title}"`);
+      return await generateFocusedTitle(conversationText, summary);
     }
+
+    console.log(`✅ Final Title: "${title}"`);
+    return title;
+
+  } catch (error) {
+    console.error('❌ Error in generateMeaningfulTitle:', error);
+    return await generateFocusedTitle(conversationText, summary);
+  }
 };
+
 
 /**
  * Generate a more focused title using key conversation elements
