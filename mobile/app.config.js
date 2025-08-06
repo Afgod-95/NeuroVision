@@ -30,6 +30,7 @@ export default {
       favicon: "./src/assets/images/favicon.png"
     },
     plugins: [
+      "expo-font",
       [
         "expo-router",
       {

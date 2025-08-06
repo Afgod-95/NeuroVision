@@ -71,11 +71,6 @@ const Index = () => {
                 Alert.alert('Success', response.data.message, [
                 {
                     text: 'OK',
-                    onPress: () => {
-                        setTimeout(() => {
-                           router.push('/(home)')
-                        }, 500); 
-                    }
                 }
             ]);
             }

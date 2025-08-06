@@ -30,6 +30,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useDispatch } from 'react-redux';
 import { resetOptions } from '@/src/redux/slices/messageOptionsSlice';
+import { EditedMessagePrompt } from './EditedMessagePrompt';
 
 const SCREEN_WIDTH = Dimensions.get('screen').width;
 
@@ -54,7 +55,6 @@ const ChatInput = ({
   onStopMessage,
   isSending = false
 }: ChatInputProps) => {
-  const { user: userCredentials } = useSelector((state: RootState) => state.user);
   const dispatch = useDispatch();
 
   const handleSendMessage = useCallback(async () => {
@@ -80,51 +80,20 @@ const ChatInput = ({
     console.log('Microphone pressed, recording:', !isRecording);
   }, [isRecording, setIsRecording]);
 
-  // Components
-  const EditedMessagePrompt = () => {
-    const { isEdited } = useSelector((state: RootState) => state.messageOptions);
-    
-    const clearMessage = useCallback(() => {
-      dispatch(resetOptions());
-      setMessage('');
-    }, []);
-
-    if (!isEdited) return null;
-
-    return (
-      <Animated.View
-        style={styles.searchContainer}
-        exiting={FadeOutUp.delay(1).duration(10)}
-        entering={FadeInUp}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <View style={styles.searchIcon}>
-            <Feather name="edit-2" size={20} color={Colors.dark.txtSecondary} />
-          </View>
-          <Text style={styles.text}>Editing Message</Text>
-        </View>
-
-        {message.length > 0 && (
-          <Animated.View entering={FadeIn} exiting={FadeOut}>
-            <TouchableOpacity 
-              onPress={clearMessage}
-              style={[styles.searchIcon, { marginLeft: 10, marginRight: 0 }]}
-            >
-              <AntDesign name="closecircle" size={20} color={Colors.dark.txtSecondary} />
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-      </Animated.View>
-    );
-  };
-
   const canSendMessage = message.trim() && !isSending;
   const showStopButton = isSending;
 
   return (
     <>
       <View style={styles.container}>
-        <EditedMessagePrompt />
+        <EditedMessagePrompt 
+          message={message}
+          setMessage={setMessage}
+          clearMessage={() => {
+            setMessage('');
+            dispatch(resetOptions());
+          }}
+        />
 
         <View style={styles.inputContainer}>
           <TextInput
@@ -139,6 +108,9 @@ const ChatInput = ({
         </View>
 
         <View style={styles.iconsContainer}>
+          <TouchableOpacity style = {[styles.iconButton, { borderWidth: 1, borderColor: Colors.dark.borderColor}]}>
+            <Feather name = "plus" size = {20} color = "white"/>
+          </TouchableOpacity>
           <View style={styles.iconContainer}>
             <TouchableOpacity
               style={[
@@ -248,7 +220,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: 16,
-    justifyContent: 'flex-end'
+    justifyContent: 'space-between'
   },
   searchContainer: {
     flexDirection: 'row',

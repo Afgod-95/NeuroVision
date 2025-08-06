@@ -38,20 +38,26 @@ export const useCodeBlock = () => {
     };
   };
 
+
   // Enhanced code block extraction with better handling
   const extractCodeBlocks = (text: string) => {
-    const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
+    const codeBlockRegex = /```([\w+-]*)\n([\s\S]*?)```/g;
+
+
     const blocks = [];
     let match;
 
     while ((match = codeBlockRegex.exec(text)) !== null) {
       blocks.push({
         id: `code-${blocks.length}`,
-        language: match[1] || 'text',
+        language: match[1]?.trim() || 'text',  
         code: match[2].trim(),
         fullMatch: match[0],
       });
+
     }
+
+
 
     return blocks;
   };
@@ -134,6 +140,8 @@ export const useCodeBlock = () => {
   const renderCustomMarkdown = (text: string) => {
     const codeBlocks = extractCodeBlocks(text);
     const contentTypes = detectContentTypes(text);
+    console.log("Code blocks extracted:", codeBlocks.map(b => b.language));
+
 
     if (codeBlocks.length === 0) {
       return (
@@ -340,6 +348,19 @@ const markdownStyles = StyleSheet.create({
     lineHeight: 22,
     backgroundColor: 'transparent',
   },
+
+  // fallback rendering for any missed blocks
+  fence: {
+    backgroundColor: '#0d1117',
+    color: '#e6edf3',
+    fontFamily: 'Courier',
+    fontSize: 13,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#30363d',
+    overflow: 'scroll',
+  },
   // Inline code
   code_inline: {
     backgroundColor: '#21262d',
@@ -477,6 +498,33 @@ const markdownStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     color: '#e6edf3',
+    backgroundColor: 'transparent',
+  },
+
+  // Add styles for fenced code blocks
+  code_block: {
+    backgroundColor: '#0d1117',
+    color: '#e6edf3',
+    fontFamily: 'Courier',
+    fontSize: 13,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#30363d',
+    overflow: 'scroll',
+  },
+  fence: {
+    backgroundColor: '#0d1117',
+    color: '#e6edf3',
+    fontFamily: 'Courier',
+    fontSize: 13,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#30363d',
+    overflow: 'scroll',
+  },
+  pre: {
     backgroundColor: 'transparent',
   },
 });

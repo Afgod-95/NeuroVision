@@ -25,7 +25,7 @@ import UserMessageBox, { MessagePreview, MessageContent } from '@/src/components
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
 import { UploadedAudioFile as OriginalUploadedAudioFile } from '@/src/components/chatUI/ChatInput';
 import { uniqueConvId } from '@/src/constants/generateConversationId';
-import useRealtimeChat from '@/src/hooks/chats/RealtimeChats';
+import { useRealtimeChat } from '@/src/hooks/chat/useRealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
 import ScrollToBottomButton from '@/src/components/chatUI/ScrollToBottomButton';
 import { useLocalSearchParams } from 'expo-router';
@@ -67,15 +67,15 @@ const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse, (prevProps, ne
 
 const Index = () => {
   // Get message options from Redux
+  
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
-  const { user: userCredentials } = useSelector((state: RootState) => state.user);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
   const { conversation_id } = useLocalSearchParams();
   console.log(`Conversation ID: ${conversation_id}`);
 
-
+ 
   const queryClient = useQueryClient();
 
   // Get the actual conversation ID
@@ -89,13 +89,17 @@ const Index = () => {
     isAIResponding,
     isRecording,
     message,
-    isSidebarVisible,
     conversationId,
+    isSidebarVisible,
     isTyping,
     username,
 
+
+    userCredentials,
+
     // Actions
     handleSendMessage,
+    setIsSidebarVisible,
     handleRegenerate,
     handleEditMessageCallback,
     startNewConversation,
@@ -104,7 +108,6 @@ const Index = () => {
     setMessage,
     setMessages,
     setIsRecording,
-    setIsSidebarVisible,
     scrollToBottom,
 
     // Refs

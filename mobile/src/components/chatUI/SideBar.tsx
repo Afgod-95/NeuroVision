@@ -61,7 +61,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                 return res.data;
             }),
         enabled: !!userCredentials?.id,
-        refetchInterval: 10000, // poll every 10 seconds
+        refetchInterval: 10000, 
         retry: 3,
         retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
     });

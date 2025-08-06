@@ -22,7 +22,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
-import { useMessageOptions } from '@/src/hooks/useMessageOptions';
+import { useMessageOptions } from '@/src/hooks/userMessagePreview/useMessageOptions';
 import { useDispatch } from 'react-redux';
 import { setShowOptions } from '@/src/redux/slices/messageOptionsSlice';
 import { useAudioPlayer, AudioSource } from 'expo-audio';
@@ -147,7 +147,7 @@ const UserMessageBox = ({
 }: MessagesProps) => {
   //getting user profile
   const { user: userCredentials } = useSelector((state: RootState) => state.user);
-  const { isEdited } = useSelector((state: RootState) => state.messageOptions);
+  
   const {
     handlePressIn,
     handlePressOut,
@@ -252,16 +252,6 @@ const UserMessageBox = ({
         >
           {renderMessageContent()}
         </Pressable>
-
-        {isEdited && (
-          <Animated.View
-            entering={FadeInDown.duration(300)}
-            exiting={FadeOut.duration(200)}
-          >
-            <Text style={styles.editedMessage}>Edited</Text>
-          </Animated.View>
-
-        )}
       </Animated.View>
     </Animated.View>
 
