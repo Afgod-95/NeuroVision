@@ -23,7 +23,7 @@ import { Message, ApiResponse, ApiMessage } from '@/src/utils/interfaces/Typescr
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import UserMessageBox, { MessagePreview, MessageContent } from '@/src/components/chatUI/UserMessageBox';
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
-import { UploadedAudioFile as OriginalUploadedAudioFile } from '@/src/components/chatUI/ChatInput';
+import UploadedFiles, { UploadedFile } from '@/src/components/chatUI/uploaded-files/UploadedFiles';
 import { uniqueConvId } from '@/src/constants/generateConversationId';
 import { useRealtimeChat } from '@/src/hooks/chat/useRealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
@@ -32,10 +32,12 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { setOptions } from 'expo-splash-screen';
+import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
+import BottomSheetModal from '@/src/components/chatUI/FileUploadBottomSheet';
 
 
 // Extend UploadedAudioFile to include duration
-type UploadedAudioFile = OriginalUploadedAudioFile & {
+type UploadedAudioFile = UploadedFile & {
   duration?: number;
 };
 
@@ -67,7 +69,7 @@ const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse, (prevProps, ne
 
 const Index = () => {
   // Get message options from Redux
-  
+
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
@@ -75,7 +77,7 @@ const Index = () => {
   const { conversation_id } = useLocalSearchParams();
   console.log(`Conversation ID: ${conversation_id}`);
 
- 
+
   const queryClient = useQueryClient();
 
   // Get the actual conversation ID
@@ -177,8 +179,8 @@ const Index = () => {
           });
           return response.data;
         },
-        staleTime: 1000 * 60 * 5, 
-        gcTime: 1000 * 60 * 10, 
+        staleTime: 1000 * 60 * 5,
+        gcTime: 1000 * 60 * 10,
       });
 
       if (data && data.messages) {
@@ -211,14 +213,14 @@ const Index = () => {
       setIsSending(sendMessageMutation.isPending || sendMessageMutation.isPending);
     }
   }, [sendMessageMutation?.isPending, sendMessageMutation?.isPending]);
-  
+
   // Scroll to bottom handler
   const onScroll = useCallback((event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     const contentHeight = event.nativeEvent.contentSize.height;
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
 
-    const isAtBottom = offsetY + layoutHeight >= contentHeight - 50; // Add some tolerance
+    const isAtBottom = offsetY + layoutHeight >= contentHeight - 50; 
 
     setShowScrollButton(!isAtBottom && offsetY > 50);
   }, []);
@@ -236,10 +238,30 @@ const Index = () => {
     setIsSidebarVisible(true);
   }, [setIsSidebarVisible]);
 
+  //state for bottom sheet
+  const state = useRealtimeChatState()
+
+  //bottom sheet
+  const HandleOpenBottomSheet = () => {
+    state.setOpenBottomSheet(true);
+    state.bottomSheetRef.current?.expand()
+  };
+
+  //handle file upload
+  const handleFileSelected = (file: UploadedFile) => {
+    state.setAttachments((prev) => [...prev, file]);
+  };
+
+  const handleRemoveFile = (fileId: string) => {
+    state.setAttachments((prev) => prev.filter((item) => item.id !== fileId));
+  }
+
+
   // Message input handlers
   const handleMessageOnChange = useCallback((text: string) => {
     setMessage(text);
   }, [setMessage]);
+
 
   const handleIsRecording = useCallback((recording: boolean) => {
     setIsRecording(recording);
@@ -296,7 +318,7 @@ const Index = () => {
         />
       );
     }
-  }, [handleRegenerate, isAIResponding, messages.length, ]);
+  }, [handleRegenerate, isAIResponding, messages.length,]);
 
   // Debug logging for loading states
   useEffect(() => {
@@ -360,7 +382,7 @@ const Index = () => {
             <SafeAreaView style={styles.safeAreaContainer}>
 
               <View style={[
-                styles.header, 
+                styles.header,
               ]}>
                 <TouchableOpacity onPress={handleToggleSidebar}>
                   <Image
@@ -390,7 +412,7 @@ const Index = () => {
                     renderItem={renderItem}
                     contentContainerStyle={[
                       styles.flatListContent,
-                     styles.flatListContentWithBanner
+                      styles.flatListContentWithBanner
                     ]}
                     removeClippedSubviews={true}
                     maxToRenderPerBatch={10}
@@ -404,13 +426,13 @@ const Index = () => {
                     getItemLayout={undefined}
                     extraData={messages.length}
                   />
-                  {!isTyping &&  
+                  {!isTyping &&
                     <ScrollToBottomButton
                       onPress={scrollToBottom}
                       visible={showScrollButton}
                     />
                   }
-                  
+
                 </>
               )}
             </SafeAreaView>
@@ -425,6 +447,9 @@ const Index = () => {
 
             {/* Chat input */}
             <ChatInput
+              onRemoveFile={handleRemoveFile}
+              uploadedFiles={state.attachments}
+              openBottomSheet={HandleOpenBottomSheet}
               message={message}
               setMessage={setMessage}
               isEdited={isEdited}
@@ -432,10 +457,11 @@ const Index = () => {
               setIsRecording={setIsRecording}
               onSendMessage={handleSendMessage}
               onStopMessage={handleStopMessage}
-              isSending={isSending || isTyping }
+              isSending={isSending || isTyping}
             />
           </KeyboardAvoidingView>
         </View>
+
       </TouchableWithoutFeedback>
 
       {/* Sidebar */}
@@ -444,6 +470,14 @@ const Index = () => {
         onClose={handleCloseSidebar}
         onOpen={handleOpenSidebar}
       />
+      {state.openBottomSheet && (
+        <BottomSheetModal
+          onFileSelected = {(file) => handleFileSelected(file)}
+          bottomSheetRef={state.bottomSheetRef}
+         
+        />
+      )}
+
     </>
   );
 };
@@ -474,10 +508,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     height: 60,
     paddingTop: Platform.OS === 'android' ? 20 : undefined,
-    zIndex: 999, 
+    zIndex: 999,
   },
   headerWithBanner: {
-    marginTop: 8, 
+    marginTop: 8,
   },
   contentArea: {
     flex: 1,
@@ -516,7 +550,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   flatListContentWithBanner: {
-    paddingTop: 8, 
+    paddingTop: 8,
   },
   aiRespondingIndicator: {
     paddingVertical: 8,

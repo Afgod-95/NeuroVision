@@ -4,10 +4,10 @@ export default {
   expo: {
     name: "NeuroVision",
     slug: "NeuraVision",
+    scheme: "neurovision",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./src/assets/images/icon.png",
-    scheme: "neurachat",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {

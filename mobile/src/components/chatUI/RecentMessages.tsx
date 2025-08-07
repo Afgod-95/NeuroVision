@@ -16,6 +16,8 @@ import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { router } from 'expo-router';
+import { useDebounce } from 'use-debounce';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -169,6 +171,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
     const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
     const [pressedMessage, setPressedMessage] = useState<string | null>(null);
 
+    const [debouncedSearch] = useDebounce(search, 500)
     // Modal actions
     const modalActions: ModalAction[] = [
         {
@@ -242,9 +245,9 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         if (messages.length === 0) return [];
 
         // Filter messages based on search if provided
-        const filteredMessages = search
+        const filteredMessages = debouncedSearch
             ? messages.filter(message =>
-                message.title.toLowerCase().includes(search.toLowerCase())
+                message.title.toLowerCase().includes(debouncedSearch.toLowerCase())
             )
             : messages;
 
@@ -274,7 +277,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         });
 
         return grouped;
-    }, [messages, search]);
+    }, [messages, debouncedSearch]);
 
     const handleMessagePress = (messageId: string) => {
         setPressedMessage(messageId);

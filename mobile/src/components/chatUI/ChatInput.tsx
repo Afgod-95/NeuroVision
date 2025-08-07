@@ -1,66 +1,58 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Text,
   Dimensions,
-  Pressable,
-  TouchableWithoutFeedback,
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/Colors';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/redux/store';
 import Feather from '@expo/vector-icons/Feather';
-import AntDesign from '@expo/vector-icons/AntDesign';
-import Animated, {
-  FadeIn,
-  FadeInUp,
-  FadeOut,
-  FadeOutDown,
-  FadeOutUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  withRepeat,
-  withSequence
-} from 'react-native-reanimated'
 import { useDispatch } from 'react-redux';
 import { resetOptions } from '@/src/redux/slices/messageOptionsSlice';
 import { EditedMessagePrompt } from './EditedMessagePrompt';
+import UploadedFiles, { UploadedFile } from './uploaded-files/UploadedFiles';
+import { sampleUploadedFile } from '@/src/utils/data';
 
 const SCREEN_WIDTH = Dimensions.get('screen').width;
 
+
 type ChatInputProps = {
   message: string;
-  isEdited: boolean,
+  isEdited: boolean;
+  openBottomSheet: () => void;
   setMessage: (message: string) => void;
   isRecording: boolean;
   setIsRecording: (isRecording: boolean) => void;
   onSendMessage?: (message: string) => void;
   onStopMessage?: () => void;
   isSending?: boolean;
+  uploadedFiles?: UploadedFile[];
+  onRemoveFile?: (fileId: string) => void;
 };
 
 const ChatInput = ({
   message,
   setMessage,
+  openBottomSheet,
   isEdited,
   isRecording,
   setIsRecording,
   onSendMessage,
   onStopMessage,
-  isSending = false
+  isSending = false,
+  uploadedFiles = [],
+  onRemoveFile,
 }: ChatInputProps) => {
   const dispatch = useDispatch();
 
   const handleSendMessage = useCallback(async () => {
     const hasMessage = message.trim();
+    const hasFiles = uploadedFiles.length > 0;
     
-    if (!hasMessage) return;
+    if (!hasMessage && !hasFiles) return;
 
     try {
       onSendMessage?.(message);
@@ -69,7 +61,7 @@ const ChatInput = ({
       console.error('Send message error:', error);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
-  }, [message, onSendMessage, setMessage]);
+  }, [message, uploadedFiles, onSendMessage, setMessage]);
 
   const handleStopMessage = useCallback(() => {
     onStopMessage?.();
@@ -80,7 +72,7 @@ const ChatInput = ({
     console.log('Microphone pressed, recording:', !isRecording);
   }, [isRecording, setIsRecording]);
 
-  const canSendMessage = message.trim() && !isSending;
+  const canSendMessage = (message.trim() || uploadedFiles.length > 0) && !isSending;
   const showStopButton = isSending;
 
   return (
@@ -93,6 +85,12 @@ const ChatInput = ({
             setMessage('');
             dispatch(resetOptions());
           }}
+        />
+
+        {/* Uploaded files component */}
+        <UploadedFiles
+          files={uploadedFiles}
+          onRemoveFile={onRemoveFile}
         />
 
         <View style={styles.inputContainer}>
@@ -108,8 +106,11 @@ const ChatInput = ({
         </View>
 
         <View style={styles.iconsContainer}>
-          <TouchableOpacity style = {[styles.iconButton, { borderWidth: 1, borderColor: Colors.dark.borderColor}]}>
-            <Feather name = "plus" size = {20} color = "white"/>
+          <TouchableOpacity 
+            onPress={openBottomSheet}
+            style={[styles.iconButton, { borderWidth: 1, borderColor: Colors.dark.borderColor}]}
+          >
+            <Feather name="plus" size={20} color="white"/>
           </TouchableOpacity>
           <View style={styles.iconContainer}>
             <TouchableOpacity

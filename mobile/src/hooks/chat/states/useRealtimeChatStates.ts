@@ -4,6 +4,7 @@ import { Message } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
+import BottomSheet from '@gorhom/bottom-sheet';
 // Manages all state variables and basic state operations
 export const useRealtimeChatState = () => {
   const [isSidebarVisible, setIsSidebarVisible] = useState<boolean>(false);
@@ -14,6 +15,17 @@ export const useRealtimeChatState = () => {
   const [conversationId, setConversationId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
+  const [isAborted, setIsAborted] = useState<boolean>(false);
+  const [showAIButtons, setShowAIButtons] = useState<boolean>(false);
+
+  //bottomsheet states 
+  const [openBottomSheet, setOpenBottomSheet] = useState<boolean>(false);
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  
+  //files upload state 
+  const [attachments, setAttachments] = useState<any[]>([]);
+ 
+
 
   // All refs
   const realtimeChannelRef = useRef<any>(null);
@@ -46,12 +58,20 @@ export const useRealtimeChatState = () => {
     conversationId, setConversationId,
     loading, setLoading,
     isTyping, setIsTyping,
-    
+    isAborted, setIsAborted,
+    showAIButtons, setShowAIButtons,
+    openBottomSheet, setOpenBottomSheet,
+    attachments, setAttachments,
+
+    //bottomsheet states 
+    bottomSheetRef,
+
     //user
     userDetails,
     username,
     queryClient,
     messageId, isEdited, 
+    
     // Refs
     realtimeChannelRef,
     flatListRef,

@@ -7,7 +7,6 @@ import { useAIResponseManager } from "./ai/useAIResponseManager";
 import { useMessageMutation } from "./mutations/useMessageMutation";
 import { useSupabaseRealtime } from "./realtime/useSupabaseRealtime";
 import { useConversationActions } from "./actions/useConversationActions";
-import supabase from "@/src/utils/supabase/supabaseClient";
 import { useMessageOptions } from "@/src/hooks/userMessagePreview/useMessageOptions";
 
 // Main hook that orchestrates all the smaller hooks
@@ -47,6 +46,7 @@ export const useRealtimeChat = ({
         temperature,
         maxTokens,
         ...state,
+        setAttachment: state.setAttachments,
         scrollToBottom: messageUtils.scrollToBottom,
         cleanupSubscription: supabaseRealtimeSubscription.cleanupSubscription,
         clearAIResponding: aiResponseManager.clearAIResponding,

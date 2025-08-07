@@ -20,9 +20,9 @@ interface UserProps {
 
 const SignUp = () => {
   const [user, setUser] = useState<UserProps>({
-    username: 'Godwin Afari',
-    email: 'afgod98@gmail.com',
-    password: '123456',
+    username: '',
+    email: '',
+    password: '',
   });
 
   const [isDisabled, setIsDisabled] = useState<boolean>(true);

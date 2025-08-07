@@ -11,6 +11,7 @@ type AIResponseProps = {
   message: string;
   isTyping: boolean,
   loading?: boolean;
+  isAborted?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (type: 'like' | 'dislike', messageId?: string) => void;
   messageId?: string;

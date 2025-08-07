@@ -104,6 +104,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+ 
   typingDot: {
     width: 8,
     height: 8,

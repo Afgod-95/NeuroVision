@@ -52,6 +52,9 @@ function RootLayoutInner() {
     if (user.isAuthenticated === true) {
       router.replace('/(home)');
     }
+    else {
+      router.replace('/(auth)/signup')
+    }
   }, [user]);
 
   return (

@@ -23,12 +23,12 @@ import Animated, {
 import { Colors } from '@/src/constants/Colors';
 import { Feather } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useCodeBlock } from './AIResponseUI/CodeBlocks';
 import useLoadingDots from './AIResponseUI/useLoadingDots';
 import { AIResponseProps, GeneratedImage } from '@/src/utils/types/Types';
 import useImageGallery from './AIResponseUI/ImageGallery';
+import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -44,6 +44,7 @@ const AdvancedAIResponse = ({
 }: AIResponseProps) => {
   const [isLiked, setIsLiked] = useState<'like' | 'dislike' | null>(null);
 
+  const { isAborted, showAIButtons } = useRealtimeChatState()
   //code block component
   const {
     renderCustomMarkdown,
@@ -67,7 +68,6 @@ const AdvancedAIResponse = ({
     opacity: fadeOpacity.value,
   }));
 
-
   const modalStyle = useAnimatedStyle(() => ({
     opacity: modalOpacity.value,
   }));
@@ -89,7 +89,6 @@ const AdvancedAIResponse = ({
       });
     }
   }, [loading]);
-
 
   // Modal animation effect
   useEffect(() => {
@@ -162,6 +161,8 @@ const AdvancedAIResponse = ({
     }
   };
 
+  // Determine if action bar should be shown
+  const shouldShowActionBar = isAborted && showAIButtons || !isTyping;
 
   if (loading) {
     return (
@@ -169,139 +170,132 @@ const AdvancedAIResponse = ({
     );
   }
 
-
-
   return (
     <>
-
       <TouchableNativeFeedback>
-      <Animated.View style={[styles.container, fadeStyle]}>
-        <View style={styles.messageContent}>
-          {/* Generated Images */}
-          <ImageGallery images={generatedImages} />
+        <Animated.View style={[styles.container, fadeStyle]}>
+          <View style={styles.messageContent}>
+            {/* Generated Images */}
+            <ImageGallery images={generatedImages} />
 
-          {/* Content */}
-          <View style={styles.contentContainer}>
-            {renderCustomMarkdown(message)}
-          </View>
+            {/* Content */}
+            <View style={styles.contentContainer}>
+              {renderCustomMarkdown(message)}
+            </View>
 
-          {/* Action Bar - Only show when not loading */}
-          {!isTyping && (
-            <View style={styles.actionBar}>
-              <TouchableOpacity
-                style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
-                onPress={() => handleCopy(message)}
-              >
-                <Feather
-                  name={mainCopied ? "check" : "copy"}
-                  size={16}
-                  color={mainCopied ? "#10b981" : "#8e8ea0"}
-                />
-              </TouchableOpacity>
+            {/* Action Bar - Show when not typing OR when aborted */}
+            {shouldShowActionBar && (
+              <View style={styles.actionBar}>
+                <TouchableOpacity
+                  style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
+                  onPress={() => handleCopy(message)}
+                >
+                  <Feather
+                    name={mainCopied ? "check" : "copy"}
+                    size={16}
+                    color={mainCopied ? "#10b981" : "#8e8ea0"}
+                  />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
-                onPress={() => handleLike('like')}
-              >
-                <Feather
-                  name="thumbs-up"
-                  size={16}
-                  color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
-                />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
+                  onPress={() => handleLike('like')}
+                >
+                  <Feather
+                    name="thumbs-up"
+                    size={16}
+                    color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
+                  />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
-                onPress={() => handleLike('dislike')}
-              >
-                <Feather
-                  name="thumbs-down"
-                  size={16}
-                  color={isLiked === 'dislike' ?  "#ef4444" : "#8e8ea0"}
-                />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
+                  onPress={() => handleLike('dislike')}
+                >
+                  <Feather
+                    name="thumbs-down"
+                    size={16}
+                    color={isLiked === 'dislike' ? "#ef4444" : "#8e8ea0"}
+                  />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={handleShare}
-              >
-                <Feather name="share" size={16} color="#8e8ea0" />
-              </TouchableOpacity>
-
-             
-
-              {onRegenerate && (
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={onRegenerate}
+                  onPress={handleShare}
                 >
-                  <MaterialIcons name="refresh" size={20} color="#8e8ea0" />
+                  <Feather name="share" size={16} color="#8e8ea0" />
                 </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
 
-        {/* Image Modal */}
-        <Modal
-          visible={selectedImage !== null}
-          transparent={true}
-          animationType="none"
-          onRequestClose={() => setSelectedImage(null)}
-        >
-          <Animated.View style={[styles.modalOverlay, modalStyle]}>
-            <TouchableOpacity
-              style={styles.modalBackground}
-              activeOpacity={1}
-              onPress={() => setSelectedImage(null)}
-            >
-              <Animated.View style={[styles.modalContent, modalContentStyle]}>
-                {selectedImage && (
-                  <>
-                    <Image
-                      source={{ uri: selectedImage.uri }}
-                      style={styles.modalImage}
-                      resizeMode="contain"
-                    />
-                    <View style={styles.modalActions}>
-                      <TouchableOpacity
-                        style={styles.modalActionButton}
-                        onPress={() => handleImageShare(selectedImage)}
-                      >
-                        <Feather name="share-2" size={20} color="#fff" />
-                        <Text style={styles.modalActionText}>Share</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.modalActionButton}
-                        onPress={() => handleImageSave(selectedImage.uri)}
-                      >
-                        <Feather name="download" size={20} color="#fff" />
-                        <Text style={styles.modalActionText}>Save</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.modalActionButton}
-                        onPress={() => setSelectedImage(null)}
-                      >
-                        <Feather name="x" size={20} color="#fff" />
-                        <Text style={styles.modalActionText}>Close</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {selectedImage.prompt && (
-                      <View style={styles.modalPrompt}>
-                        <Text style={styles.modalPromptText}>{selectedImage.prompt}</Text>
-                      </View>
-                    )}
-                  </>
+                {onRegenerate && (
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={onRegenerate}
+                  >
+                    <MaterialIcons name="refresh" size={20} color="#8e8ea0" />
+                  </TouchableOpacity>
                 )}
-              </Animated.View>
-            </TouchableOpacity>
-          </Animated.View>
-        </Modal>
-      </Animated.View>
-    </TouchableNativeFeedback>
-    </>
-    
+              </View>
+            )}
+          </View>
 
+          {/* Image Modal */}
+          <Modal
+            visible={selectedImage !== null}
+            transparent={true}
+            animationType="none"
+            onRequestClose={() => setSelectedImage(null)}
+          >
+            <Animated.View style={[styles.modalOverlay, modalStyle]}>
+              <TouchableOpacity
+                style={styles.modalBackground}
+                activeOpacity={1}
+                onPress={() => setSelectedImage(null)}
+              >
+                <Animated.View style={[styles.modalContent, modalContentStyle]}>
+                  {selectedImage && (
+                    <>
+                      <Image
+                        source={{ uri: selectedImage.uri }}
+                        style={styles.modalImage}
+                        resizeMode="contain"
+                      />
+                      <View style={styles.modalActions}>
+                        <TouchableOpacity
+                          style={styles.modalActionButton}
+                          onPress={() => handleImageShare(selectedImage)}
+                        >
+                          <Feather name="share-2" size={20} color="#fff" />
+                          <Text style={styles.modalActionText}>Share</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.modalActionButton}
+                          onPress={() => handleImageSave(selectedImage.uri)}
+                        >
+                          <Feather name="download" size={20} color="#fff" />
+                          <Text style={styles.modalActionText}>Save</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.modalActionButton}
+                          onPress={() => setSelectedImage(null)}
+                        >
+                          <Feather name="x" size={20} color="#fff" />
+                          <Text style={styles.modalActionText}>Close</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {selectedImage.prompt && (
+                        <View style={styles.modalPrompt}>
+                          <Text style={styles.modalPromptText}>{selectedImage.prompt}</Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </Animated.View>
+              </TouchableOpacity>
+            </Animated.View>
+          </Modal>
+        </Animated.View>
+      </TouchableNativeFeedback>
+    </>
   );
 };
 
@@ -325,7 +319,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingTop: 8,
   },
   actionButton: {
     width: 32,

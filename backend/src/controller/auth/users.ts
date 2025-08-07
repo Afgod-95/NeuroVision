@@ -277,10 +277,10 @@ const updateUserProfile = async (req: Request, res: Response) => {
 // RESET PASSWORD
 const resetUserPassword = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const { newPassword } = req.body;
+    
+    const { email, newPassword } = req.body;
 
-    if (!newPassword) {
+    if (!newPassword || !email) {
       return res.status(400).json({ error: 'New password is required' });
     }
 
@@ -289,7 +289,7 @@ const resetUserPassword = async (req: Request, res: Response) => {
     const { data, error } = await supabase
       .from('users')
       .update({ password: hashedPassword })
-      .eq('id', id)
+      .eq('email', email)
       .single();
 
     if (error) {
@@ -347,18 +347,22 @@ const resetPasswordRequest = async (req: Request, res: Response) => {
         return res.status(404).json({ error: 'User not found' });
       }
 
+      if (user.is_email_verified === false) {
+        return res.status(404).json({ error: "User email is not verified"})
+      }
+
       console.log('User found, sending OTP...');
 
       const otpResult = await sendOtp(user, true);
       if (otpResult.error) {
         console.error('OTP error:', otpResult.error);
-        return res.status(500).json({ error: 'Failed to send OTP' });
+        return res.status(500).json({ error: 'An error occured whilst sending password reset link' });
       }
 
-      console.log('OTP sent successfully');
+      console.log('Password reset link sent successfully');
 
       res.status(200).json({
-        message: 'OTP sent successfully',
+        message: 'Password reset link sent successfully',
         otpResult,
         user: { id: user.id, email: user.email, username: user.username }
       });
@@ -383,7 +387,7 @@ const logoutUser = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE USER
+
 // Helper function for handling Supabase errors
 const handleSupabaseError = (res: Response, error: any, message: string) => {
   if (error) {

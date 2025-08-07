@@ -39,7 +39,7 @@ export const useTypingAnimation = ({
     setIsTyping(true);
     currentTypingMessageIdRef.current = messageId;
     let currentIndex = 0;
-    const typingSpeed = 30;
+    const typingSpeed = 10;
 
     const typeNextCharacter = () => {
       if (currentIndex <= fullText.length && currentTypingMessageIdRef.current === messageId) {

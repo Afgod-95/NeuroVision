@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 import { Message } from "@/src/utils/interfaces/TypescriptInterfaces";
-import { useFetchMessagesMutation  } from "@/src/hooks/chat/mutations/ConversationsMutation";
+import { useFetchMessagesMutation } from "@/src/hooks/chat/mutations/ConversationsMutation";
 import { uniqueConvId as startNewConversationId } from "@/src/constants/generateConversationId";
 import axios from "axios";
 import { QueryCacheNotifyEvent, QueryClient, UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { UploadedAudioFile } from "@/src/utils/interfaces/TypescriptInterfaces";
+import { useRealtimeChatState } from "../states/useRealtimeChatStates";
 
 type useConversationActionsType = {
     userDetails: any,
@@ -14,14 +15,13 @@ type useConversationActionsType = {
     temperature: number,
     maxTokens: number,
 
- 
-
     //states and refs
     isAIResponding: boolean,
     abortControllerRef: React.RefObject<AbortController | null>,
     queryClient: QueryClient,
     messages: Message[],
     setMessage: (message: string) => void,
+    setAttachment: (attachment: any[]) => void,
     setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
     setConversationId: (conversationId: string) => void,
     isProcessingResponseRef: React.RefObject<boolean>,
@@ -32,7 +32,7 @@ type useConversationActionsType = {
 
     setIsAIResponding: (responding: boolean) => void,
     scrollToBottom: () => void,
-   
+
     clearAIResponding: () => void,
     sendMessageMutation: UseMutationResult<any, unknown, any, unknown>,
     cleanupSubscription: () => void,
@@ -45,7 +45,7 @@ type useConversationActionsType = {
 // Handles conversation-level actions
 export const useConversationActions = ({
     //user
-   
+
     //prompts 
     systemPrompt,
     temperature,
@@ -62,6 +62,7 @@ export const useConversationActions = ({
     queryClient,
     setMessage,
     setMessages,
+    setAttachment,
     setConversationId,
     isProcessingResponseRef,
     setLoading,
@@ -71,35 +72,43 @@ export const useConversationActions = ({
 
     setIsAIResponding,
     scrollToBottom,
-   
+
     clearAIResponding,
     sendMessageMutation,
-     startTypingAnimation,
+    startTypingAnimation,
     cleanupSubscription,
     cleanupTypingAnimation,
-   
+
     extractAIResponseText,
-   
-} : useConversationActionsType ) => {
+
+}: useConversationActionsType) => {
+    
+    const { setShowAIButtons, setIsAborted } = useRealtimeChatState()
+
     const handleSendMessage = useCallback(async (messageText: string, audioFile?: UploadedAudioFile) => {
         console.log('handleSendMessage called with:', { messageText, audioFile });
 
+        
         if (!messageText.trim() && !audioFile) {
             return;
         }
+
 
         if (isProcessingResponseRef.current) {
             console.log('Already processing a response, ignoring request');
             return;
         }
 
+
         setMessage('');
+        setAttachment([]);
+        setIsAborted(false);
         sendMessageMutation.mutate({ messageText, audioFile });
     }, [sendMessageMutation]);
 
-  const startNewConversation = useCallback(() => {
+    const startNewConversation = useCallback(() => {
         const newConvId = startNewConversationId;
-        // Clean up current subscription and typing animation
+               // Clean up current subscription and typing animation
         cleanupSubscription();
         cleanupTypingAnimation();
 
@@ -110,7 +119,8 @@ export const useConversationActions = ({
         currentLoadingIdRef.current = null;
         processedMessageIds.current.clear();
         clearAIResponding();
-        setLoading(true);
+         setIsAborted(false);
+        setLoading(false);
     }, [startNewConversationId, clearAIResponding, cleanupSubscription, cleanupTypingAnimation]);
 
     const loadConversationHistoryMutation = useFetchMessagesMutation();
@@ -118,6 +128,7 @@ export const useConversationActions = ({
     const loadConversationHistory = useCallback(async () => {
         try {
             setLoading(true);
+             setIsAborted(false);
 
             const response = await loadConversationHistoryMutation.mutateAsync(userDetails?.id);
 
@@ -140,6 +151,7 @@ export const useConversationActions = ({
             console.log('Already processing a response, ignoring regenerate request');
             return;
         }
+        setIsAborted(false);
 
         const currentIndex = messages.findIndex(msg => msg.id === messageId);
         const previousUserMessage = messages.slice(0, currentIndex).reverse().find(msg => msg.user);
@@ -161,7 +173,17 @@ export const useConversationActions = ({
             currentLoadingIdRef.current = loadingMessageId;
 
             setMessages(prev => {
-                const filtered = prev.filter(msg => msg.id !== messageId);
+                // Remove the message being regenerated AND the most recent message
+                const filtered = prev.filter((msg, index) => {
+                    // Remove the specific message being regenerated
+                    if (msg.id === messageId) return false;
+
+                    // Remove the most recent message (last message in the array)
+                    if (index === prev.length - 1) return false;
+
+                    return true;
+                });
+
                 return [...filtered, loadingMessage];
             });
 
@@ -313,15 +335,18 @@ export const useConversationActions = ({
             sendMessageMutation.reset();
         }
 
+        setIsAborted(true);
+        setShowAIButtons(true);
+
         console.log('Message abort completed');
     }, [cleanupTypingAnimation, sendMessageMutation, queryClient]);
 
 
-  return {
-    handleSendMessage,
-    handleRegenerate,
-    startNewConversation,
-    loadConversationHistory,
-    abortMessage
-  };
+    return {
+        handleSendMessage,
+        handleRegenerate,
+        startNewConversation,
+        loadConversationHistory,
+        abortMessage
+    };
 };

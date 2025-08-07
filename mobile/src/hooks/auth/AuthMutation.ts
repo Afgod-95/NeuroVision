@@ -25,7 +25,7 @@ export const useSignupMutation = () => {
                     onPress: () => {
                         setTimeout(() => {
                             router.push({
-                                pathname: '/(auth)/email_verification/[userId]',
+                                pathname: '/(auth)/verify/[userId]',
                                 params: {
                                     userId: userId,
                                     email: email
