@@ -117,7 +117,7 @@ const ResetPasswordScreen: React.FC = () => {
         {/* Animated Background Elements */}
         <div className="absolute inset-0 pointer-events-none">
           <motion.div
-            className="absolute bottom-0 right-[-50px] w-[200px] h-[200px] rounded-full blur-3xl"
+            className="fixed bottom-0 right-[-50px] w-[200px] h-[200px] rounded-full blur-3xl"
             style={{
               background: '#10b981', 
               filter: 'blur(60px)', 
@@ -224,7 +224,7 @@ const ResetPasswordScreen: React.FC = () => {
         {/* Animated Background Elements */}
         <div className="absolute inset-0 pointer-events-none">
           <motion.div
-            className="absolute bottom-0 left-[-50px] w-[200px] h-[200px] rounded-full blur-3xl"
+            className="fixed bottom-0 left-[-50px] w-[200px] h-[200px] rounded-full blur-3xl"
             style={{
               background: '#9747FF', 
               filter: 'blur(60px)', 
