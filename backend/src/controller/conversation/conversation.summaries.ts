@@ -99,50 +99,44 @@ Title:`;
  * Get all conversation summaries for a user - for sidebar display
  */
 export const getUserConversationSummaries = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { userId } = req.query;
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 20;
-        const offset = (page - 1) * limit;
-
-        if (!userId) {
-            res.status(400).json({
-                success: false,
-                error: 'userId is required'
-            });
-            return;
-        }
-
-        // Get all conversation summaries for the user, ordered by most recent
-        const { data, error, count } = await supabase
-            .from('ai_conversation_summaries')
-            .select('*', { count: 'exact' })
-            .eq('user_id', parseInt(userId as string))
-            .order('updated_at', { ascending: false })
-            .range(offset, offset + limit - 1);
-
-        if (error) {
-            throw error;
-        }
-
-        res.json({
-            success: true,
-            conversations: data || [],
-            totalCount: count || 0,
-            page,
-            limit,
-            hasMore: (count || 0) > offset + limit,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error: any) {
-        console.error('Get user conversations error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to fetch conversations'
-        });
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
     }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
+
+    const { data, error, count } = await supabase
+      .from('ai_conversation_summaries')
+      .select('*', { count: 'exact' })
+      .eq('user_id', parseInt(userId))
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      conversations: data || [],
+      totalCount: count || 0,
+      page,
+      limit,
+      hasMore: (count || 0) > offset + limit,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Get user conversations error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch conversations'
+    });
+  }
 };
+
 
 
 /**
@@ -150,7 +144,8 @@ export const getUserConversationSummaries = async (req: Request, res: Response):
  */
 export const bulkGenerateSummaries = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId, limit = 10 } = req.body;
+        const userId = req.user?.id;
+        const { limit = 10, offset = 0 } = req.body;
 
         if (!userId) {
             res.status(400).json({
@@ -188,7 +183,7 @@ export const bulkGenerateSummaries = async (req: Request, res: Response): Promis
         // Process each conversation
         for (const conv of conversationsNeedingSummaries) {
             try {
-                await autoGenerateSummary(conv.conversation_id, userId);
+                await autoGenerateSummary(conv.conversation_id, parseInt(userId));
                 results.push({
                     conversationId: conv.conversation_id,
                     success: true,

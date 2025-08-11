@@ -65,7 +65,7 @@ const ResetPassword = () => {
                     disabled={false}
                     loading={false}
                     onPress={() => router.push({
-                        pathname: '/(auth)/email_verification/[userId]',
+                        pathname: '/(auth)/verify/[userId]',
                         params: {
                             userId: user.email 
                         }

@@ -73,7 +73,7 @@ const ContinueWithGoogle = () => {
                     onPress={handleSign}
                     onPressIn={handlePressIn}
                     onPressOut={handlePressOut}
-                    disabled={true}
+                    disabled={false}
                     style={{
                         backgroundColor: Colors.dark.bgSecondary,
                         height: 40,

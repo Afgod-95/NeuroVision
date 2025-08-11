@@ -3,6 +3,8 @@ import cors from 'cors';
 import { rateLimiter, validateApiKey } from './middlewares/validation';
 import chatsRouter from './routes/chatsRouter';
 import authRouter from './routes/authRouter';
+import cron from 'node-cron'
+import { cleanupExpiredTokens } from './middlewares/auth.middleware';
 
 
 // Create an Express app
@@ -12,6 +14,16 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+
+/* 
+  Middleware from auth to expired tokens and run it every midnight
+*/
+cron.schedule('0 0 * * *', async () => {
+  console.log("Cleaning up expired tokens...")
+  const success = await cleanupExpiredTokens();
+  console.log(success ? 'Cleanup complete ✅' : 'Cleanup failed ❌');
+})
+
 
 app.use(express.static('public'));
 app.use(express.static('src'));
@@ -25,8 +37,6 @@ app.use('/api/conversations/', validateApiKey);
 app.use('/api/auth', authRouter);
 
 app.use('/api/conversations', chatsRouter);
-
-
 
 
 

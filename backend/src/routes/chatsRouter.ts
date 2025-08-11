@@ -4,22 +4,23 @@ import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
 import { getMessages } from '../controller/messages/messages';
 import { bulkGenerateSummaries, getUserConversationSummaries } from '../controller/conversation/conversation.summaries';
 import { tts } from '../controller/tts/textToSpeech.controller';
+import { verifyAccessToken } from '../middlewares/auth.middleware';
 
 
 const chatsRouter = express.Router()
 // Chat endpoints
-chatsRouter.post('/send-message', sendChatMessage);
+chatsRouter.post('/send-message', verifyAccessToken as RequestHandler, sendChatMessage);
 
 // Completion endpoint
-chatsRouter.post('/completion', generateCompletion);
+chatsRouter.post('/completion',verifyAccessToken as RequestHandler, generateCompletion);
 
-chatsRouter.get('/conversations', getConversation);
+chatsRouter.get('/conversations',verifyAccessToken as RequestHandler, getConversation);
 
 // Utility endpoints
-chatsRouter.get('/models', getModels);
+chatsRouter.get('/models', verifyAccessToken as RequestHandler, getModels as RequestHandler);
 
 //assembly ai for audio transcription
-chatsRouter.post('/transcribe-audio', async (req: Request, res: Response) => {
+chatsRouter.post('/transcribe-audio', verifyAccessToken as RequestHandler, async (req: Request, res: Response) => {
     try {
         await transcribeAudio(req, res);
     } catch (error) {
@@ -31,26 +32,26 @@ chatsRouter.post('/transcribe-audio', async (req: Request, res: Response) => {
 /**
  * get messages endpoint
  */
-chatsRouter.get('/messages', getConversationMessages);
+chatsRouter.get('/messages',verifyAccessToken as RequestHandler, getConversationMessages);
 
 //get conversation history
-chatsRouter.get('/:conversationId/history', getConversation)
+chatsRouter.get('/:conversationId/history',verifyAccessToken as RequestHandler, getConversation)
 
 
 
 //chatsRouter.put('/conversations/summary', updateConversationSummary);
-chatsRouter.post('/summaries/bulk-generate', bulkGenerateSummaries);
+chatsRouter.post('/summaries/bulk-generate',verifyAccessToken as RequestHandler, bulkGenerateSummaries);
 
 
 /**
  * GET CONVERSATION SUMMARIES FOR A SPECIFIC USER
 */
-chatsRouter.get('/user/summaries/', getUserConversationSummaries);
+chatsRouter.get('/user/summaries/',verifyAccessToken as RequestHandler, getUserConversationSummaries);
 
 /**
  * TEXT TO SPEECH ENDPOINT
  */
-chatsRouter.post('/text-to-speech', tts as RequestHandler);
+chatsRouter.post('/text-to-speech',verifyAccessToken as RequestHandler, tts as RequestHandler);
 
 
 export default chatsRouter;

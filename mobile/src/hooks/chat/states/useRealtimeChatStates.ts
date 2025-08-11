@@ -18,6 +18,7 @@ export const useRealtimeChatState = () => {
   const [isAborted, setIsAborted] = useState<boolean>(false);
   const [showAIButtons, setShowAIButtons] = useState<boolean>(false);
 
+  const [newChat, setNewChat] = useState<boolean>(false);
   //bottomsheet states 
   const [openBottomSheet, setOpenBottomSheet] = useState<boolean>(false);
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -62,6 +63,7 @@ export const useRealtimeChatState = () => {
     showAIButtons, setShowAIButtons,
     openBottomSheet, setOpenBottomSheet,
     attachments, setAttachments,
+    newChat, setNewChat,
 
     //bottomsheet states 
     bottomSheetRef,

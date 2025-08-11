@@ -1,34 +1,25 @@
-import express, { Request, Response } from 'express';
-import { 
-    registerUser,
-    loginUser,
-    logoutUser,
-    getUserProfile,
-   verifyEmailOtp,
-   resetPasswordRequest,
-   deleteUserAccount,
-   updateUserProfile,
-   resetUserPassword,
-   resendOtp
-
- } from '../controller/auth/users';
+import express, { NextFunction, Request, Response } from 'express';
+import * as authController from '../controller/auth.controller';
  import { RequestHandler } from 'express';
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
+import { verifyAccessToken, verifyRefreshToken  } from '../middlewares/auth.middleware';
 
 const authRouter = express.Router();
 
 //api endpoints for user auth
-authRouter.post('/register', registerUser as RequestHandler);
-authRouter.post('/verify-email', verifyEmailOtp as RequestHandler);
-authRouter.post('/resend-verification-otp', resendOtp as RequestHandler);
-authRouter.post('/resend-password-reset-otp', resendOtp as RequestHandler);
-authRouter.post('/login', loginUser as RequestHandler);
-authRouter.post('/logout', logoutUser);
-authRouter.post('/reset-password-request', resetPasswordRequest as RequestHandler);
-authRouter.post('/reset-password/:id', resetUserPassword as RequestHandler);
-authRouter.put('/update-profile/:id', updateUserProfile as RequestHandler);
-authRouter.get('/get-profile/:id', getUserProfile as RequestHandler);
-authRouter.delete('/delete-account/:id', deleteUserAccount);
+authRouter.post('/register', authController.registerUser as RequestHandler);
+authRouter.post('/verify-email', authController.verifyEmailOtp as RequestHandler);
+authRouter.post('/resend-verification-otp', authController.resendOtp as RequestHandler);
+authRouter.post('/resend-password-reset-otp', authController.resendOtp as RequestHandler);
+authRouter.post('/login', authController.loginUser as RequestHandler);
+authRouter.post('/logout', authController.logout as RequestHandler);
+authRouter.post('/reset-password-request', authController.resetPasswordRequest as RequestHandler);
+authRouter.post('/refresh-token', verifyRefreshToken as RequestHandler, authController.refreshToken as RequestHandler)
+authRouter.put('/update-password', verifyAccessToken as RequestHandler, authController.updatePassword as RequestHandler);
+
+
+authRouter.get('/profile', verifyAccessToken as RequestHandler, authController.getProfile as RequestHandler)
+authRouter.delete('/delete-account/:id', verifyAccessToken as RequestHandler, authController.deleteUserAccount as RequestHandler);
 
 
 //TRANSCRIBE AUDIO 

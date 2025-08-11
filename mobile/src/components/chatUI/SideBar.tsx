@@ -24,6 +24,9 @@ import { router } from 'expo-router';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
+import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
+import { useRealtimeChat } from '@/src/hooks/chat/useRealtimeChats';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
@@ -33,9 +36,10 @@ type CustomSideBarProps = {
     isVisible: boolean;
     onClose: () => void;
     onOpen: () => void;
+    startNewConversation?: () => void;
 };
 
-const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpen }) => {
+const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpen, startNewConversation }) => {
 
     //states
     const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
@@ -43,7 +47,9 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const [shouldRender, setShouldRender] = useState(isVisible);
     const [isDragging, setIsDragging] = useState(false);
     const [searchbarVisible, setSearchbarVisible] = useState(false);
-    const { user: userCredentials } = useSelector((state: RootState) => state.user);
+
+    const { userDetails } = useRealtimeChatState();
+
 
     const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
 
@@ -51,17 +57,17 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const [searchQuery, setSearchQuery] = useState('');
 
     const { data, isLoading, error } = useQuery({
-        queryKey: ['conversationSummaries', userCredentials?.id],
+        queryKey: ['conversationSummaries', userDetails?.id],
         queryFn: () =>
             axios
                 .get('/api/conversations/user/summaries', {
-                    params: { userId: userCredentials?.id }
+                    params: { userId: userDetails?.id }
                 })
-            .then(res => {
-                return res.data;
-            }),
-        enabled: !!userCredentials?.id,
-        refetchInterval: 10000, 
+                .then(res => {
+                    return res.data;
+                }),
+        enabled: !!userDetails?.id,
+        refetchInterval: 10000,
         retry: 3,
         retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
     });
@@ -90,11 +96,11 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
 
 
 
-    console.log(userCredentials?.id)
+    console.log(userDetails?.id)
 
     //getting username from redux state
-    const username = userCredentials?.username
-    const userInitials = getUsernameInitials({ fullname: userCredentials?.username ?? '' });
+    const username = userDetails?.username
+    const userInitials = getUsernameInitials({ fullname: userDetails?.username ?? '' });
     //onChange tfunction for searchbar
     const onSearch = (query: string) => {
         setSearchQuery(query)
@@ -211,26 +217,20 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                 {...panResponder.panHandlers}
             >
                 <View style={styles.contentContainer}>
-                    <View style={styles.header}>
-                        {/* Hide tittle if search bar is open */}
-                        {!searchbarVisible && <Text style={styles.title}>NeuroVision</Text>}
+                    <View style={styles.itemContainer}>
+                        <SearchBar
+                            value={searchQuery}
+                            onChangeText={onSearch}
+                            onSearch={() => { /* implement search logic here if needed */ }}
+                            onClear={clearSearch}
+                            onCancel={() => setSearchbarVisible(false)}
+                        />
+                        <TouchableOpacity onPress={startNewConversation} >
+                            <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
 
-                        {/* Hide search icon if search bar is open */}
-                        {!searchbarVisible && (
-                            <TouchableOpacity onPress={searchbarOpen}>
-                                <Feather name="search" size={24} color={Colors.dark.txtSecondary} />
-                            </TouchableOpacity>
-                        )}
+                        </TouchableOpacity>
                     </View>
 
-                    <SearchBar
-                        isVisible={searchbarVisible}
-                        value={searchQuery}
-                        onChangeText={onSearch}
-                        onSearch={() => { /* implement search logic here if needed */ }}
-                        onClear={clearSearch}
-                        onCancel={() => setSearchbarVisible(false)}
-                    />
                 </View>
 
                 {/* recent messages */}
@@ -333,6 +333,14 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontFamily: 'Manrope-ExtraBold',
     },
+    itemContainer: {
+        paddingVertical: 10,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 20,
+        paddingHorizontal: 10,
+    }
 });
 
 export default CustomSideBar;

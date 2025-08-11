@@ -29,7 +29,7 @@ const _layout = () => {
                 <Stack.Screen name="signup" options={{ headerShown: false }}/>
                
                 <Stack.Screen
-                    name="email_verification/[userId]"
+                    name="verify/[userId]"
                     options={{
                         headerShown: true,
                         headerTitle: '',

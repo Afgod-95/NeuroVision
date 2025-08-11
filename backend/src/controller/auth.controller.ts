@@ -1,17 +1,19 @@
 import { Request, Response } from 'express';
-import supabase from '../../lib/supabase';
-import { sendOtp } from '../../services/sendOtp';
+import supabase from '../lib/supabase';
+import { sendOtp } from '../services/sendOtp';
 import {
   checkUserExists,
   validateRegisterFields,
   createUser
-} from '../../helpers/userHelpers';
-import { comparePassword, hashPassword } from '../../utils/encryptedPassword';
-import { getDevicesLocation_info, isDeviceNew, saveDevice, sendNewDeviceEmail } from '../../services/devicesLoginDetector';
-import { updateDeviceLastAccessed } from '../../helpers/lastAccessedDevice';
+} from '../helpers/userHelpers';
+import { comparePassword, hashPassword } from '../utils/encryptedPassword';
+import { getDevicesLocation_info, isDeviceNew, saveDevice, sendNewDeviceEmail } from '../services/devicesLoginDetector';
+import { updateDeviceLastAccessed } from '../helpers/lastAccessedDevice';
+import { generateTokenPair, revokeAllUserTokens, revokeRefreshToken } from '../middlewares/auth.middleware';
+import bcrypt from 'bcrypt';
 
 //register user endpoint
-const registerUser = async (req: Request, res: Response) => {
+export const registerUser = async (req: Request, res: Response) => {
   try {
     const { username, email, password } = req.body;
 
@@ -21,7 +23,6 @@ const registerUser = async (req: Request, res: Response) => {
     if (userExistsResult.error || userExistsResult.exists) return;
 
     const newUser = await createUser(username, email, password, res);
-
     if (!newUser) {
       return res.status(500).json({ error: 'Failed to create user' });
     };
@@ -53,7 +54,7 @@ const registerUser = async (req: Request, res: Response) => {
 
 
 //resend otp 
-const resendOtp = async (req: Request, res: Response) => {
+export const resendOtp = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -95,7 +96,7 @@ const resendOtp = async (req: Request, res: Response) => {
 
 
 //verify user email
-const verifyEmailOtp = async (req: Request, res: Response) => {
+export const verifyEmailOtp = async (req: Request, res: Response) => {
   try {
     const { userId, otpCode } = req.body;
 
@@ -151,7 +152,7 @@ const verifyEmailOtp = async (req: Request, res: Response) => {
 
 
 // LOGIN USER
-const loginUser = async (req: Request, res: Response) => {
+export const loginUser = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -167,7 +168,6 @@ const loginUser = async (req: Request, res: Response) => {
     if (error || !user) {
       return res.status(404).json({ error: 'Invalid email or password' });
     }
-
 
     const isPasswordValid = await comparePassword({ password, hashedPassword: user.password });
     if (!isPasswordValid) {
@@ -215,7 +215,15 @@ const loginUser = async (req: Request, res: Response) => {
       await updateDeviceLastAccessed(user.id, getDeviceInfo);
     }
 
-    res.status(200).json({ message: 'Login successful', user });
+    //generate token
+    const { accessToken, refreshToken } = await generateTokenPair(user.id);
+
+    res.status(200).json({
+      message: 'Login successful',
+      user,
+      accessToken,
+      refreshToken,
+    });
 
   } catch (error) {
     console.error('Login error:', error);
@@ -224,30 +232,8 @@ const loginUser = async (req: Request, res: Response) => {
 };
 
 
-
-// GET USER PROFILE
-const getUserProfile = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error || !user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.status(200).json(user);
-  } catch (error) {
-    console.error('Profile fetch error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
 // UPDATE USER PROFILE
-const updateUserProfile = async (req: Request, res: Response) => {
+export const updateUserProfile = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { username, email } = req.body;
@@ -274,42 +260,13 @@ const updateUserProfile = async (req: Request, res: Response) => {
   }
 };
 
-// RESET PASSWORD
-const resetUserPassword = async (req: Request, res: Response) => {
-  try {
-    
-    const { email, newPassword } = req.body;
-
-    if (!newPassword || !email) {
-      return res.status(400).json({ error: 'New password is required' });
-    }
-
-    const hashedPassword = await hashPassword(newPassword)
-
-    const { data, error } = await supabase
-      .from('users')
-      .update({ password: hashedPassword })
-      .eq('email', email)
-      .single();
-
-    if (error) {
-      console.error('Reset error:', error);
-      return res.status(500).json({ error: 'Failed to reset password' });
-    }
-
-    res.status(200).json({ message: 'Password reset successful', data });
-  } catch (error) {
-    console.error('Reset error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
 
 
 
 // 1. Add request tracking to prevent duplicate calls
 const activeRequests = new Map<string, boolean>();
 
-const resetPasswordRequest = async (req: Request, res: Response) => {
+export const resetPasswordRequest = async (req: Request, res: Response) => {
   try {
     console.log('Reset password request received');
     console.log('Request body:', req.body);
@@ -348,7 +305,7 @@ const resetPasswordRequest = async (req: Request, res: Response) => {
       }
 
       if (user.is_email_verified === false) {
-        return res.status(404).json({ error: "User email is not verified"})
+        return res.status(404).json({ error: "User email is not verified" })
       }
 
       console.log('User found, sending OTP...');
@@ -376,16 +333,218 @@ const resetPasswordRequest = async (req: Request, res: Response) => {
   }
 };
 
-// LOGOUT USER
-const logoutUser = async (req: Request, res: Response) => {
+
+
+export const updatePassword = async (req: Request, res: Response) => {
+    const { currentPassword, newPassword } = req.body;
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                error: 'UNAUTHORIZED',
+                message: 'User not authenticated'
+            });
+        }
+
+        // Get current password hash
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('password')
+            .eq('id', req.user.id)
+            .single();
+
+        if (error || !user) {
+            return res.status(404).json({
+                error: 'USER_NOT_FOUND',
+                message: 'User not found'
+            });
+        }
+
+        // Verify current password
+        const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+        if (!isValidPassword) {
+            return res.status(400).json({
+                error: 'INVALID_PASSWORD',
+                message: 'Current password is incorrect'
+            });
+        }
+
+        // Hash new password
+        const saltRounds = 12;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        // Update password
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({ password: hashedPassword })
+            .eq('id', req.user.id);
+
+        if (updateError) {
+            return res.status(500).json({
+                error: 'UPDATE_FAILED',
+                message: 'Failed to update password'
+            });
+        }
+
+        // Revoke all existing refresh tokens (force re-login)
+        await revokeAllUserTokens(parseInt(req.user.id));
+
+        res.json({ message: 'Password updated successfully. Please log in again.' });
+
+    } catch (error) {
+        console.error('Update password error:', error);
+        res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'Internal server error'
+        });
+    }
+};
+
+
+
+// refresh token 
+export const refreshToken = async (req: Request, res: Response) => {
+
   try {
-    // Token/session handling should be here
-    res.status(200).json({ message: 'User logged out successfully' });
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Refresh token is required' });
+    }
+
+    // The verifyRefreshToken middleware should have validated the token
+    // and set req.user, so we can generate new tokens
+    if (!req?.user) {
+      return res.status(403).json({
+        error: 'INVALID_TOKEN',
+        message: 'Invalid refresh token'
+      });
+    }
+
+    //revoke the old refresh token 
+    await revokeRefreshToken(refreshToken);
+
+    //generate new token pair
+    const tokens = await generateTokenPair(req?.user?.id);
+    res.json({
+      message: 'Tokens refreshed successfully',
+      tokens
+    });
+
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('Refresh token error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+}
+
+// Logout user (revoke refresh token)
+export const logout = async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(400).json({
+      error: 'MISSING_TOKEN',
+      message: 'Refresh token is required'
+    });
+  }
+
+  try {
+    const revoked = await revokeRefreshToken(refreshToken);
+
+    if (revoked) {
+      res.json({ message: 'Logged out successfully' });
+    } else {
+      res.status(400).json({
+        error: 'LOGOUT_FAILED',
+        message: 'Failed to revoke refresh token'
+      });
+    }
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Internal server error'
+    });
+  }
 };
+
+// Logout user from all devices
+export const logoutAll = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'UNAUTHORIZED',
+        message: 'User not authenticated'
+      });
+    }
+
+   // Check if user has any known devices
+    const { data: existingDevices, error: deleteError } = await supabase
+      .from('known_devices')
+      .delete()
+      .eq('user_id', req.user.id);
+    const revoked = await revokeAllUserTokens(parseInt(req.user.id));
+
+    if (revoked) {
+      res.json({ message: 'Logged out from all devices successfully' });
+    } else {
+      res.status(500).json({
+        error: 'LOGOUT_ALL_FAILED',
+        message: 'Failed to revoke all tokens'
+      });
+    }
+
+  } catch (error) {
+    console.error('Logout all error:', error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get current user profile
+export const getProfile = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'UNAUTHORIZED',
+        message: 'User not authenticated'
+      });
+    }
+
+    // Get fresh user data from database
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, email, is_email_verified, created_at')
+      .eq('id', req.user.id)
+      .single();
+
+    if (error || !user) {
+      return res.status(404).json({
+        error: 'USER_NOT_FOUND',
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        is_email_verified: user.is_email_verified,
+        created_at: user.created_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Internal server error'
+    });
+  }
+};
+
 
 
 // Helper function for handling Supabase errors
@@ -400,7 +559,7 @@ const handleSupabaseError = (res: Response, error: any, message: string) => {
 
 
 //delete user account
-const deleteUserAccount = async (req: Request, res: Response) => {
+export const deleteUserAccount = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -418,18 +577,3 @@ const deleteUserAccount = async (req: Request, res: Response) => {
   }
 };
 
-
-//exports 
-export {
-  registerUser,
-  loginUser,
-  verifyEmailOtp,
-  resendOtp,
-  logoutUser,
-  resetUserPassword,
-  deleteUserAccount,
-  resetPasswordRequest,
-  updateUserProfile,
-  getUserProfile,
-
-}

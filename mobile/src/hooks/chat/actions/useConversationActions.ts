@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { Message } from "@/src/utils/interfaces/TypescriptInterfaces";
 import { useFetchMessagesMutation } from "@/src/hooks/chat/mutations/ConversationsMutation";
 import { uniqueConvId as startNewConversationId } from "@/src/constants/generateConversationId";
-import axios from "axios";
-import { QueryCacheNotifyEvent, QueryClient, UseMutationResult, UseQueryResult } from "@tanstack/react-query";
+import api from "@/src/services/axiosClient";
+import { QueryClient, UseMutationResult } from "@tanstack/react-query";
 import { UploadedAudioFile } from "@/src/utils/interfaces/TypescriptInterfaces";
 import { useRealtimeChatState } from "../states/useRealtimeChatStates";
 
@@ -32,6 +32,7 @@ type useConversationActionsType = {
 
     setIsAIResponding: (responding: boolean) => void,
     scrollToBottom: () => void,
+    setNewChat: (newChat: boolean) => void,
 
     clearAIResponding: () => void,
     sendMessageMutation: UseMutationResult<any, unknown, any, unknown>,
@@ -63,6 +64,7 @@ export const useConversationActions = ({
     setMessage,
     setMessages,
     setAttachment,
+    setNewChat,
     setConversationId,
     isProcessingResponseRef,
     setLoading,
@@ -115,6 +117,7 @@ export const useConversationActions = ({
         // Reset all state
         setConversationId(newConvId);
         setMessages([]);
+        setNewChat(true);
         pendingUserMessageRef.current = null;
         currentLoadingIdRef.current = null;
         processedMessageIds.current.clear();
@@ -191,7 +194,7 @@ export const useConversationActions = ({
             scrollToBottom();
 
             try {
-                const response = await axios.post('/api/conversations/send-message', {
+                const response = await api.post('/api/conversations/send-message', {
                     message: previousUserMessage.text,
                     systemPrompt: systemPrompt,
                     temperature: temperature,

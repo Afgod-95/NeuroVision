@@ -67,7 +67,12 @@ const Index = () => {
                 //deviceData
             });
             if (response.status === 200){
-                dispatch(login(response.data.user));
+                const { user, accessToken, refreshToken } = response.data;
+                dispatch(login({
+                    user,
+                    accessToken,
+                    refreshToken,
+                }));
                 Alert.alert('Success', response.data.message, [
                 {
                     text: 'OK',

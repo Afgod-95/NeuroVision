@@ -33,7 +33,7 @@ const getUserIdFromAuth = async (authUserId: string): Promise<number | null> => 
 const getMessages = async (req: Request, res: Response) => {
   try {
     const { conversationId } = req.params;
-    const authUserId = req.user?.id; // Assuming you have auth middleware that sets req.user
+    const authUserId = req.user?.id; 
     
     if (!authUserId) {
       return res.status(401).json({ error: "Unauthorized" });

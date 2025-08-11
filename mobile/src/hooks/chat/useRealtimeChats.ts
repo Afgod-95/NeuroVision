@@ -46,6 +46,7 @@ export const useRealtimeChat = ({
         temperature,
         maxTokens,
         ...state,
+        setNewChat: state.setNewChat,
         setAttachment: state.setAttachments,
         scrollToBottom: messageUtils.scrollToBottom,
         cleanupSubscription: supabaseRealtimeSubscription.cleanupSubscription,
@@ -95,6 +96,7 @@ export const useRealtimeChat = ({
         // State
         messages: state.messages,
         loading: state.loading,
+        newChat: state.newChat,
         isAIResponding: state.isAIResponding,
         isRecording: state.isRecording,
         message: state.message,
@@ -117,6 +119,7 @@ export const useRealtimeChat = ({
         setIsRecording: state.setIsRecording,
         setIsSidebarVisible: state.setIsSidebarVisible,
         scrollToBottom: messageUtils.scrollToBottom,
+        setNewChat: state.setNewChat,
 
         // Refs for external access
         flatListRef: state.flatListRef,

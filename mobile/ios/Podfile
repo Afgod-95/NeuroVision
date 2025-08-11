@@ -4,16 +4,18 @@ require File.join(File.dirname(`node --print "require.resolve('react-native/pack
 require 'json'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
 
-ENV['RCT_NEW_ARCH_ENABLED'] = '0' if podfile_properties['newArchEnabled'] == 'false'
+ENV['RCT_NEW_ARCH_ENABLED'] = podfile_properties['newArchEnabled'] == 'true' ? '1' : '0'
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] = podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
 
-platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
+source 'https://github.com/CocoaPods/Specs.git'
+
+platform :ios, podfile_properties['ios.deploymentTarget'] || '13.4'
 install! 'cocoapods',
   :deterministic_uuids => false
 
 prepare_react_native_project!
 
-target 'NeuraChat' do
+target 'NeuroVision' do
   use_expo_modules!
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
@@ -57,6 +59,15 @@ target 'NeuraChat' do
       target_installation_result.resource_bundle_targets.each do |resource_bundle_target|
         resource_bundle_target.build_configurations.each do |config|
           config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+        end
+      end
+    end
+
+    # Force minimum deployment target to iOS 15.1 for all pods (required for New Architecture)
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         end
       end
     end

@@ -12,7 +12,7 @@ type SearchbarProps = {
     onChangeText: (text: string) => void,
     onClear: () => void,
     onSearch: () => void,
-    isVisible: boolean,
+ 
     onCancel: () => void,
 }
 
@@ -20,19 +20,15 @@ const SearchBar: React.FC<SearchbarProps> = ({
     value,
     onChangeText,
     onClear,
-    isVisible,
-    onCancel,
 }) => {
-    return isVisible ? (
-        <View style={styles.container}>
+    return (
+       
             <Animated.View
                 style = {{
                     flexDirection: 'row',
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: 15,
-                    paddingHorizontal: 20,
-                    width: '100%',
                 }}
             >
                 <Animated.View
@@ -45,7 +41,8 @@ const SearchBar: React.FC<SearchbarProps> = ({
                     <TextInput
                         placeholder='Search'
                         value={value}
-                        autoFocus = {true}
+                        autoFocus = {false}
+                        returnKeyType='search'
                         onChangeText={onChangeText}
                         placeholderTextColor={Colors.dark.txtSecondary}
                         style={styles.searchInput}
@@ -67,32 +64,22 @@ const SearchBar: React.FC<SearchbarProps> = ({
                             <AntDesign name="closecircle" size={20} color={Colors.dark.txtSecondary} />
                         </TouchableOpacity>
                         </Animated.View>
-                        
                     )}
                 </Animated.View>
-                <TouchableOpacity onPress={onCancel}>
-                    <Text style={styles.cancel}>Cancel</Text>
-                </TouchableOpacity>
             </Animated.View>
-        
-        </View>
-
-    ) : null;
+    
+    ) 
 };
 
 const styles = StyleSheet.create({
-    container: {
-        width: '100%',
-        height: 50,
-    },
+    
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.dark.bgSecondary,
         borderRadius: 10,
         paddingHorizontal: 12,
-        width: '100%',
-        height: 40,
+        paddingVertical: 10,
     },
     searchInput: {
         flex: 1,

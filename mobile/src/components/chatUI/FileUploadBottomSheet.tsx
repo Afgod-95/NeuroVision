@@ -16,7 +16,7 @@ import BottomSheet, {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio'
 import * as FileSystem from 'expo-file-system';
 import { Colors } from '../../constants/Colors';
 import { useRealtimeChatState } from '../../hooks/chat/states/useRealtimeChatStates';
@@ -31,11 +31,12 @@ type BottomSheetModalProps = {
 };
 
 const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: BottomSheetModalProps) => {
-  
+  const recordingRef = React.useRef<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = React.useState(false);
   // variables
-	const snapPoints = useMemo(() => ["25%", "50%", "75%"], []);
+  const snapPoints = useMemo(() => ["25%", "50%", "75%"], []);
 
-  
+
   const handleSheetChanges = useCallback((index: number) => {
     console.log('Sheet index:', index);
   }, []);
@@ -107,7 +108,7 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
 
       if (!result.canceled && result.assets.length > 0) {
         console.log('Multiple images selected:', result.assets);
-        
+
         // If callback for multiple files exists, use it
         if (onFilesSelected) {
           onFilesSelected(result.assets);
@@ -137,7 +138,7 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
 
       if (!result.canceled) {
         console.log('Files selected:', result.assets);
-        
+
         // If callback for multiple files exists, use it
         if (onFilesSelected && result.assets.length > 1) {
           onFilesSelected(result.assets);
@@ -161,33 +162,45 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
   // Record audio
   const handleRecordAudio = async () => {
     try {
-      // Request audio recording permissions
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Microphone access is required to record audio');
         return;
       }
 
-      Alert.alert(
-        'Record Audio',
-        'Audio recording feature will be implemented here. This would typically open a recording interface.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Start Recording', 
-            onPress: () => {
-              console.log('Starting audio recording...');
-              // Implement your audio recording logic here
-              // You can use expo-av's Audio.Recording API
-            }
-          }
-        ]
-      );
+      if (!isRecording) {
+        // Start recording
+        console.log('Starting audio recording...');
+        const recording = new Audio.Recording();
+        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        await recording.startAsync();
+        recordingRef.current = recording;
+        setIsRecording(true);
+      } else {
+        // Stop recording
+        console.log('Stopping audio recording...');
+        const recording = recordingRef.current;
+        if (!recording) return;
+
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        console.log('Recording saved at', uri);
+
+        setIsRecording(false);
+        recordingRef.current = null;
+
+        // Send the file to callback
+        onFileSelected?.({
+          uri,
+          name: `recording-${Date.now()}.m4a`,
+          type: 'audio/m4a',
+        });
+      }
     } catch (error) {
-      console.error('Error setting up audio recording:', error);
-      Alert.alert('Error', 'Failed to set up audio recording');
+      console.error('Error handling audio recording:', error);
+      Alert.alert('Error', 'Failed to handle audio recording');
     }
-  };
+  }
 
   const actions = [
     {
@@ -213,11 +226,11 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
     },
     {
       icon: Mic,
-      label: 'Record Audio',
-      subtitle: 'Voice message',
+      label: isRecording ? 'Stop Recording' : 'Record Audio',
+      subtitle: isRecording ? 'Tap to finish' : 'Voice message',
       color: '#FF3B30',
       onPress: handleRecordAudio,
-    },
+    }
   ];
 
   return (

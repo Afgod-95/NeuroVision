@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import { useForgotPasswordMutation } from '@/src/hooks/auth/AuthMutation';
+import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation';
 import { emailRegex } from '@/src/constants/Regex';
 
 const { width } = Dimensions.get('screen')
@@ -17,9 +17,14 @@ interface UserProps {
 }
 
 const ForgotPassword = () => {
+    
+    const { useForgotPasswordMutation } = useAuthMutation();
+    
     const [user, setUser] = useState<UserProps>({
         email: ''
     })
+
+
 
     const [isDisabled, setIsDisabled] = useState<boolean>(false)
 
@@ -46,7 +51,7 @@ const ForgotPassword = () => {
             const data = await forgotPasswordMutation.mutateAsync(user)
             const { user: userDetails } = data;
             router.push({
-                pathname: '/(auth)/email_verification/[userId]',
+                pathname: '/(auth)/verify/[userId]',
                 params: {
                     userId: userDetails.id,
                     email: userDetails.email,

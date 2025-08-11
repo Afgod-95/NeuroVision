@@ -154,13 +154,19 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             temperature,
             maxTokens,
             conversationId: rawConversationId,
-            userId,
             useDatabase = false
         }: ChatRequest & {
             conversationId?: string;
             userId?: number;
             useDatabase?: boolean;
         } = req.body;
+
+        const authUserId = req?.user?.id;
+        const userId = parseInt(authUserId as string);
+        if (!authUserId) {
+            res.status(401).json({ success: false, error: 'Unauthorized' });
+            return;
+        }
 
         console.log('Request received:', {
             message: message ? `${message.substring(0, 100)}...` : 'No message',
@@ -259,7 +265,6 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                 console.log('✅ Assistant message stored successfully');
             } catch (error) {
                 console.error('❌ Failed to store assistant message:', error);
-                // Continue without blocking the response
             }
         }
 
@@ -327,7 +332,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
                                     actualMessageCount
                                 });
                             }
-                        }, 2000); 
+                        }, 2000);
                     } else {
                         console.log('Skipping summary generation (conditions not met)');
                     }
@@ -399,7 +404,16 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
  */
 export const forceGenerateSummary = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { conversationId, userId } = req.body;
+        const { conversationId} = req.body;
+        const authUserId = req?.user?.id;
+        const userId = parseInt(authUserId as string);
+        if (!userId) {
+            res.status(400).json({
+                success: false,
+                error: 'userId is required'
+            });
+            return;
+        }
 
         if (!conversationId || !userId) {
             res.status(400).json({
@@ -447,9 +461,18 @@ export const generateCompletion = async (req: Request, res: Response): Promise<v
             maxTokens,
             type = 'general',
             conversationId: rawConversationId,
-            userId,
             useDatabase = false
         } = req.body;
+
+         const authUserId = req?.user?.id;
+        const userId = parseInt(authUserId as string);
+        if (!userId) {
+            res.status(400).json({
+                success: false,
+                error: 'userId is required'
+            });
+            return;
+        }
 
         if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
             res.status(400).json({
@@ -534,7 +557,16 @@ export const generateCompletion = async (req: Request, res: Response): Promise<v
  */
 export const getConversation = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId, limit = 50, offset = 0 } = req.query;
+        const { limit = 50, offset = 0 } = req.query;
+        const authUserId = req?.user?.id;
+        const userId = parseInt(authUserId as string);
+        if (!userId) {
+            res.status(400).json({
+                success: false,
+                error: 'userId is required'
+            });
+            return;
+        }
 
         if (!userId) {
             res.status(400).json({
@@ -545,7 +577,7 @@ export const getConversation = async (req: Request, res: Response): Promise<void
         }
 
         const history = await getConversationHistory(
-            parseInt(userId as string),
+            userId,
             parseInt(limit as string),
             parseInt(offset as string)
         );
@@ -576,9 +608,9 @@ export const getConversation = async (req: Request, res: Response): Promise<void
  */
 export const getConversationMessages = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { conversationId, userId } = req.query;
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 50;
+        const { conversationId, page = 1, limit = 50 } = req.query;
+        const authUserId = req?.user?.id;
+        const userId = parseInt(authUserId as string);
 
         if (!conversationId || !userId) {
             res.status(400).json({
@@ -601,7 +633,7 @@ export const getConversationMessages = async (req: Request, res: Response): Prom
             .from('ai_conversation_summaries')
             .select('conversation_id')
             .eq('conversation_id', conversationId)
-            .eq('user_id', parseInt(userId as string))
+            .eq('user_id', userId)
             .single();
 
         if (!conversationExists) {
@@ -617,7 +649,7 @@ export const getConversationMessages = async (req: Request, res: Response): Prom
             .from('messages')
             .select('*')
             .eq('conversation_id', conversationId)
-            .eq('user_id', parseInt(userId as string))
+            .eq('user_id', userId)
             .order('created_at', { ascending: true });
 
         if (error) {
@@ -648,7 +680,9 @@ export const getConversationMessages = async (req: Request, res: Response): Prom
  */
 export const deleteConversation = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { conversationId, userId } = req.body;
+        const { conversationId } = req.body;
+        const authUserId = req?.user?.id;
+        const userId = parseInt(authUserId as string);
 
         if (!conversationId || !userId) {
             res.status(400).json({

@@ -1,6 +1,6 @@
 import OTPInput from '@/src/components/textInputs/OtpInput'
 import { Colors } from '@/src/constants/Colors'
-import { useVerifyEmailMutation, useResendOtpMutation, useVerifyPasswordResetOTPMutation } from '@/src/hooks/auth/AuthMutation'
+import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation'
 import { router, useLocalSearchParams } from 'expo-router'
 import React, { useCallback } from 'react'
 import {
@@ -14,12 +14,6 @@ import {
     View
 } from 'react-native'
 
-interface OTPScreenProps {
-    type?: 'email_verification' | 'password_reset';
-    userId: string;
-    email?: string;
-}
-
 const EmailVerification = () => {
     const params = useLocalSearchParams();
     
@@ -30,11 +24,14 @@ const EmailVerification = () => {
 
     console.log('Fetched userId:', userId);
     console.log('Verification type:', type);
+
+
+      // Initialize mutations
+    const mutations = useAuthMutation();
     
-    // Initialize mutations
-    const emailVerificationMutation = useVerifyEmailMutation();
-    const passwordResetOTPMutation = useVerifyPasswordResetOTPMutation();
-    const resendOtpMutation = useResendOtpMutation();
+    const emailVerificationMutation = mutations.useVerifyEmailMutation();
+    const passwordResetOTPMutation = mutations.useVerifyPasswordResetOTPMutation();
+    const resendOtpMutation = mutations.useResendOtpMutation();
 
     // Choose the appropriate mutation based on type
     const currentMutation = type === 'password_reset' ? passwordResetOTPMutation : emailVerificationMutation;

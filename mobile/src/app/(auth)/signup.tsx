@@ -8,7 +8,7 @@ import { router } from 'expo-router';
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import { useSignupMutation } from '@/src/hooks/auth/AuthMutation';
+import { useSignupMutation } from '@/src/hooks/auth/useAuthMutation';
 
 const { width } = Dimensions.get('screen');
 
@@ -65,11 +65,9 @@ const SignUp = () => {
   return (
     <ScreenWrapper>
       {/*Recaptcha Modal */}
-     
-
       <Animated.View style={styles.innerContainer}>
         <Animated.Text
-          style={[styles.textHeader, { color: Colors.dark.txtPrimary }]}
+          style={[styles.textHeader, { color: Colors.dark.txtSecondary }]}
           entering={FadeInUp.duration(600).delay(200).springify()}
         >
           Create Account

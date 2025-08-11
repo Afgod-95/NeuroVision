@@ -48,10 +48,10 @@ type RecentMessagesProps = {
 };
 
 // Shimmer Component
-const ShimmerPlaceholder: React.FC<{ width: number; height: number; style?: any }> = ({ 
-    width, 
-    height, 
-    style 
+const ShimmerPlaceholder: React.FC<{ width: number; height: number; style?: any }> = ({
+    width,
+    height,
+    style
 }) => {
     const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
@@ -245,11 +245,15 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         if (messages.length === 0) return [];
 
         // Filter messages based on search if provided
-        const filteredMessages = debouncedSearch
+        const filteredMessages = (debouncedSearch
             ? messages.filter(message =>
                 message.title.toLowerCase().includes(debouncedSearch.toLowerCase())
             )
-            : messages;
+            : messages
+        ).map(message => ({
+            ...message,
+            title: message.title.charAt(0).toUpperCase() + message.title.slice(1)
+        }));
 
         // Sort messages by timestamp (newest first)
         const sortedMessages = [...filteredMessages].sort(
@@ -257,7 +261,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         );
 
         const grouped: GroupedMessage[] = [];
-        
+
         // Add single "Recents" header
         if (sortedMessages.length > 0) {
             grouped.push({
@@ -410,7 +414,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                         <TouchableWithoutFeedback>
                             <View style={styles.modalContent}>
                                 <View style={styles.modalHandle} />
-                                
+
                                 {modalActions.map((action) => (
                                     <Pressable
                                         key={action.id}

@@ -1,5 +1,3 @@
-import 'dotenv/config';
-
 export default {
   expo: {
     name: "NeuroVision",
@@ -10,19 +8,27 @@ export default {
     icon: "./src/assets/images/icon.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+
+    splash: {
+      image: "./src/assets/images/adaptive-icon.png",
+      imageWidth: 200,
+      resizeMode: "contain",
+      backgroundColor: "#0D0D0D"
+    },
+
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.afgod-95.Neurovision",
-      googleServicesFile: "./GoogleService-Info.plist"
+      deploymentTarget: "16.0", 
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./src/assets/images/adaptive-icon.png",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#0D0D0D"
       },
       edgeToEdgeEnabled: true,
       package: "com.afgod95.NeuroVision",
-      googleServicesFile: "./google-services.json"
+
     },
     web: {
       bundler: "metro",
@@ -33,33 +39,24 @@ export default {
       "expo-font",
       [
         "expo-router",
-      {
-        origin: "https://neuro-vision-kohl.vercel.app/"
-      },
-    ],
-      "expo-web-browser",
-      [
-        "expo-splash-screen",
         {
-          image: "./src/assets/images/splash-icon.png",
-          imageWidth: 200,
-          resizeMode: "contain",
-          backgroundColor: "#ffffff"
+          origin: "https://neuro-vision-kohl.vercel.app/"
         }
       ],
+      "expo-web-browser",
       [
         "expo-document-picker",
         {
-          "iCloudContainerEnvironment": "Production"
+          iCloudContainerEnvironment: "Production"
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
+          microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone."
         }
       ],
-      "@react-native-google-signin/google-signin",
+      "@react-native-google-signin/google-signin"
     ],
     experiments: {
       typedRoutes: true
@@ -69,22 +66,14 @@ export default {
       eas: {
         projectId: "190efbad-8406-4157-9923-2f5a5f4dc200"
       },
-      // Firebase environment variables
-      firebaseApiKey: process.env.FIREBASE_API_KEY,
-      firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
-      firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
-      firebaseStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-      firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-      firebaseAppId: process.env.FIREBASE_APP_ID,
 
-      //backed url 
+      // backend url 
       baseBackendUrl: process.env.BASE_BACKEND_URL,
 
-
-      //supabase 
+      // supabase 
       supabaseUrl: process.env.SUPABASE_URL,
       supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY,
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
-    },
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY
+    }
   }
 };
