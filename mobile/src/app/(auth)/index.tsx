@@ -13,6 +13,7 @@ import axios from 'axios';
 import { login } from '@/src/redux/slices/authSlice';
 import * as Device from "expo-device";
 import Constants from "expo-constants";
+import api from '@/src/services/axiosClient';
 
 
 const { width } = Dimensions.get('screen')
@@ -61,27 +62,27 @@ const Index = () => {
                 browser: Constants?.platform?.web ? navigator.userAgent : 'Expo',
                 device_name: Device.modelName || 'Unknown',
             };
-            const response = await axios.post('/api/auth/login', {
+            const response = await api.post('/api/auth/login', {
                 email: user.email,
                 password: user.password,
                 //deviceData
             });
             if (response.status === 200){
                 const { user, accessToken, refreshToken } = response.data;
+                console.log(`User: ${user}`);
+                console.log(`AccessToken: ${accessToken}`);
+                console.log(`RefreshToken: ${refreshToken}`);
                 dispatch(login({
                     user,
                     accessToken,
                     refreshToken,
                 }));
                 Alert.alert('Success', response.data.message, [
-                {
-                    text: 'OK',
-                }
             ]);
             }
             
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            Alert.alert('Ooops!', "An error occured whilst signing in");
             console.log(error.message);
         }
         finally {

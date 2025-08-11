@@ -159,18 +159,34 @@ function useOtpInput({
   }, [canResend, onResendCode, codeLength, startCountdown, setCode, inputRefs]);
 
   const handleChange = useCallback((text: string, index: number): void => {
-    if (text === '' && code[index] === '') {
-      if (index > 0) {
-        const newCode = [...code];
-        newCode[index - 1] = '';
-        setCode(newCode);
-        setTimeout(() => {
-          inputRefs.current[index - 1]?.focus();
-        }, 10);
+    // Handle paste operation - if text length > 1, it's likely a paste
+    if (text.length > 1) {
+      // Extract only digits
+      const digits = text.replace(/\D/g, '');
+      const newCode = [...code];
+      
+      // Clear all fields first
+      for (let i = 0; i < codeLength; i++) {
+        newCode[i] = '';
       }
+      
+      // Fill the inputs starting from index 0 (always start from beginning for paste)
+      for (let i = 0; i < digits.length && i < codeLength; i++) {
+        newCode[i] = digits[i];
+      }
+      
+      setCode(newCode);
+      
+      // Focus on the next empty field or the last filled field
+      const nextIndex = Math.min(digits.length, codeLength - 1);
+      setTimeout(() => {
+        inputRefs.current[nextIndex]?.focus();
+      }, 50);
+      
       return;
     }
 
+    // Handle single character input (including empty string for deletion)
     if (text === '' || /^\d$/.test(text)) {
       const newCode = [...code];
       newCode[index] = text;
@@ -179,7 +195,35 @@ function useOtpInput({
       if (text !== '' && index < codeLength - 1) {
         setTimeout(() => {
           inputRefs.current[index + 1]?.focus();
-        }, 10);
+        }, 50);
+      }
+      return;
+    }
+
+    // Handle backspace on empty field (move to previous)
+    if (text === '' && code[index] === '') {
+      if (index > 0) {
+        const newCode = [...code];
+        newCode[index - 1] = '';
+        setCode(newCode);
+        setTimeout(() => {
+          inputRefs.current[index - 1]?.focus();
+        }, 50);
+      }
+      return;
+    }
+
+    // If text contains non-digits, extract only the first digit
+    const firstDigit = text.match(/\d/);
+    if (firstDigit) {
+      const newCode = [...code];
+      newCode[index] = firstDigit[0];
+      setCode(newCode);
+
+      if (index < codeLength - 1) {
+        setTimeout(() => {
+          inputRefs.current[index + 1]?.focus();
+        }, 50);
       }
     }
   }, [code, codeLength, setCode, inputRefs]);
@@ -193,7 +237,7 @@ function useOtpInput({
       } else if (index > 0) {
         setTimeout(() => {
           inputRefs.current[index - 1]?.focus();
-        }, 10);
+        }, 50);
       }
     }
   }, [code, setCode, inputRefs]);
@@ -261,7 +305,6 @@ const OtpFields: React.FC<{
             onFocus={() => animateFocus(index, true)}
             onBlur={() => animateFocus(index, false)}
             keyboardType="numeric"
-            maxLength={1}
             textAlign="center"
             placeholder="•"
             placeholderTextColor={Colors.dark.txtSecondary}

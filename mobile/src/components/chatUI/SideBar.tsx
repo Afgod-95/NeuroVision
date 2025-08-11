@@ -27,6 +27,7 @@ import axios from 'axios';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
 import { useRealtimeChat } from '@/src/hooks/chat/useRealtimeChats';
+import api from '@/src/services/axiosClient';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
@@ -49,7 +50,9 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const [searchbarVisible, setSearchbarVisible] = useState(false);
 
     const { userDetails } = useRealtimeChatState();
-
+    const { accessToken } = useSelector((state: RootState) => state.user);
+    console.log(`Access Token Sidebar: ${accessToken}`)
+     console.log(`Access Token Sidebar: ${userDetails}`)
 
     const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
 
@@ -59,9 +62,12 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const { data, isLoading, error } = useQuery({
         queryKey: ['conversationSummaries', userDetails?.id],
         queryFn: () =>
-            axios
+            api
                 .get('/api/conversations/user/summaries', {
-                    params: { userId: userDetails?.id }
+                    params: { userId: userDetails?.id },
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
                 })
                 .then(res => {
                     return res.data;
@@ -71,6 +77,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
         retry: 3,
         retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
     });
+
+    console.log(`Summaries: ${JSON.stringify(data)}`)
 
     useEffect(() => {
         if (error) {

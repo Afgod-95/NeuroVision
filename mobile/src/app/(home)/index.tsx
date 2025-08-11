@@ -78,6 +78,12 @@ const Index = () => {
   const { conversation_id } = useLocalSearchParams();
   console.log(`Conversation ID: ${conversation_id}`);
 
+ const { user, accessToken, refreshToken } = useSelector((state: RootState) => state.user);
+
+  console.log(`User Details: ${user}`);
+  console.log(`AccessToken: ${accessToken}`);
+  console.log(`RefreshToken: ${refreshToken}`)
+
 
   const queryClient = useQueryClient();
 

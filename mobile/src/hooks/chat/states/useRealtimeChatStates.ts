@@ -44,7 +44,7 @@ export const useRealtimeChatState = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
 
 
-   const { user: userDetails } = useSelector((state: RootState) => state.user);
+   const { user: userDetails, accessToken, refreshToken } = useSelector((state: RootState) => state.user);
     const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
     const queryClient = useQueryClient();
 
@@ -64,6 +64,8 @@ export const useRealtimeChatState = () => {
     openBottomSheet, setOpenBottomSheet,
     attachments, setAttachments,
     newChat, setNewChat,
+
+    accessToken, refreshToken,
 
     //bottomsheet states 
     bottomSheetRef,

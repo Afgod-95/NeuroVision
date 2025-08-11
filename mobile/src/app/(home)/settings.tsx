@@ -21,11 +21,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Colors } from '@/src/constants/Colors';
 import SettingItem from '@/src/components/settings/SettingItem';
-import { useDeleteUserAccountMutation } from '@/src/hooks/auth/useAuthMutation';
+import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { useDispatch } from 'react-redux';
-import { logout, resetState } from '@/src/redux/slices/authSlice';
+import { AppDispatch } from '@/src/redux/store';
+
+import {  logoutUser, resetState } from '@/src/redux/slices/authSlice';
 
 const BASE_HEADER_HEIGHT = 30;
 
@@ -52,8 +54,7 @@ interface SectionHeaderProps {
 const SettingsScreen: React.FC = () => {
     const scrollY = useSharedValue(0);
     const insets = useSafeAreaInsets();
-
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     const { user: userCredentials } = useSelector((state: RootState) => state.user);
 
     // Settings state
@@ -68,6 +69,7 @@ const SettingsScreen: React.FC = () => {
         },
     });
 
+    const { useDeleteUserAccountMutation } = useAuthMutation()
     const deleteUserAccount = useDeleteUserAccountMutation();
 
     //platform compatibility
@@ -290,7 +292,7 @@ const SettingsScreen: React.FC = () => {
                     icon: 'log-out',
                     title: 'Sign Out',
                     onPress: () => { 
-                        dispatch(logout());
+                       dispatch(logoutUser());
                         router.push('/(auth)')
                     },
                     danger: true,

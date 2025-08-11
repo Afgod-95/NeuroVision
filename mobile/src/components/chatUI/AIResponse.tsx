@@ -15,10 +15,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withRepeat,
-  withSequence,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import { Colors } from '@/src/constants/Colors';
 import { Feather } from '@expo/vector-icons';

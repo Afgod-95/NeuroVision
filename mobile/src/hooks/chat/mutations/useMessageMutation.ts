@@ -1,8 +1,8 @@
 import { useMutation } from "@tanstack/react-query"
-import { Message, MessageContent } from "@/src/utils/interfaces/TypescriptInterfaces";
-import axios from "axios";
-import { User } from '@/src/redux/slices/authSlice'
+import { Message, MessageContent, RootState } from "@/src/utils/interfaces/TypescriptInterfaces";
 import { UploadedAudioFile } from "@/src/utils/interfaces/TypescriptInterfaces";
+import api from "@/src/services/axiosClient";
+import { useSelector } from "react-redux";
 
 
 type sendMessageMutationType = {
@@ -45,6 +45,10 @@ type sendMessageMutationType = {
     extractAIResponseText,
     scrollToBottom
 } : sendMessageMutationType ) => {
+
+    const accessToken = useSelector((state: RootState) => state?.user);
+    console.log(`Access Token Send message mutation: ${accessToken}`)
+
     const sendMessageMutation = useMutation({
         mutationFn: async ({ messageText, audioFile }: { messageText: string, audioFile?: UploadedAudioFile }) => {
             let finalMessage = messageText;
@@ -68,17 +72,29 @@ type sendMessageMutationType = {
                 };
             }
 
-            const response = await axios.post('/api/conversations/send-message', {
+            
+
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
+
+            const payload = {
                 message: finalMessage,
-                systemPrompt: systemPrompt,
-                temperature: temperature,
-                maxTokens: maxTokens,
-                conversationId: conversationId,
-                userId: userDetails?.id,
-                useDatabase: true,
-            }, {
-                signal: abortControllerRef.current.signal,
+                messageContent,
+                systemPrompt,
+                temperature,
+                maxTokens,
+                conversationId,
+                userDetails
+            };
+
+         
+            const response = await api.post("/api/conversations/send-message", payload, {
+                signal: controller.signal,
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
             });
+
 
             // Clear the abort controller after the request completes
             abortControllerRef.current = null;
@@ -170,7 +186,6 @@ type sendMessageMutationType = {
                 console.log('AI response received, waiting for realtime update...');
 
                 // Fallback in case realtime doesn't work - but no timeout
-                setTimeout(() => {
                     if (isProcessingResponseRef.current) {
                         console.log('Realtime fallback: manually clearing loading state');
                         clearAIResponding();
@@ -205,8 +220,8 @@ type sendMessageMutationType = {
 
                             return withoutLoading;
                         });
-                    }
-                }, 5000);
+                    };
+               
 
             } catch (error) {
                 console.error('Failed to process AI response:', error);
@@ -243,6 +258,7 @@ type sendMessageMutationType = {
 
                 if (error.response?.data?.error) {
                     const backendError = error.response.data.error;
+                    
 
                     if (backendError.includes('Message is required')) {
                         errorText = 'Please provide a message to send.';

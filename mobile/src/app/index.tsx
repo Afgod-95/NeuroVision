@@ -6,6 +6,7 @@ import { router } from "expo-router";
 
 import { StyleSheet, Text, View } from "react-native";
 
+
 export default function index() {
   return (
     <AuthWrapper>

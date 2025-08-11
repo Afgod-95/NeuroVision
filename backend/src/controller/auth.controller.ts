@@ -28,6 +28,11 @@ export const registerUser = async (req: Request, res: Response) => {
     };
 
     const otpResult = await sendOtp(newUser);
+    const { data: otp_verifications, error: error } = await supabase
+      .from('otps')
+      .select('expires_at')
+      .eq('user_id', newUser.id)
+      .single();
 
     if (otpResult.error) {
       console.log(otpResult)
@@ -41,7 +46,8 @@ export const registerUser = async (req: Request, res: Response) => {
       `,
         otp: otpResult,
         userId: newUser.id,
-        email: newUser.email
+        email: newUser.email,
+        otpExpires: otp_verifications?.expires_at,
       });
     }
 
@@ -70,6 +76,16 @@ export const resendOtp = async (req: Request, res: Response) => {
       .eq('email', email)
       .single();
 
+    const { data: otp_verifications, error: otpError } = await supabase
+      .from('otp_verifications')
+      .select('expires_at')
+      .eq('user_id', user.id)
+      .single();
+
+    if (otpError || !otp_verifications) {
+      return res.status(404).json({ error: 'OTP not found' });
+    }
+
     if (error || !user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -85,6 +101,7 @@ export const resendOtp = async (req: Request, res: Response) => {
       return res.status(201).json({
         message: `A 6 digit otp has been sent to your mail. Please re-check and verify again.`,
         otp: otpResult,
+        otpExpires: otp_verifications.expires_at,
       });
     }
 
@@ -117,6 +134,8 @@ export const verifyEmailOtp = async (req: Request, res: Response) => {
     if (fetchError || !otpRecord) {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
+
+    
 
     // 2. Mark OTP as verified
     const { error: updateError } = await supabase
@@ -221,8 +240,10 @@ export const loginUser = async (req: Request, res: Response) => {
     res.status(200).json({
       message: 'Login successful',
       user,
-      accessToken,
-      refreshToken,
+      token: {
+        accessToken,
+        refreshToken,
+      }
     });
 
   } catch (error) {

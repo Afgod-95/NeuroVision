@@ -13,6 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import authReducer from "./slices/authSlice";
 import messageOptionsReducer from "./slices/messageOptionsSlice";
+import { injectStore } from "../services/axiosClient";
 
 
 
@@ -43,6 +44,9 @@ export const store = configureStore({
     }),
 });
 
+injectStore(store);
+
 // Create the persistor
 export const persistor = persistStore(store);
 export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;

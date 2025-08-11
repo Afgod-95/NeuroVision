@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { Message } from "@/src/utils/interfaces/TypescriptInterfaces";
-import { useFetchMessagesMutation } from "@/src/hooks/chat/mutations/ConversationsMutation";
+import { useFetchMessagesMutation } from "../mutations/ConversationsMutation";
 import { uniqueConvId as startNewConversationId } from "@/src/constants/generateConversationId";
 import api from "@/src/services/axiosClient";
 import { QueryClient, UseMutationResult } from "@tanstack/react-query";
@@ -89,12 +89,10 @@ export const useConversationActions = ({
 
     const handleSendMessage = useCallback(async (messageText: string, audioFile?: UploadedAudioFile) => {
         console.log('handleSendMessage called with:', { messageText, audioFile });
-
         
         if (!messageText.trim() && !audioFile) {
             return;
         }
-
 
         if (isProcessingResponseRef.current) {
             console.log('Already processing a response, ignoring request');

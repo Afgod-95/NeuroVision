@@ -18,7 +18,6 @@ interface UserState {
   refreshToken: string | null;
 }
 
-
 const initialState: UserState = {
   isAuthenticated: false,
   user: null,
@@ -27,16 +26,26 @@ const initialState: UserState = {
 };
 
 export const logoutUser = createAsyncThunk(
-  'auth/logoutUser', async (_, { dispatch }) => {
+  'auth/logoutUser', 
+  async (_, { dispatch, getState }) => {
     try {
-      await api.post('/logout');
-      Alert.alert("You have sucessfully logged out");
+      const state = getState() as { user: UserState };
+      const refreshToken = state.user.refreshToken;
+
+      if (refreshToken) {
+        const response = await api.post('/api/auth/logout', { refreshToken });
+        console.log(response.data);
+      }
+      
+      Alert.alert("You have successfully logged out");
       dispatch(resetState());
     } catch (error) {
       console.error('Logout failed:', error);
+      // Still reset state even if logout API fails
+      dispatch(resetState());
     }
   }
-)
+);
 
 const authSlice = createSlice({
   name: 'auth',
@@ -52,16 +61,24 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.user = null;
       state.accessToken = null;
-      state.refreshToken = null
+      state.refreshToken = null;
     },
-    resetState (state) {
+    resetState(state) {
       state.isAuthenticated = false;
       state.user = null;
       state.accessToken = null;
-      state.refreshToken = null
+      state.refreshToken = null;
+    },
+    // Add this new action for updating tokens
+    updateTokens(state, action) {
+      state.accessToken = action.payload.accessToken;
+      state.refreshToken = action.payload.refreshToken;
+      if (action.payload.user) {
+        state.user = action.payload.user;
+      }
     }
   },
 });
 
-export const { login, logout, resetState } = authSlice.actions;
+export const { login, logout, resetState, updateTokens } = authSlice.actions;
 export default authSlice.reducer;

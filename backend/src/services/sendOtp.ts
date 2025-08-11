@@ -61,7 +61,8 @@ export const sendOtp = async (user: User, isForgotPassword: boolean = false) => 
         subject: 'Your OTP Code - NeuroVision',
         html: `
           
-
+            <div style="background-color: #0D0D0D; color: #FFFFFF; padding: 24px 16px; max-width: 100%; box-sizing: border-box;">
+                <div style="max-width: 500px; margin: 0 auto; background-color: #1A1A1A; padding: 24px; border-radius: 12px; box-shadow: 0 0 20px rgba(0,0,0,0.3);">
                 <div style="font-family: 'sans-serif; max-width: 500px; margin: auto; padding: 24px; border-radius: 12px;">
                     <h2 style="text-align: center;">OTP Verification</h2>
                     
@@ -72,7 +73,7 @@ export const sendOtp = async (user: User, isForgotPassword: boolean = false) => 
                     </p>
 
                     <div style="text-align: center; margin: 30px 0;">
-                       <span style="font-size: 24px; font-weight: bold; color: #fff;">${otp}</span>
+                       <span style="font-size: 24px; font-weight: bold;;">${otp}</span>
                     </div>
 
                     <p style="font-size: 13px;">

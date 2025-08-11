@@ -38,6 +38,8 @@ app.use('/api/auth', authRouter);
 
 app.use('/api/conversations', chatsRouter);
 
+console.log(process.env.ACCESS_TOKEN_SECRET);
+
 
 
 

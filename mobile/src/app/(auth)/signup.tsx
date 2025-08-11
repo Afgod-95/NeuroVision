@@ -8,7 +8,7 @@ import { router } from 'expo-router';
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import { useSignupMutation } from '@/src/hooks/auth/useAuthMutation';
+import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation';
 
 const { width } = Dimensions.get('screen');
 
@@ -41,8 +41,10 @@ const SignUp = () => {
     setUser({ ...user, [name]: value });
   };
 
-  //sign up user 
-  const signUpMutation = useSignupMutation();
+  //initialize mutation
+  const mutation = useAuthMutation();
+  const signUpMutation = mutation.useSignupMutation();
+ 
   const handleSignUp = async () => {
     if (!usernameRegex.test(user.username)) {
       Alert.alert('Invalid username');
