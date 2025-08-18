@@ -154,7 +154,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             temperature,
             maxTokens,
             conversationId: rawConversationId,
-            useDatabase = false
+            useDatabase = true
         }: ChatRequest & {
             conversationId?: string;
             useDatabase?: boolean;
