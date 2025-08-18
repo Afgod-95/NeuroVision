@@ -53,8 +53,14 @@ const CustomAlert = ({
   const handleClose = () => {
     onClose?.();
   };
+
   useEffect(() => {
     if (visible) {
+      // Reset animations to initial values
+      scaleAnim.setValue(0);
+      fadeAnim.setValue(0);
+      slideAnim.setValue(50);
+
       // Haptic feedback
       if (type === 'success') {
         Vibration.vibrate([0, 100]); // Short vibration for success
@@ -111,8 +117,6 @@ const CustomAlert = ({
     }
   }, [visible, type, autoClose, fadeAnim, handleClose, scaleAnim, slideAnim, autoCloseDelay]);
 
-  
-
   const handlePrimaryPress = () => {
     onPrimaryPress?.();
     if (!onPrimaryPress) {
@@ -141,7 +145,7 @@ const CustomAlert = ({
         return {
           icon: XCircle,
           iconColor: '#FF3B30',
-          backgroundColor:Colors.dark.bgPrimary,
+          backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
           primaryButtonColor: '#FF3B30',
         };
@@ -156,10 +160,10 @@ const CustomAlert = ({
       case 'info':
         return {
           icon: Info,
-          iconColor: '#007AFF',
+          iconColor: Colors.dark.button,
           backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
-          primaryButtonColor: '#007AFF',
+          primaryButtonColor: Colors.dark.button,
         };
       default:
         return {
@@ -281,7 +285,7 @@ type AlertState = {
   autoCloseDelay: number;
 };
 
-// Hook for easier usage
+// Enhanced hook with conflict resolution
 export const useCustomAlert = () => {
   const [alertState, setAlertState] = React.useState<AlertState>({
     visible: false,
@@ -297,7 +301,19 @@ export const useCustomAlert = () => {
     autoCloseDelay: 3000,
   });
 
-  const showAlert = (config: {
+  // Queue to handle multiple alerts
+  const alertQueue = useRef<AlertState[]>([]);
+  const isProcessing = useRef(false);
+
+  const processQueue = React.useCallback(() => {
+    if (alertQueue.current.length > 0 && !isProcessing.current) {
+      isProcessing.current = true;
+      const nextAlert = alertQueue.current.shift()!;
+      setAlertState(nextAlert);
+    }
+  }, []);
+
+  const showAlert = React.useCallback((config: {
     type: AlertType;
     title: string;
     message: string;
@@ -309,21 +325,35 @@ export const useCustomAlert = () => {
     autoClose?: boolean;
     autoCloseDelay?: number;
   }) => {
-    setAlertState({
+    const newAlert: AlertState = {
       visible: true,
       primaryButtonText: 'OK',
       showCloseButton: true,
       autoClose: false,
       autoCloseDelay: 3000,
       ...config,
-    });
-  };
+    };
 
-  const hideAlert = () => {
+    // If an alert is currently visible, queue the new one
+    if (alertState.visible) {
+      alertQueue.current.push(newAlert);
+    } else {
+      setAlertState(newAlert);
+      isProcessing.current = true;
+    }
+  }, [alertState.visible]);
+
+  const hideAlert = React.useCallback(() => {
     setAlertState(prev => ({ ...prev, visible: false }));
-  };
+    
+    // Process next alert in queue after a short delay
+    setTimeout(() => {
+      isProcessing.current = false;
+      processQueue();
+    }, 300);
+  }, [processQueue]);
 
-  const showSuccess = (title: string, message: string, options?: {
+  const showSuccess = React.useCallback((title: string, message: string, options?: {
     primaryButtonText?: string;
     secondaryButtonText?: string;
     onPrimaryPress?: () => void;
@@ -340,9 +370,9 @@ export const useCustomAlert = () => {
       autoCloseDelay: 2500,
       ...options,
     });
-  };
+  }, [showAlert]);
 
-  const showError = (title: string, message: string, options?: {
+  const showError = React.useCallback((title: string, message: string, options?: {
     primaryButtonText?: string;
     secondaryButtonText?: string;
     onPrimaryPress?: () => void;
@@ -357,9 +387,9 @@ export const useCustomAlert = () => {
       message,
       ...options,
     });
-  };
+  }, [showAlert]);
 
-  const showWarning = (title: string, message: string, options?: {
+  const showWarning = React.useCallback((title: string, message: string, options?: {
     primaryButtonText?: string;
     secondaryButtonText?: string;
     onPrimaryPress?: () => void;
@@ -374,9 +404,9 @@ export const useCustomAlert = () => {
       message,
       ...options,
     });
-  };
+  }, [showAlert]);
 
-  const showInfo = (title: string, message: string, options?: {
+  const showInfo = React.useCallback((title: string, message: string, options?: {
     primaryButtonText?: string;
     secondaryButtonText?: string;
     onPrimaryPress?: () => void;
@@ -391,7 +421,13 @@ export const useCustomAlert = () => {
       message,
       ...options,
     });
-  };
+  }, [showAlert]);
+
+  // Clear queue function for emergency cases
+  const clearAlertQueue = React.useCallback(() => {
+    alertQueue.current = [];
+    isProcessing.current = false;
+  }, []);
 
   const AlertComponent = () => (
     <CustomAlert
@@ -408,6 +444,7 @@ export const useCustomAlert = () => {
     showError,
     showWarning,
     showInfo,
+    clearAlertQueue,
   };
 };
 
@@ -431,7 +468,6 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   alertContainer: {
-    backgroundColor: Colors.dark.bgSecondary,
     borderRadius: 24,
     padding: 24,
     width: '100%',
@@ -469,6 +505,7 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     marginBottom: 24,
+    width: '100%', // Ensure full width
   },
   title: {
     fontSize: 22,
@@ -476,12 +513,15 @@ const styles = StyleSheet.create({
     color: Colors.dark.txtPrimary,
     textAlign: 'center',
     marginBottom: 8,
+    width: '100%', 
   },
   message: {
     fontSize: 16,
     color: Colors.dark.txtSecondary,
     textAlign: 'center',
     lineHeight: 22,
+    width: '100%', 
+    paddingHorizontal: 4, 
   },
   buttonContainer: {
     flexDirection: 'row',

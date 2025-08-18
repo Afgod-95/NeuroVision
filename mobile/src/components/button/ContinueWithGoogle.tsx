@@ -85,7 +85,6 @@ const ContinueWithGoogle = () => {
                         paddingHorizontal: 15,
                         paddingVertical: 10,
                         borderRadius: 10,
-                        opacity: true ? 0.5 : 1,
                     }}
                 >
                     <Image source={require('../../assets/images/Google-icon.png')} style={{ width: 24, height: 24 }} />

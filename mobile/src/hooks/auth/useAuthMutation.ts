@@ -3,10 +3,11 @@ import { Alert } from "react-native";
 import axios from "axios";
 import { router } from "expo-router";
 import api from "@/src/services/axiosClient";
-import { useSelector, useDispatch  } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/src/redux/store";
 import { resetState } from "@/src/redux/actions/authSlice";
 import { useCustomAlert } from "@/src/components/alert/CustomAlert";
+import authApi from "@/src/services/authApiClient";
 
 
 //delete user account 
@@ -25,30 +26,19 @@ export const useAuthMutation = () => {
     const useSignupMutation = () => {
         return useMutation({
             mutationFn: async (user: any) => {
-                const result = await api.post('/api/auth/register', user);
+                const result = await authApi.post('/api/auth/register', user); 
                 return result.data;
             },
-            onSuccess: (data) => {
-                const { userId, email } = data;
-                console.log(`User id in signup mut: ${userId}, ${email}`)
-                showSuccess('Success', data.message,{
-                    autoClose: true
-                });
-                setTimeout(() => {
-                    router.push({
-                        pathname: '/(auth)/verify/[userId]',
-                        params: { userId, email }
-                    })
-                },3000)
-            },
-            onError: (error) => {
-                console.log('Error signing up', error.message)
-                showError('Oops!!!', 'An error occured whilst signing up',{
+            
+            onError: (error: any) => {
+                console.log('Error signing up', error.response?.data || error.message);
+                showError('Oops!!!', error.response?.data?.error || 'An error occurred whilst signing up', {
                     autoClose: true
                 });
             }
         });
     };
+
 
     // resend otp
     const useResendOtpMutation = () => {
@@ -58,13 +48,13 @@ export const useAuthMutation = () => {
                     ? '/api/auth/resend-password-reset-otp'
                     : '/api/auth/resend-verification-otp';
 
-                const result = await api.post(endpoint, { email });
+                const result = await authApi.post(endpoint, { email });
                 return result.data;
             },
             onError: (error) => {
                 console.log('Error resending OTP', error.message);
                 console.log(error);
-                showError('Oops!!!', 'An error occured whilst resending OTP',{
+                showError('Oops!!!', 'An error occured whilst resending OTP', {
                     autoClose: true
                 });
             }
@@ -74,7 +64,7 @@ export const useAuthMutation = () => {
     const useVerifyPasswordResetOTPMutation = () => {
         return useMutation({
             mutationFn: async ({ userId, otpCode }: { userId: any; otpCode: string }) => {
-                const result = await api.post('/api/auth/verify-password-reset-otp', {
+                const result = await authApi.post('/api/auth/verify-password-reset-otp', {
                     userId,
                     otpCode
                 });
@@ -83,7 +73,7 @@ export const useAuthMutation = () => {
             onError: (error) => {
                 console.log('Error verifying password reset OTP', error.message);
                 console.log(error);
-                showError('Oops!!!', 'An error occured whilst signing up',{
+                showError('Oops!!!', 'An error occured whilst signing up', {
                     autoClose: true
                 });
             }
@@ -97,20 +87,22 @@ export const useAuthMutation = () => {
                 console.log('Sending request to reset password with email:', email);
 
                 try {
-                    const result = await api.post('/api/auth/reset-password-request', { email });
+                    const result = await authApi.post('/api/auth/reset-password-request', { email });
                     console.log('Response received:', result.data);
                     return result.data;
                 } catch (error) {
                     console.error('Axios error:', error);
-                    showError('Oops!!!', 'An error occured whilst sending reset password request',{
-                    autoClose: true
-                });
+                    showError('Oops!!!', 'An error occured whilst sending reset password request', {
+                        autoClose: true
+                    });
                     throw error;
                 }
             },
             onSuccess: (data) => {
                 console.log('Success data:', data);
-                Alert.alert('Success', data.message || 'OTP sent successfully');
+                showSuccess('Success', data.message || 'OTP sent successfully', {
+                    autoClose: true
+                });
             },
             onError: (error: any) => {
                 console.error('Mutation error:', error);
@@ -139,7 +131,7 @@ export const useAuthMutation = () => {
     const useVerifyEmailMutation = () => {
         return useMutation({
             mutationFn: async ({ userId, otpCode }: { userId: any; otpCode: string }) => {
-                const result = await api.post('/api/auth/verify-email', {
+                const result = await authApi.post('/api/auth/verify-email', {
                     userId,
                     otpCode
                 });
@@ -148,7 +140,7 @@ export const useAuthMutation = () => {
             onError: (error) => {
                 console.log('Error verifying email', error.message);
                 console.log(error);
-                showError('Oops!!!', 'An error occured whilst verifying email',{
+                showError('Oops!!!', 'An error occured whilst verifying email', {
                     autoClose: true
                 });
             }
@@ -164,23 +156,23 @@ export const useAuthMutation = () => {
                 const response = await api.delete(`/api/auth/delete-account/${userId}`,
                     {
                         headers: {
-                        'Authorization': `Bearer ${accessToken}`
+                            'Authorization': `Bearer ${accessToken}`
                         }
                     }
                 )
                 return response.data
             },
             onSuccess: (data) => {
-                router.push('/(auth)');
+                router.push('/(auth)/login');
                 dispatch(resetState());
-                showSuccess('Success', 'Account deleted successfully',{
+                showSuccess('Success', 'Account deleted successfully', {
                     autoClose: true
                 });
                 console.log(data);
             },
             onError: (error) => {
                 console.log(error);
-                showError('Oops!!!', 'An error occured whilst deleting account',{
+                showError('Oops!!!', 'An error occured whilst deleting account', {
                     autoClose: true
                 });
             }

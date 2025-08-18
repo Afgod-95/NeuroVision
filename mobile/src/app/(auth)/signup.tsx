@@ -21,9 +21,9 @@ interface UserProps {
 
 const SignUp = () => {
   const [user, setUser] = useState<UserProps>({
-    username: '',
-    email: '',
-    password: '',
+    username: 'Afari Boadu Godwin',
+    email: 'afgod98@gmail.com',
+    password: 'expo1234',
   });
 
   const [isDisabled, setIsDisabled] = useState<boolean>(true);
@@ -47,25 +47,50 @@ const SignUp = () => {
   //initialize mutation
   const mutation = useAuthMutation();
   const signUpMutation = mutation.useSignupMutation();
- 
+
   const handleSignUp = async () => {
     if (!usernameRegex.test(user.username)) {
-      Alert.alert('Invalid username');
+      showError('Ooops!!!', 'Invalid username');
       return;
     }
 
     if (!emailRegex.test(user.email)) {
-      Alert.alert('Invalid email');
+      showError('Ooops!!!', 'Invalid email');
       return;
     }
 
 
     if (user.password.length < 6) {
-      Alert.alert('Password must be at least 6 characters');
+      showError('Ooops!!!', 'Password must be at least 6 characters');
       return;
     }
-    signUpMutation.mutate(user);
-  };
+    signUpMutation.mutateAsync({
+      username: user.username,
+      email: user.email,
+      password: user.password
+    }, {
+      onSuccess: (data) => {
+        showSuccess('Success', data.message, {
+          autoClose: false,
+          onPrimaryPress: () => {
+            router.push({
+              pathname: '/(auth)/verify/[userId]',
+              params: {
+                userId: data.userId,
+                email: data.email
+              }
+            })
+          }
+        })
+      },
+      onError: (error) => {
+          showError('Error', error.message);
+      }
+    })
+  }
+
+
+
 
   return (
     <ScreenWrapper>
@@ -103,11 +128,11 @@ const SignUp = () => {
           placeholder="********"
         />
 
-        <Button 
-          title="Sign up" 
-          disabled={isDisabled} 
-          loading={signUpMutation.isPending} 
-          onPress={handleSignUp} 
+        <Button
+          title="Sign up"
+          disabled={isDisabled}
+          loading={signUpMutation.isPending}
+          onPress={handleSignUp}
         />
 
         <Animated.View
@@ -122,7 +147,7 @@ const SignUp = () => {
           entering={FadeInUp.duration(600).delay(200).springify()}
         >
           <Text style={styles.forgotPasswordText}>Already have an account?</Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)')}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
             <Text style={[styles.forgotPasswordText, { color: Colors.dark.link }]}>Sign in</Text>
           </TouchableOpacity>
         </Animated.View>

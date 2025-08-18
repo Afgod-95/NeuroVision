@@ -5,7 +5,6 @@ import Constants from "expo-constants";
 // Create a separate axios instance for auth requests (login, register, etc.)
 // This instance doesn't have token refresh interceptors
 const baseUrl = Constants.expoConfig?.extra?.baseBackendUrl;
-console.log("Auth API baseURL:", baseUrl);
 const authApi = axios.create({
     baseURL: baseUrl,
 });

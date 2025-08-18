@@ -15,6 +15,7 @@ import BottomSheet, {
 import { Colors } from '../../constants/Colors';
 import { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { useCustomAlert } from '../alert/CustomAlert';
+import Loading from '../Loaders/Loading';
 
 
 type AccountDeletionSheetProps = {
@@ -22,12 +23,14 @@ type AccountDeletionSheetProps = {
   onDelete?: () => void;
   onCancel?: () => void;
   userName?: string;
+  isLoading: boolean,
 };
 
 const AccountDeletionSheet = ({
   bottomSheetRef,
   onDelete,
   onCancel,
+  isLoading,
   userName = "User"
 }: AccountDeletionSheetProps) => {
   // Variables
@@ -45,14 +48,14 @@ const AccountDeletionSheet = ({
 
   const handleDelete = () => {
     showWarning('Final Confirmation', 'Are you absolutely sure? This action cannot be undone.', {
-      primaryButtonText: 'Cancel',
+      primaryButtonText: 'Delete',
       onPrimaryPress: () => {
-        bottomSheetRef.current?.close();
+         bottomSheetRef.current?.close();
+         onDelete?.();
       },
-      secondaryButtonText: 'Delete Forever',
+      secondaryButtonText: 'Cancel',
       onSecondaryPress: () => {
         bottomSheetRef.current?.close();
-        onDelete?.();
       }
     })
   };
@@ -137,7 +140,7 @@ const AccountDeletionSheet = ({
               ]}
               onPress={handleDelete}
             >
-              <Text style={styles.deleteButtonText}>Delete Forever</Text>
+              {isLoading ? <Loading /> : <Text style={styles.deleteButtonText}>Delete Forever</Text>}
             </Pressable>
           </View>
         </BottomSheetView>

@@ -1,12 +1,12 @@
 import { useEffect, useCallback } from "react";
 import { RealtimeChatProps } from "@/src/utils/interfaces/TypescriptInterfaces";
-import { useRealtimeChatState } from "./states/useRealtimeChatStates";
-import { useMessageUtils } from "./utils/useMessageUtils";
-import { useTypingAnimation } from "./animations/useTypingAnimation";
-import { useAIResponseManager } from "./ai/useAIResponseManager";
-import { useMessageMutation } from "./mutations/useMessageMutation";
-import { useSupabaseRealtime } from "./realtime/useSupabaseRealtime";
-import { useConversationActions } from "./actions/useConversationActions";
+import { useRealtimeChatState } from "../states/useRealtimeChatStates";
+import { useMessageUtils } from "../utils/useMessageUtils";
+import { useTypingAnimation } from "../animations/useTypingAnimation";
+import { useAIResponseManager } from "../ai/useAIResponseManager";
+import { useMessageMutation } from "../mutations/useMessageMutation";
+import { useSupabaseRealtime } from "../supabase/useSupabaseRealtime";
+import { useConversationActions } from "../actions/useConversationActions";
 import { useMessageOptions } from "@/src/hooks/userMessagePreview/useMessageOptions";
 
 // Main hook that orchestrates all the smaller hooks

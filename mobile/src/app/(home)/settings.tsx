@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -64,20 +64,19 @@ const SettingsScreen: React.FC = () => {
     const [speechEnabled, setSpeechEnabled] = useState<boolean>(true);
     const [autoSave, setAutoSave] = useState<boolean>(true);
     const [dataSharing, setDataSharing] = useState<boolean>(false);
+    const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
     const [openAccountDeletion, setOpenAccountDeletion] = useState<boolean>(false);
     const openAccountDeletionRef = useRef<BottomSheet>(null);
 
-    const { AlertComponent } = useCustomAlert()
+    const { AlertComponent, showSuccess, showInfo, showWarning } = useCustomAlert()
 
-    
     //open account deletion modal 
     const handleOpenAccountDeletion = () => {
         setOpenAccountDeletion(true);
         openAccountDeletionRef.current?.expand();
     }
 
-    
     //function to toggle use biometrics 
     const toggleUseBiometric = () => {
         dispatch(setUseBiometrics(!useBiometrics));
@@ -92,13 +91,47 @@ const SettingsScreen: React.FC = () => {
     //delete user account
     const { useDeleteUserAccountMutation } = useAuthMutation();
     const deleteUserAccount = useDeleteUserAccountMutation();
-    const handleDeleteAccount = () => {
+    const handleDeleteAccount = useCallback(() => {
         deleteUserAccount.mutate({
             userId: userCredentials?.id as number
         })
-    }
-   
+        dispatch(resetState());
+        showSuccess(`Success`, 'You have successfully deleted your account.');
+        setTimeout(() => {
+            router.push('/(auth)/login')
+        }, 2000)
+    }, [deleteUserAccount, dispatch, userCredentials?.id, showSuccess])
 
+    // Fixed logout handler using custom alert
+    const handleLogout = useCallback(() => {
+        showInfo(
+            'Sign Out',
+            'Are you sure you want to sign out?',
+            {
+                primaryButtonText: 'Sign Out',
+                secondaryButtonText: 'Cancel',
+                showCloseButton: false,
+                onPrimaryPress: () => {
+                    setIsLoggingOut(true);
+
+                    // Navigate immediately to prevent flashing
+                    router.replace('/(auth)/login');
+
+                    // Then dispatch logout action
+                    setTimeout(() => {
+                        dispatch(logoutUser());
+                        showSuccess('Success', "You have successfully logged out", {
+                            autoClose: true
+                        });
+                        setIsLoggingOut(false);
+                    }, 100);
+                },
+                onSecondaryPress: () => {
+                    // Just close the alert, no action needed
+                }
+            }
+        );
+    }, [dispatch, showSuccess, showInfo]);
 
     const isIos = Platform.OS === 'ios';
     const isAndroid = Platform.OS === 'android';
@@ -148,18 +181,18 @@ const SettingsScreen: React.FC = () => {
         Alert.alert('Upgrade to Pro', 'Unlock advanced AI features, unlimited conversations, and priority support.');
     };
 
-    const handleClearHistory = (): void => {
-        Alert.alert(
-            'Clear All Conversations',
-            'This will permanently delete all your chat history. This action cannot be undone.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Clear', style: 'destructive', onPress: () => { } }
-            ]
-        );
-    };
-
-
+    const handleClearHistory = useCallback(() => {
+        showWarning('Final Confirmation', 'Are you absolutely sure? This action cannot be undone.', {
+            primaryButtonText: 'Delete',
+            onPrimaryPress: () => {
+                
+            },
+            secondaryButtonText: 'Cancel',
+            onSecondaryPress: () => {
+              
+            }
+        })
+    }, [dispatch, showSuccess, showInfo]);
 
     // Streamlined settings sections - only essentials
     const settingSections: SettingSection[] = [
@@ -184,7 +217,6 @@ const SettingsScreen: React.FC = () => {
                     showArrow: false,
                     danger: false,
                 },
-
                 {
                     icon: 'add',
                     title: 'Subscription',
@@ -342,19 +374,15 @@ const SettingsScreen: React.FC = () => {
             // Account Actions
             items: [
                 {
-                    icon: 'log-out',
-                    title: 'Sign Out',
-                    onPress: () => {
-                        dispatch(logoutUser());
-                        router.push('/(auth)')
-                    },
-                    danger: true,
-                },
-
-                {
                     icon: 'person-remove',
                     title: 'Delete Account',
                     onPress: handleOpenAccountDeletion,
+                    danger: true,
+                },
+                {
+                    icon: 'log-out',
+                    title: isLoggingOut ? 'Signing Out...' : 'Sign Out',
+                    onPress: handleLogout,
                     danger: true,
                 },
             ],
@@ -433,15 +461,14 @@ const SettingsScreen: React.FC = () => {
             {/* open bottom sheet */}
             {openAccountDeletion && (
                 <AccountDeletionSheet
+                    isLoading={deleteUserAccount.isPending}
                     bottomSheetRef={openAccountDeletionRef}
-                    onDelete={() => {handleDeleteAccount()}}
-                    onCancel={() => {openAccountDeletionRef.current?.close()}}
+                    onDelete={() => { handleDeleteAccount() }}
+                    onCancel={() => { openAccountDeletionRef.current?.close() }}
                     userName={userCredentials?.username}
                 />
             )}
-            
         </>
-
     );
 };
 

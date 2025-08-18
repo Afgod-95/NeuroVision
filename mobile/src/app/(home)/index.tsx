@@ -26,7 +26,7 @@ import UserMessageBox, { MessagePreview, MessageContent } from '@/src/components
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
 import UploadedFiles, { UploadedFile } from '@/src/components/chatUI/uploaded-files/UploadedFiles';
 import { uniqueConvId } from '@/src/constants/generateConversationId';
-import { useRealtimeChat } from '@/src/hooks/chat/useRealtimeChats';
+import { useRealtimeChat } from '@/src/hooks/chat/realtime/useRealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
 import ScrollToBottomButton from '@/src/components/chatUI/ScrollToBottomButton';
 import { useLocalSearchParams } from 'expo-router';

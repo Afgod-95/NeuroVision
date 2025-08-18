@@ -21,18 +21,18 @@ interface UserProps {
 }
 
 const Index = () => {
-  const [user, setUser] = useState<UserProps>({ email: '', password: '' });
+  const [user, setUser] = useState<UserProps>({ email: 'afgod98@gmail.com', password: 'expo1234' });
   const [isDisabled, setIsDisabled] = useState<boolean>(true);
 
   const dispatch = useDispatch<AppDispatch>();
   const { loading } = useSelector((state: RootState) => state.auth);
 
   // Initialize custom alert hook
-  const { 
-    AlertComponent, 
-    showSuccess, 
-    showError, 
-    showWarning 
+  const {
+    AlertComponent,
+    showSuccess,
+    showError,
+    showWarning
   } = useCustomAlert();
 
   const handleTextInputChange = (name: string, value: string) => {
@@ -78,48 +78,43 @@ const Index = () => {
     dispatch(loginUser({ email: user.email, password: user.password }))
       .unwrap()
       .then((res) => {
+        console.log('Login success response:', res);
         showSuccess(
-          'Welcome Back!', 
+          'Welcome Back!',
           'You have successfully logged in',
           {
             autoClose: true,
-            autoCloseDelay: 2000,
-            primaryButtonText: 'Continue',
-            onPrimaryPress: () => {console.log("You have successfully logged in")}
+            autoCloseDelay: 3000, 
+            primaryButtonText: 'Redirecting...',
           }
         );
-        
+
+        // Navigate after alert auto-closes
         setTimeout(() => {
-          router.push('/(home)');
-        }, 2500);
+          router.replace('/(home)');
+        }, 3000);
       })
       .catch((err) => {
-        console.log(err.message);
-        
-        // Handle different error types
+        console.log('Login error:', err);
+
         let errorTitle = 'Login Failed';
-        let errorMessage = 'Something went wrong. Please try again.';
-        
-        if (err.message.includes('invalid')) {
+        let errorMessage = typeof err === 'string' ? err : 'Something went wrong. Please try again.';
+
+        if (errorMessage.toLowerCase().includes('invalid')) {
           errorTitle = 'Invalid Credentials';
-          errorMessage = 'The email or password you entered is incorrect.';
-        } else if (err.message.includes('network')) {
+        } else if (errorMessage.toLowerCase().includes('network')) {
           errorTitle = 'Network Error';
-          errorMessage = 'Please check your internet connection and try again.';
-        } else if (err.message.includes('user not found')) {
+        } else if (errorMessage.toLowerCase().includes('not found')) {
           errorTitle = 'Account Not Found';
-          errorMessage = 'No account found with this email address.';
         }
-        
+
         showError(
           errorTitle,
           errorMessage,
           {
             primaryButtonText: 'Try Again',
             secondaryButtonText: 'Forgot Password?',
-            onSecondaryPress: () => {
-              router.push('/(auth)/forgot_password');
-            }
+            onSecondaryPress: () => router.push('/(auth)/forgot_password'),
           }
         );
       });
@@ -142,7 +137,7 @@ const Index = () => {
           keyboardType="email-address"
           placeholder="johndoe@gmail.com"
         />
-        
+
         <AnimatedTextInput
           label="Password"
           value={user.password}

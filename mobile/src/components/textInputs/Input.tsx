@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +33,7 @@ const AnimatedTextInput: React.FC<TextInputProps> = ({
 
   const [isFocused, setIsFocused] = useState(false);
   const [hidePassword, setHidePassword] = useState(secureTextEntry);
+   const inputRef = useRef<TextInput>(null);
 
   const isLabelFocused = isFocused || !!value;
 
@@ -65,12 +66,13 @@ const AnimatedTextInput: React.FC<TextInputProps> = ({
       >
         <TextInput
           value={value}
+          ref = {inputRef}
           onChangeText={onChangeText}
           autoCapitalize='none'
+          focusable = {true}
           secureTextEntry={hidePassword}
           keyboardType={keyboardType}
-          blurOnSubmit={blurOnSubmit}
-          style={[styles.input, { color: Colors.dark.txtPrimary }]}
+          style={[styles.input, { color: Colors.dark.txtPrimary}]}
           onFocus={() => {
             setIsFocused(true);
             onFocus && onFocus();

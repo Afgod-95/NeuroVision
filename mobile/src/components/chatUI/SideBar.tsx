@@ -27,7 +27,7 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
-import { useRealtimeChat } from '@/src/hooks/chat/useRealtimeChats';
+import { useRealtimeChat } from '@/src/hooks/chat/realtime/useRealtimeChats';
 import api from '@/src/services/axiosClient';
 
 const { width } = Dimensions.get('window');

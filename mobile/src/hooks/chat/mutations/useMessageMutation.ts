@@ -87,7 +87,8 @@ type sendMessageMutationType = {
                 temperature,
                 maxTokens,
                 conversationId,
-                userDetails
+                userDetails,
+                useDatabase: true
             };
 
             if(!accessToken){

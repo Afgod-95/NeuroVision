@@ -2,7 +2,6 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { Alert } from 'react-native';
 import { refreshTokenApi } from '@/src/services/tokenRefreshService';
 import authApi from '@/src/services/authApiClient';
-import CustomAlert, { useCustomAlert } from '@/src/components/alert/CustomAlert';
 
 export interface User {
   id: number;
@@ -19,6 +18,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   loading: boolean;
+  isRegistrationComplete: boolean,
   error: string | null;
   useBiometrics: boolean,
 }
@@ -29,6 +29,7 @@ const initialState: AuthState = {
   accessToken: null,
   refreshToken: null,
   loading: false,
+  isRegistrationComplete: false,
   error: null,
   useBiometrics: false
 };
@@ -54,7 +55,7 @@ export const refreshAccessToken = createAsyncThunk(
       return tokens;
     } catch (error: any) {
       console.log('Token refresh failed:', error.message);
-      return rejectWithValue(error.response?.data || 'Token refresh failed');
+      return rejectWithValue( error.message);
     }
   }
 );
@@ -63,7 +64,6 @@ export const refreshAccessToken = createAsyncThunk(
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
-    const { showError, showSuccess } = useCustomAlert();
     try {
       console.log('Starting login process...');
       const response = await authApi.post('/api/auth/login', { email, password });
@@ -74,11 +74,6 @@ export const loginUser = createAsyncThunk(
       if (!userData || !token) {
         throw new Error('Invalid response format from server');
       }
-
-      showSuccess('Success', 'You have successfully logged in',{
-        autoClose: true
-      });
-
 
       return {
         user: userData,
@@ -103,8 +98,6 @@ export const loginUser = createAsyncThunk(
         console.log('Request setup error:', error.message);
         errorMessage = error.message || errorMessage;
       }
-
-      showError('Login Failed', errorMessage);
       return rejectWithValue(errorMessage);
     }
   }
@@ -113,7 +106,6 @@ export const loginUser = createAsyncThunk(
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (_, { dispatch, getState, rejectWithValue }) => {
-     const { showError, showSuccess } = useCustomAlert();
     try {
       const state = getState() as { auth: AuthState };
       const refreshToken = state.auth.refreshToken;
@@ -130,13 +122,10 @@ export const logoutUser = createAsyncThunk(
       }
 
       console.log('Logout completed');
-      showSuccess('Success', 'You have successfully logged out');
-      
-      // Return success to indicate logout completed
       return true;
     } catch (error: any) {
       console.error('Logout failed:', error);
-      return rejectWithValue('Logout failed but local state will be cleared');
+      return rejectWithValue(error.message);
     }
   }
 );
@@ -152,6 +141,7 @@ const authSlice = createSlice({
       state.accessToken = action.payload.accessToken;
       state.refreshToken = action.payload.refreshToken;
       state.loading = false;
+      state.isRegistrationComplete = true
       state.error = null;
     },
     logout(state) {
@@ -160,11 +150,17 @@ const authSlice = createSlice({
       state.accessToken = null;
       state.refreshToken = null;
       state.loading = false;
+      state.isRegistrationComplete = false;
       state.error = null;
     },
     resetState(state) {
       return initialState; // Reset to initial state
     },
+
+     completeRegistration: (state) => {
+      state.isRegistrationComplete = true;
+    },
+
     updateTokens(state, action) {
       state.accessToken = action.payload.accessToken;
       if (action.payload.refreshToken) {
@@ -198,6 +194,7 @@ const authSlice = createSlice({
         state.loading = false;
         state.isAuthenticated = true;
         state.user = action.payload.user;
+        state.isRegistrationComplete = true;
         state.accessToken = action.payload.accessToken;
         state.refreshToken = action.payload.refreshToken;
         state.error = null;
@@ -206,6 +203,7 @@ const authSlice = createSlice({
         console.log('Login rejected - setting loading to false');
         state.loading = false;
         state.isAuthenticated = false;
+        state.isRegistrationComplete = false;
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
@@ -239,7 +237,8 @@ const authSlice = createSlice({
       .addCase(refreshAccessToken.rejected, (state, action) => {
         console.log('Token refresh failed, logging out user');
         // Token refresh failed, user needs to login again
-        state.isAuthenticated = false;
+        state.isAuthenticated = false; 
+        state.isRegistrationComplete = false;
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
@@ -249,5 +248,10 @@ const authSlice = createSlice({
   },
 });
 
-export const { login, logout, resetState, updateTokens, clearError, setUseBiometrics } = authSlice.actions;
+export const { 
+  login, logout, resetState, 
+  updateTokens, clearError, setUseBiometrics, 
+  completeRegistration
+
+ } = authSlice.actions;
 export default authSlice.reducer;

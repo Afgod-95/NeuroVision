@@ -50,13 +50,10 @@ const EmailVerification = () => {
                 { userId: userId, otpCode },
                 {
                     onSuccess: (data) => {
-                        showSuccess('Success', data.message,{
-                            autoClose: true
-                        });
                         router.push({
                             pathname: '/(auth)/reset_password',
                             params: { userId }
-                        });
+                        }); 
                     },
                     onError: (error) => {
                        showError('Ooops!!!', 'An error occured whilst verifying email');
@@ -73,13 +70,16 @@ const EmailVerification = () => {
                             autoClose: true
                         });
                         console.log(data.message);
-                        router.push({
-                            pathname: '/(auth)',
-                            params: { userId }
-                        });
+                        setTimeout(() => {
+                            router.push({
+                                pathname: '/(auth)/login',
+                                params: { userId }
+                            });
+                        }, 2000)
+                       
                     },
                     onError: (error) => {
-                       showError('Ooops!!!', 'An error occured whilst verifying email');
+                       showError('Ooops!!!', error.message);
                     }
                 }
             );
@@ -135,7 +135,7 @@ const EmailVerification = () => {
         } else {
            showError('Oooops!!!', 'No email address found to resend code.');
         }
-    }, [email, type, resendOtpMutation]);
+    }, [email, type, resendOtpMutation, showSuccess, showError]);
 
     // Get dynamic content based on type
     const getScreenTitle = () => {

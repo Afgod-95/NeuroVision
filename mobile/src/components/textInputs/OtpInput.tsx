@@ -128,6 +128,18 @@ function useOtpInput({
 
   const hasTriggered = useRef(false);
 
+  //auto suggest otp code via clipboard 
+  useEffect(() => {
+    const handleClipboardChange = async () => {
+      const otpCode = await Clipboard.toString();
+      if (/^\d{6}$/.test(otpCode)) {
+        setCode(otpCode.split(''));
+      }
+    };
+    const interval = setInterval(handleClipboardChange, 2000);
+    return () => clearInterval(interval);
+  }, [codeLength, setCode]);
+
   useEffect(() => {
     const completeCode = code.join('');
     if (completeCode.length === codeLength && !hasTriggered.current && onCodeFilled) {
@@ -157,6 +169,8 @@ function useOtpInput({
       }, 100);
     }
   }, [canResend, onResendCode, codeLength, startCountdown, setCode, inputRefs]);
+
+
 
   const handleChange = useCallback((text: string, index: number): void => {
     // Handle paste operation - if text length > 1, it's likely a paste

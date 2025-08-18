@@ -31,63 +31,59 @@ export const useTypingAnimation = ({
     }
     currentTypingMessageIdRef.current = null;
     setIsTyping(false);
-  }, [setIsTyping]); // Removed refs from dependencies as they don't change
+  }, [setIsTyping, currentTypingMessageIdRef,  typingIntervalRef, typingTimeoutRef]);
 
   const startTypingAnimation = useCallback((fullText: string, messageId: string) => {
-    // Clear any existing typing animation
-    if (typingIntervalRef.current) {
-      clearInterval(typingIntervalRef.current);
-      typingIntervalRef.current = null;
-    }
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-    
-    setIsTyping(true);
-    currentTypingMessageIdRef.current = messageId;
-    let currentIndex = 0;
-    const typingSpeed = 10;
+  // Clear any existing typing animation
+  if (typingIntervalRef.current) {
+    clearInterval(typingIntervalRef.current);
+    typingIntervalRef.current = null;
+  }
+  if (typingTimeoutRef.current) {
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = null;
+  }
+  
+  setIsTyping(true);
+  currentTypingMessageIdRef.current = messageId;
+  let currentIndex = 0;
+  const typingSpeed = 10;
 
-    const typeNextCharacter = () => {
-      if (currentIndex <= fullText.length && currentTypingMessageIdRef.current === messageId) {
-        const currentText = fullText.substring(0, currentIndex);
+  const typeNextCharacter = () => {
+    if (currentIndex <= fullText.length && currentTypingMessageIdRef.current === messageId) {
+      const currentText = fullText.substring(0, currentIndex);
 
+      setMessages((prev: Message[]) =>
+        prev.map((msg: Message) =>
+          msg.id === messageId
+            ? { ...msg, text: currentText, isTyping: currentIndex < fullText.length }
+            : msg
+        )
+      );
+
+      if (currentIndex < fullText.length) {
+        currentIndex++;
+        typingIntervalRef.current = setTimeout(typeNextCharacter, typingSpeed);
+      } else {
+        // Typing animation complete
+        currentTypingMessageIdRef.current = null;
+        setIsTyping(false);
         setMessages((prev: Message[]) =>
           prev.map((msg: Message) =>
             msg.id === messageId
-              ? { ...msg, text: currentText, isTyping: currentIndex < fullText.length }
+              ? { ...msg, isTyping: false }
               : msg
           )
         );
-
-        if (currentIndex < fullText.length) {
-          currentIndex++;
-          typingIntervalRef.current = setTimeout(typeNextCharacter, typingSpeed);
-        } else {
-          // Typing animation complete
-          currentTypingMessageIdRef.current = null;
-          setIsTyping(false);
-          setMessages((prev: Message[]) =>
-            prev.map((msg: Message) =>
-              msg.id === messageId
-                ? { ...msg, isTyping: false }
-                : msg
-            )
-          );
-        }
-
-        // Auto-scroll during typing
-        scrollToBottom();
       }
-    };
 
-    typeNextCharacter();
-  }, [
-    setIsTyping, 
-    setMessages, 
-    scrollToBottom
-  ]); // Removed cleanupTypingAnimation from dependencies
+      // Call scrollToBottom directly without dependency
+      scrollToBottom();
+    }
+  };
+
+  typeNextCharacter();
+}, []);
 
   return {
     cleanupTypingAnimation,
