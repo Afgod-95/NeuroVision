@@ -110,7 +110,7 @@ const Welcome = ({ username, newChat = false, onPromptSelect }: WelcomeProps) =>
           <Text style={styles.subText}>Choose a prompt to get started</Text>
         </View>
 
-        {/* GPT-style Prompts */}
+        {/* Custom Prompts */}
         <View style={styles.promptsSection}>
           <FlatList
             data={gptPrompts}
@@ -132,9 +132,9 @@ const Welcome = ({ username, newChat = false, onPromptSelect }: WelcomeProps) =>
     <View style={styles.contentArea}>
       <View style={styles.welcomeContainer}>
         {isFirstTime ? (
-          <View style={styles.firstTimeContainer}>
-            {/* Welcome Text */}
-            <View style={styles.firstTimeWelcome}>
+          <>
+            {/* Welcome Text for First Time Users */}
+            <View style={styles.firstTimeWelcomeText}>
               <Text style={styles.welcomeText}>
                 Hello {username} 👋{'\n'}
                 <Text style={styles.boldText}>I&apos;m NeuroVision, your AI assistant.</Text>
@@ -151,12 +151,12 @@ const Welcome = ({ username, newChat = false, onPromptSelect }: WelcomeProps) =>
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.promptsList}
-                snapToInterval={screenWidth * 0.65 + 12} // Card width + margin
+                snapToInterval={screenWidth * 0.65 + 12} 
                 snapToAlignment="start"
                 decelerationRate="fast"
               />
             </View>
-          </View>
+          </>
         ) : (
           <>
             <Text style={styles.welcomeText}>Hello {username} 👋</Text>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   newChatContainer: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingBottom: 100, // Space for input area
+    paddingBottom: 100,
   },
   welcomeContainer: {
     alignItems: 'center',
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginRight: 12,
-    width: screenWidth * 0.65, // 65% of screen width
+    width: screenWidth * 0.65, 
     maxHeight: 80,
     justifyContent: 'center',
     shadowColor: '#000',
@@ -236,16 +236,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  firstTimeContainer: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingBottom: 100,
-  },
-  firstTimeWelcome: {
+ 
+  firstTimeWelcomeText: {
     alignItems: 'center',
     paddingHorizontal: 20,
-    flex: 1,
-    justifyContent: 'center',
+    marginTop: -100, 
   },
   firstTimePromptsSection: {
     position: 'absolute',
@@ -253,6 +248,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'transparent',
+    width: '100%', 
   },
 });
 

@@ -5,9 +5,12 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Provider, useSelector } from "react-redux";
-import { RootState, store } from "@/src/redux/store";
+import { PersistGate } from "redux-persist/integration/react";
+import { RootState, store, persistor } from "@/src/redux/store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Buffer } from "buffer";
+import { Colors } from "../constants/Colors";
+import BiometricAuthGate from "../components/biometricAuthGate/BiometricGateAuth";
 
 global.Buffer = global.Buffer || Buffer;
 
@@ -30,16 +33,20 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <Provider store={store}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <RootLayoutInner />
-        </GestureHandlerRootView>
+        <PersistGate persistor={persistor}>
+          <GestureHandlerRootView
+            style={{ flex: 1, backgroundColor: Colors.dark.bgPrimary }}
+          >
+            <RootLayoutInner />
+          </GestureHandlerRootView>
+        </PersistGate>
       </Provider>
     </QueryClientProvider>
   );
 }
 
 function RootLayoutInner() {
-  const user = useSelector((state: RootState) => state.user);
+  const user = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
     if (user?.isAuthenticated) {
@@ -49,7 +56,7 @@ function RootLayoutInner() {
     }
   }, [user?.isAuthenticated]);
 
-  return (
+  const content = (
     <>
       <StatusBar
         style="light"
@@ -60,4 +67,11 @@ function RootLayoutInner() {
       <Slot />
     </>
   );
+
+  // 🔐 Only wrap home side of the app with biometrics
+  if (user?.isAuthenticated) {
+    return <BiometricAuthGate>{content}</BiometricAuthGate>;
+  }
+
+  return content;
 }

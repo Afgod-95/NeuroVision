@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 import { Message } from "@/src/utils/interfaces/TypescriptInterfaces";
-import { useFetchMessagesMutation } from "../mutations/ConversationsMutation";
+import { useConversationMutation } from "../mutations/useConversationMutation";
 import { uniqueConvId as startNewConversationId } from "@/src/constants/generateConversationId";
 import api from "@/src/services/axiosClient";
 import { QueryClient, UseMutationResult } from "@tanstack/react-query";
 import { UploadedAudioFile } from "@/src/utils/interfaces/TypescriptInterfaces";
-import { useRealtimeChatState } from "../states/useRealtimeChatStates";
+import { useSelector } from "react-redux";
+import { RootState } from "@/src/redux/store";
 
 type useConversationActionsType = {
     userDetails: any,
@@ -22,6 +23,8 @@ type useConversationActionsType = {
     messages: Message[],
     setMessage: (message: string) => void,
     setAttachment: (attachment: any[]) => void,
+    setIsAborted: (isAborted: boolean) => void,
+    setShowAIButtonAction: (showAIButtonAction: boolean) => void,
     setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
     setConversationId: (conversationId: string) => void,
     isProcessingResponseRef: React.RefObject<boolean>,
@@ -64,6 +67,8 @@ export const useConversationActions = ({
     setMessage,
     setMessages,
     setAttachment,
+    setIsAborted,
+    setShowAIButtonAction,
     setNewChat,
     setConversationId,
     isProcessingResponseRef,
@@ -84,12 +89,12 @@ export const useConversationActions = ({
     extractAIResponseText,
 
 }: useConversationActionsType) => {
-    
-    const { setShowAIButtons, setIsAborted } = useRealtimeChatState()
+
+    const { accessToken } = useSelector((state: RootState) => state.auth);
+
 
     const handleSendMessage = useCallback(async (messageText: string, audioFile?: UploadedAudioFile) => {
-        console.log('handleSendMessage called with:', { messageText, audioFile });
-        
+       
         if (!messageText.trim() && !audioFile) {
             return;
         }
@@ -98,17 +103,20 @@ export const useConversationActions = ({
             console.log('Already processing a response, ignoring request');
             return;
         }
-
-
         setMessage('');
         setAttachment([]);
         setIsAborted(false);
         sendMessageMutation.mutate({ messageText, audioFile });
-    }, [sendMessageMutation]);
 
+    }, [sendMessageMutation, isProcessingResponseRef, 
+        setAttachment, setMessage, 
+        setIsAborted
+    ]);
+
+    //start new conversation
     const startNewConversation = useCallback(() => {
         const newConvId = startNewConversationId;
-               // Clean up current subscription and typing animation
+        // Clean up current subscription and typing animation
         cleanupSubscription();
         cleanupTypingAnimation();
 
@@ -120,16 +128,18 @@ export const useConversationActions = ({
         currentLoadingIdRef.current = null;
         processedMessageIds.current.clear();
         clearAIResponding();
-         setIsAborted(false);
+        setIsAborted(false);
         setLoading(false);
-    }, [startNewConversationId, clearAIResponding, cleanupSubscription, cleanupTypingAnimation]);
+    }, [clearAIResponding, currentLoadingIdRef, pendingUserMessageRef,processedMessageIds,setConversationId,setIsAborted, setMessages, setLoading,setNewChat, cleanupSubscription, cleanupTypingAnimation]);
+
+    const { useFetchMessagesMutation } = useConversationMutation(accessToken as string)
 
     const loadConversationHistoryMutation = useFetchMessagesMutation();
 
     const loadConversationHistory = useCallback(async () => {
         try {
             setLoading(true);
-             setIsAborted(false);
+            setIsAborted(false);
 
             const response = await loadConversationHistoryMutation.mutateAsync(userDetails?.id);
 
@@ -145,8 +155,9 @@ export const useConversationActions = ({
         } finally {
             setLoading(false);
         }
-    }, [userDetails?.id, loadConversationHistoryMutation]);
+    }, [userDetails?.id, setIsAborted, setLoading, loadConversationHistoryMutation]);
 
+    //handle regenerate function
     const handleRegenerate = useCallback(async (messageId: string) => {
         if (isProcessingResponseRef.current) {
             console.log('Already processing a response, ignoring regenerate request');
@@ -192,14 +203,18 @@ export const useConversationActions = ({
             scrollToBottom();
 
             try {
-                const response = await api.post('/api/conversations/send-message', {
+                const payload = {
                     message: previousUserMessage.text,
                     systemPrompt: systemPrompt,
                     temperature: temperature,
                     maxTokens: maxTokens,
                     conversationId: conversationId,
-                    userId: userDetails?.id,
                     useDatabase: true,
+                }
+                const response = await api.post('/api/conversations/send-message', payload, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                    },
                 });
 
                 const aiResponseText = extractAIResponseText(response.data);
@@ -208,34 +223,33 @@ export const useConversationActions = ({
                     throw new Error('AI response is empty or invalid');
                 }
 
-                // Fallback without timeout
-                setTimeout(() => {
-                    if (isProcessingResponseRef.current && currentLoadingIdRef.current === loadingMessageId) {
-                        console.log('Regeneration fallback: manually clearing loading state');
-                        clearAIResponding();
 
-                        setMessages((prev) => {
-                            const withoutLoading = prev.filter(msg => msg.id !== loadingMessageId);
+                if (isProcessingResponseRef.current && currentLoadingIdRef.current === loadingMessageId) {
+                    console.log('Regeneration fallback: manually clearing loading state');
+                    clearAIResponding();
 
-                            const fallbackMessage: Message = {
-                                id: `regen-fallback-${Date.now()}`,
-                                text: '',
-                                user: false,
-                                created_at: new Date().toISOString(),
-                                timestamp: new Date().toISOString(),
-                                sender: 'assistant',
-                                isTyping: true
-                            };
+                    setMessages((prev) => {
+                        const withoutLoading = prev.filter(msg => msg.id !== loadingMessageId);
 
-                            // Start typing animation for regenerated message
-                            setTimeout(() => {
-                                startTypingAnimation(aiResponseText, fallbackMessage.id);
-                            }, 100);
+                        const fallbackMessage: Message = {
+                            id: `regen-fallback-${Date.now()}`,
+                            text: '',
+                            user: false,
+                            created_at: new Date().toISOString(),
+                            timestamp: new Date().toISOString(),
+                            sender: 'assistant',
+                            isTyping: true
+                        };
 
-                            return [...withoutLoading, fallbackMessage];
-                        });
-                    }
-                }, 5000);
+                        // Start typing animation for regenerated message
+                        setTimeout(() => {
+                            startTypingAnimation(aiResponseText, fallbackMessage.id);
+                        }, 100);
+
+                        return [...withoutLoading, fallbackMessage];
+                    });
+                }
+
 
             } catch (error: any) {
                 console.error('Failed to regenerate message:', error);
@@ -281,7 +295,12 @@ export const useConversationActions = ({
                 clearAIResponding();
             }
         }
-    }, [messages, systemPrompt, temperature, maxTokens, conversationId, userDetails?.id, clearAIResponding, extractAIResponseText, scrollToBottom]);
+    }, [messages, currentLoadingIdRef, systemPrompt,isProcessingResponseRef, 
+        startTypingAnimation, setIsAIResponding, setIsAborted, setMessages, 
+        temperature, maxTokens, 
+        conversationId, clearAIResponding, extractAIResponseText, scrollToBottom, 
+        accessToken
+    ]);
 
     //abort message 
     const abortMessage = useCallback(() => {
@@ -337,10 +356,13 @@ export const useConversationActions = ({
         }
 
         setIsAborted(true);
-        setShowAIButtons(true);
+        setShowAIButtonAction(true);
 
         console.log('Message abort completed');
-    }, [cleanupTypingAnimation, sendMessageMutation, queryClient]);
+    }, [cleanupTypingAnimation, abortControllerRef, currentLoadingIdRef, isAIResponding,
+        sendMessageMutation, queryClient, isProcessingResponseRef, setIsAIResponding, 
+        pendingUserMessageRef, setIsAborted, setMessages, setShowAIButtonAction
+    ]);
 
 
     return {

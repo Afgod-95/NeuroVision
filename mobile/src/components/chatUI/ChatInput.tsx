@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -11,13 +11,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/Colors';
 import Feather from '@expo/vector-icons/Feather';
 import { useDispatch } from 'react-redux';
-import { resetOptions } from '@/src/redux/slices/messageOptionsSlice';
+import { resetOptions } from '@/src/redux/actions/messageOptionsSlice';
 import { EditedMessagePrompt } from './EditedMessagePrompt';
 import UploadedFiles, { UploadedFile } from './uploaded-files/UploadedFiles';
 import { sampleUploadedFile } from '@/src/utils/data';
 
 const SCREEN_WIDTH = Dimensions.get('screen').width;
-
 
 type ChatInputProps = {
   message: string;
@@ -47,21 +46,35 @@ const ChatInput = ({
   onRemoveFile,
 }: ChatInputProps) => {
   const dispatch = useDispatch();
+  const textInputRef = useRef<TextInput>(null);
+
+  const [showEditedPopup, setShowEditedPopup] = useState<boolean>(false);
 
   const handleSendMessage = useCallback(async () => {
     const hasMessage = message.trim();
     const hasFiles = uploadedFiles.length > 0;
-    
+
     if (!hasMessage && !hasFiles) return;
 
     try {
       onSendMessage?.(message);
       setMessage('');
+      // hide edited message prompt if it was showing
+      if (isEdited) {
+        setShowEditedPopup(false);
+        dispatch(resetOptions());
+      }
     } catch (error) {
       console.error('Send message error:', error);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
-  }, [message, uploadedFiles, onSendMessage, setMessage]);
+  }, [message, uploadedFiles, onSendMessage, setMessage, isEdited, dispatch]);
+
+  useEffect(() => {
+   if(isEdited){
+    setShowEditedPopup(true);
+   }
+  }, [isEdited]);
 
   const handleStopMessage = useCallback(() => {
     onStopMessage?.();
@@ -72,15 +85,24 @@ const ChatInput = ({
     console.log('Microphone pressed, recording:', !isRecording);
   }, [isRecording, setIsRecording]);
 
+  // Add handler for focusing the input when container is pressed
+  const handleInputContainerPress = useCallback(() => {
+    if (!isSending && textInputRef.current) {
+      textInputRef.current.focus();
+    }
+  }, [isSending]);
+
   const canSendMessage = (message.trim() || uploadedFiles.length > 0) && !isSending;
   const showStopButton = isSending;
 
   return (
     <>
       <View style={styles.container}>
-        <EditedMessagePrompt 
+        <EditedMessagePrompt
           message={message}
           setMessage={setMessage}
+          showEditedMessagePopup={showEditedPopup}
+          setShowEditedMessagePopup={setShowEditedPopup}
           clearMessage={() => {
             setMessage('');
             dispatch(resetOptions());
@@ -93,79 +115,90 @@ const ChatInput = ({
           onRemoveFile={onRemoveFile}
         />
 
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Ask anything"
-            placeholderTextColor="#9CA3AF"
-            value={message}
-            onChangeText={setMessage}
-            multiline
-            editable={!isSending}
-          />
-        </View>
-
-        <View style={styles.iconsContainer}>
+        {/* Main input area */}
+        <View style={styles.mainInputArea}>
           <TouchableOpacity 
-            onPress={openBottomSheet}
-            style={[styles.iconButton, { borderWidth: 1, borderColor: Colors.dark.borderColor}]}
+            style={styles.inputContainer}
+            onPress={handleInputContainerPress}
+            activeOpacity={1}
           >
-            <Feather name="plus" size={20} color="white"/>
+            <TextInput
+              ref={textInputRef}
+              style={styles.textInput}
+              placeholder="Ask anything"
+              placeholderTextColor="#9CA3AF"
+              value={message}
+              onChangeText={setMessage}
+              multiline
+              editable={!isSending}
+              scrollEnabled={true}
+              textAlignVertical="top"
+              returnKeyType="default"
+            />
           </TouchableOpacity>
-          <View style={styles.iconContainer}>
-            <TouchableOpacity
-              style={[
-                styles.iconButton,
-                isRecording && styles.recordingButton,
-                { borderWidth: isRecording ? 0 : 1, borderColor: Colors.dark.borderColor }
-              ]}
-              onPress={handleMicPress}
-              activeOpacity={0.7}
-              disabled={isSending}
-            >
-              <Ionicons
-                name={isRecording ? "mic" : "mic-outline"}
-                size={20}
-                color={isRecording ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
-              />
-            </TouchableOpacity>
 
-            {showStopButton ? (
+          <View style={styles.iconsContainer}>
+            <TouchableOpacity
+              onPress={openBottomSheet}
+              style={[styles.iconButton, { borderWidth: 1, borderColor: Colors.dark.borderColor }]}
+            >
+              <Feather name="plus" size={20} color="white" />
+            </TouchableOpacity>
+            <View style={styles.iconContainer}>
               <TouchableOpacity
                 style={[
                   styles.iconButton,
-                  styles.stopButton,
+                  isRecording && styles.recordingButton,
+                  { borderWidth: isRecording ? 0 : 1, borderColor: Colors.dark.borderColor }
                 ]}
-                onPress={handleStopMessage}
+                onPress={handleMicPress}
                 activeOpacity={0.7}
+                disabled={isSending}
               >
                 <Ionicons
-                  name="stop"
-                  size={17}
-                  color={Colors.dark.bgSecondary}
+                  name={isRecording ? "mic" : "mic-outline"}
+                  size={20}
+                  color={isRecording ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
                 />
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.iconButton,
-                  canSendMessage && styles.recordingButton,
-                  {
-                    borderWidth: canSendMessage ? 0 : 1,
-                    borderColor: Colors.dark.borderColor,
-                  }
-                ]}
-                onPress={handleSendMessage}
-                activeOpacity={0.7}
-                disabled={!canSendMessage}
-              >
-                <Ionicons
-                  name="send"
-                  size={17}
-                  color={canSendMessage ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
-                />
-              </TouchableOpacity>
-            )}
+
+              {showStopButton ? (
+                <TouchableOpacity
+                  style={[
+                    styles.iconButton,
+                    styles.stopButton,
+                  ]}
+                  onPress={handleStopMessage}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="stop"
+                    size={17}
+                    color={Colors.dark.bgSecondary}
+                  />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.iconButton,
+                    canSendMessage && styles.recordingButton,
+                    {
+                      borderWidth: canSendMessage ? 0 : 1,
+                      borderColor: Colors.dark.borderColor,
+                    }
+                  ]}
+                  onPress={handleSendMessage}
+                  activeOpacity={0.7}
+                  disabled={!canSendMessage}
+                >
+                  <Ionicons
+                    name="send"
+                    size={17}
+                    color={canSendMessage ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </View>
@@ -181,13 +214,17 @@ const styles = StyleSheet.create({
     paddingBottom: 35,
     backgroundColor: Colors.dark.bgSecondary,
   },
+  mainInputArea: {
+    paddingHorizontal: 16,
+  },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 12,
     minHeight: 48,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   textInput: {
     flex: 1,
@@ -195,7 +232,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     maxHeight: 100,
+    minHeight: 24,
     paddingVertical: 0,
+    paddingHorizontal: 0,
+    margin: 0,
   },
   iconContainer: {
     flexDirection: 'row',
@@ -218,9 +258,7 @@ const styles = StyleSheet.create({
   },
   iconsContainer: {
     flexDirection: 'row',
-    width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 16,
     justifyContent: 'space-between'
   },
   searchContainer: {

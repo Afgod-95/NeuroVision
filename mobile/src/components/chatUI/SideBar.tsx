@@ -1,3 +1,4 @@
+// Updated CustomSideBar component with silent background refetching
 import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
@@ -50,35 +51,42 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const [searchbarVisible, setSearchbarVisible] = useState(false);
 
     const { userDetails } = useRealtimeChatState();
-    const { accessToken } = useSelector((state: RootState) => state.user);
-    console.log(`Access Token Sidebar: ${accessToken}`)
-     console.log(`Access Token Sidebar: ${userDetails}`)
+    const { accessToken } = useSelector((state: RootState) => state.auth);
 
     const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
 
     //search function
     const [searchQuery, setSearchQuery] = useState('');
 
-    const { data, isLoading, error } = useQuery({
+    const {
+        data,
+        isLoading, 
+        isFetching,
+        error,
+    } = useQuery({
         queryKey: ['conversationSummaries', userDetails?.id],
-        queryFn: () =>
-            api
-                .get('/api/conversations/user/summaries', {
-                    params: { userId: userDetails?.id },
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    }
-                })
-                .then(res => {
-                    return res.data;
-                }),
-        enabled: !!userDetails?.id,
+        queryFn: async () => {
+            const res = await api.get('/api/conversations/user/summaries', {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            console.log(res.data);
+            return res.data;
+        },
+        enabled: !!userDetails?.id && !!accessToken,
         refetchInterval: 10000,
         retry: 3,
-        retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
+        retryDelay: () => 1000 * 2,
+        refetchIntervalInBackground: true,
+        keepPreviousData: true,
+        staleTime: 5000,
+        cacheTime: 1000 * 60 * 30,
     });
 
-    console.log(`Summaries: ${JSON.stringify(data)}`)
+
+    console.log(`Summaries: ${JSON.stringify(data)}`);
+    console.log(`Is fetching: ${isFetching}`);
 
     useEffect(() => {
         if (error) {
@@ -90,10 +98,10 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
         }
     }, [error]);
 
-    // ✅ Effect to update local state when data changes
+    //Effect to update local state when data changes
     useEffect(() => {
         if (data?.conversations) {
-            const formatted = data.conversations.map((conversation: ConversationSummary) => ({
+            const formatted = data?.conversations.map((conversation: ConversationSummary) => ({
                 conversation_id: conversation.conversation_id,
                 title: conversation.title,
                 created_at: conversation.created_at
@@ -101,8 +109,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
             setSummaryTitle(formatted);
         }
     }, [data]);
-
-
 
     console.log(userDetails?.id)
 
@@ -123,7 +129,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const openSettings = () => {
         router.push('/(home)/settings');
     }
-
 
     useEffect(() => {
         Animated.timing(sidebarWidth, {
@@ -235,14 +240,13 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                         />
                         <TouchableOpacity onPress={startNewConversation} >
                             <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
-
                         </TouchableOpacity>
                     </View>
-
                 </View>
 
-                {/* recent messages */}
+                {/* recent messages - Only show loading for initial load */}
                 <RecentMessages
+                    isFetching={isFetching}
                     isLoading={isLoading}
                     messages={summaryTitle}
                     search={searchQuery}
@@ -251,10 +255,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                 <View style={styles.bottom}>
                     <TouchableOpacity style={styles.bottomContent} onPress={openSettings}>
                         <TouchableOpacity style={styles.userCont} onPress={openSettings}>
-                            <View
-
-                                style={styles.userAccountButton}
-                            >
+                            <View style={styles.userAccountButton}>
                                 <Text style={styles.userText}>{userInitials}</Text>
                             </View>
                             <Text style={styles.userText}>{username}</Text>

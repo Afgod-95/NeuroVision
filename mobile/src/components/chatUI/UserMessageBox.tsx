@@ -24,7 +24,7 @@ import { RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
 import { useMessageOptions } from '@/src/hooks/userMessagePreview/useMessageOptions';
 import { useDispatch } from 'react-redux';
-import { setShowOptions } from '@/src/redux/slices/messageOptionsSlice';
+import { setShowOptions } from '@/src/redux/actions/messageOptionsSlice';
 import { useAudioPlayer, AudioSource } from 'expo-audio';
 import { AudioPlayer } from '../audio/AudioPlayer';
 import * as Clipboard from 'expo-clipboard';
@@ -145,8 +145,7 @@ const UserMessageBox = ({
   copyMessage,
   editMessage,
 }: MessagesProps) => {
-  //getting user profile
-  const { user: userCredentials } = useSelector((state: RootState) => state.user);
+  
   
   const {
     handlePressIn,

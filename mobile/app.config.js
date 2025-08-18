@@ -20,6 +20,9 @@ export default {
       supportsTablet: true,
       bundleIdentifier: "com.afgod-95.Neurovision",
       deploymentTarget: "16.0", 
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "This app uses Face ID to quickly authenticate your login."
+      }
     },
     android: {
       adaptiveIcon: {

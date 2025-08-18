@@ -9,6 +9,7 @@ import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-nat
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation';
 import { emailRegex } from '@/src/constants/Regex';
+import { useCustomAlert } from '@/src/components/alert/CustomAlert';
 
 const { width } = Dimensions.get('screen')
 
@@ -19,6 +20,7 @@ interface UserProps {
 const ForgotPassword = () => {
     
     const { useForgotPasswordMutation } = useAuthMutation();
+    const { AlertComponent, showError } = useCustomAlert();
     
     const [user, setUser] = useState<UserProps>({
         email: ''
@@ -43,7 +45,7 @@ const ForgotPassword = () => {
 
     const handleForgotPassword = async () => {
         if (!emailRegex.test(user.email)){
-            Alert.alert('Please enter a valid email')
+            showError('Error','Please enter a valid email')
             return
         }
         try {   
@@ -99,6 +101,7 @@ const ForgotPassword = () => {
                     onPress={handleForgotPassword}
                 />
             </Animated.View>
+            <AlertComponent />
         </ScreenWrapper>
     )
 }

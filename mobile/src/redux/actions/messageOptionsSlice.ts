@@ -1,4 +1,5 @@
 // src/redux/slices/messageOptionsSlice.ts
+import { Message } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 interface TouchPos {
@@ -12,7 +13,8 @@ interface MessageOptionsState {
   showAbove: boolean;
   message: string | null;
   isEdited: boolean,
-  messageId: string | null; 
+  messageId: string | null;
+  editingMessage: Message | null,
 }
 
 const initialState: MessageOptionsState = {
@@ -20,8 +22,9 @@ const initialState: MessageOptionsState = {
   touchPos: { x: 0, y: 0 },
   showAbove: false,
   message: null,
-  messageId: null, 
+  messageId: null,
   isEdited: false,
+  editingMessage: null,
 };
 
 export const messageOptionsSlice = createSlice({
@@ -40,6 +43,9 @@ export const messageOptionsSlice = createSlice({
     setMessage: (state, action: PayloadAction<string>) => {
       state.message = action.payload;
     },
+    setEditingMessage: (state, action: PayloadAction<Message | null>) => {
+      state.editingMessage = action.payload;
+    },
     setMessageId: (state, action: PayloadAction<string>) => {
       state.messageId = action.payload;
     },
@@ -55,7 +61,7 @@ export const {
   setTouchPos,
   setShowAbove,
   setMessage,
-  setMessageId, 
+  setMessageId,
   isEdited,
   resetOptions,
 } = messageOptionsSlice.actions;

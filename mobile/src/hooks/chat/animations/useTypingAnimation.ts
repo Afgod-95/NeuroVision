@@ -10,7 +10,6 @@ interface UseTypingAnimationProps {
   scrollToBottom: () => void;
 }
 
-
 // Handles all typing animation logic
 export const useTypingAnimation = ({ 
   setMessages, 
@@ -32,10 +31,19 @@ export const useTypingAnimation = ({
     }
     currentTypingMessageIdRef.current = null;
     setIsTyping(false);
-  }, [typingIntervalRef, typingTimeoutRef, currentTypingMessageIdRef, setIsTyping]);
+  }, [setIsTyping]); // Removed refs from dependencies as they don't change
 
   const startTypingAnimation = useCallback((fullText: string, messageId: string) => {
-    cleanupTypingAnimation();
+    // Clear any existing typing animation
+    if (typingIntervalRef.current) {
+      clearInterval(typingIntervalRef.current);
+      typingIntervalRef.current = null;
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    
     setIsTyping(true);
     currentTypingMessageIdRef.current = messageId;
     let currentIndex = 0;
@@ -58,7 +66,8 @@ export const useTypingAnimation = ({
           typingIntervalRef.current = setTimeout(typeNextCharacter, typingSpeed);
         } else {
           // Typing animation complete
-          cleanupTypingAnimation();
+          currentTypingMessageIdRef.current = null;
+          setIsTyping(false);
           setMessages((prev: Message[]) =>
             prev.map((msg: Message) =>
               msg.id === messageId
@@ -75,13 +84,10 @@ export const useTypingAnimation = ({
 
     typeNextCharacter();
   }, [
-    cleanupTypingAnimation, 
     setIsTyping, 
-    currentTypingMessageIdRef, 
     setMessages, 
-    typingIntervalRef, 
     scrollToBottom
-  ]);
+  ]); // Removed cleanupTypingAnimation from dependencies
 
   return {
     cleanupTypingAnimation,

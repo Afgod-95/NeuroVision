@@ -11,7 +11,8 @@ import {
   LayoutAnimation,
   UIManager,
   Platform,
-  FlatList
+  FlatList,
+  StatusBar
 } from 'react-native';
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Colors } from '@/src/constants/Colors';
@@ -35,7 +36,6 @@ import { setOptions } from 'expo-splash-screen';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
 import BottomSheetModal from '@/src/components/chatUI/FileUploadBottomSheet';
 import Welcome from '@/src/components/chatUI/welcome-screen/Welcome';
-
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = UploadedFile & {
@@ -70,20 +70,26 @@ const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse, (prevProps, ne
 
 const Index = () => {
   // Get message options from Redux
-
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
+  
+  // Add keyboard height tracking
+  const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState<boolean>(false);
+  
+  // Get status bar height for proper header spacing
+  const statusBarHeight = StatusBar.currentHeight || 0;
+  
   const { conversation_id } = useLocalSearchParams();
   console.log(`Conversation ID: ${conversation_id}`);
 
- const { user, accessToken, refreshToken } = useSelector((state: RootState) => state.user);
+  const { user, accessToken, refreshToken } = useSelector((state: RootState) => state.auth);
 
   console.log(`User Details: ${user}`);
   console.log(`AccessToken: ${accessToken}`);
   console.log(`RefreshToken: ${refreshToken}`)
-
 
   const queryClient = useQueryClient();
 
@@ -109,8 +115,7 @@ const Index = () => {
   // Stop message handler
   const handleStopMessage = useCallback(() => {
     realtimeActions.abortMessage();
-  }, [realtimeActions.sendMessageMutation]);
-
+  }, [realtimeActions]);
 
   // Function to transform API messages to internal Message format
   const transformApiMessages = useCallback((apiMessages: ApiMessage[]): Message[] => {
@@ -168,7 +173,7 @@ const Index = () => {
     } finally {
       setIsInitialLoading(false);
     }
-  }, [queryClient, transformApiMessages, realtimeActions.setMessages, realtimeActions.scrollToBottom]);
+  }, [queryClient, transformApiMessages, realtimeActions]);
 
   // Effect to prefetch messages when conversation_id is available
   useEffect(() => {
@@ -186,7 +191,7 @@ const Index = () => {
     if (realtimeActions.sendMessageMutation) {
       setIsSending(realtimeActions.sendMessageMutation.isPending || realtimeActions.sendMessageMutation.isPending);
     }
-  }, [realtimeActions.sendMessageMutation?.isPending, realtimeActions.sendMessageMutation?.isPending]);
+  }, [realtimeActions]);
 
   // Scroll to bottom handler
   const onScroll = useCallback((event: any) => {
@@ -202,15 +207,15 @@ const Index = () => {
   // Sidebar handlers
   const handleToggleSidebar = useCallback(() => {
     realtimeActions.setIsSidebarVisible(!realtimeActions.isSidebarVisible);
-  }, [realtimeActions.isSidebarVisible, realtimeActions.setIsSidebarVisible]);
+  }, [realtimeActions]);
 
   const handleCloseSidebar = useCallback(() => {
     realtimeActions.setIsSidebarVisible(false);
-  }, [realtimeActions.setIsSidebarVisible]);
+  }, [realtimeActions]);
 
   const handleOpenSidebar = useCallback(() => {
     realtimeActions.setIsSidebarVisible(true);
-  }, [realtimeActions.setIsSidebarVisible]);
+  }, [realtimeActions]);
 
   //state for bottom sheet
   const state = useRealtimeChatState()
@@ -230,34 +235,55 @@ const Index = () => {
     state.setAttachments((prev) => prev.filter((item) => item.id !== fileId));
   }
 
-
   // Message input handlers
   const handleMessageOnChange = useCallback((text: string) => {
     realtimeActions.setMessage(text);
-  }, [realtimeActions.setMessage]);
-
+  }, [realtimeActions]);
 
   const handleIsRecording = useCallback((recording: boolean) => {
     realtimeActions.setIsRecording(recording);
-  }, [realtimeActions.setIsRecording]);
+  }, [realtimeActions]);
 
   // Handle send message with proper typing
   const handleSendMessageWithAudio = useCallback((messageText: string, audioFile?: UploadedAudioFile) => {
     realtimeActions.handleSendMessage(messageText, audioFile);
-  }, [realtimeActions.handleSendMessage]);
+  }, [realtimeActions]);
 
-  // Keyboard animation effects
+  // Enhanced keyboard handling for Android
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardWillShow', () => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    });
-    const hideSub = Keyboard.addListener('keyboardWillHide', () => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    });
+    let keyboardDidShowListener: any;
+    let keyboardDidHideListener: any;
+
+    if (Platform.OS === 'android') {
+      keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (event) => {
+        setKeyboardHeight(event.endCoordinates.height);
+        setIsKeyboardVisible(true);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      });
+
+      keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+        setKeyboardHeight(0);
+        setIsKeyboardVisible(false);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      });
+    } else {
+      // iOS listeners
+      keyboardDidShowListener = Keyboard.addListener('keyboardWillShow', (event) => {
+        setKeyboardHeight(event.endCoordinates.height);
+        setIsKeyboardVisible(true);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      });
+
+      keyboardDidHideListener = Keyboard.addListener('keyboardWillHide', () => {
+        setKeyboardHeight(0);
+        setIsKeyboardVisible(false);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      });
+    }
 
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
     };
   }, []);
 
@@ -286,13 +312,15 @@ const Index = () => {
       return (
         <MemoizedAdvancedAIResponse
           isTyping={realtimeActions.isTyping}
+          showAIButtonAction={realtimeActions.showAIActionButton}
+          isAborted={realtimeActions.isAborted}
           message={item.text}
           loading={finalLoadingState}
           onRegenerate={() => realtimeActions.handleRegenerate(item.id)}
         />
       );
     }
-  }, [realtimeActions.handleRegenerate, realtimeActions.isAIResponding, realtimeActions.messages.length,]);
+  }, [realtimeActions]);
 
   // Debug logging for loading states
   useEffect(() => {
@@ -316,13 +344,12 @@ const Index = () => {
 
   // Memoized content components
   const welcomeContent = useMemo(() => (
-    <Welcome 
-      username={realtimeActions.username} 
-      newChat = {realtimeActions.newChat}
+    <Welcome
+      username={realtimeActions.username}
+      newChat={realtimeActions.newChat}
       onPromptSelect={(prompt) => realtimeActions.setMessage(prompt)}
-    
     />
-  ), [realtimeActions.username]);
+  ), [realtimeActions]);
 
   const loadingContent = useMemo(() => (
     <Loading />
@@ -343,95 +370,179 @@ const Index = () => {
             style={styles.backgroundImage}
           />
 
-          <KeyboardAvoidingView
-            style={styles.keyboardContainer}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={0}
-          >
-            <SafeAreaView style={styles.safeAreaContainer}>
-
-              <View style={[
-                styles.header,
-              ]}>
-                <TouchableOpacity onPress={handleToggleSidebar}>
-                  <Image
-                    source={require('@/src/assets/images/menu.png')}
-                    style={styles.menuIcon}
-                  />
-                </TouchableOpacity>
-
-                <Text style={styles.headerTitle}>NeuroVision</Text>
-                {realtimeActions.messages.length !== 0 ? (
-                  <TouchableOpacity onPress={realtimeActions.startNewConversation}>
-                    <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
-                  </TouchableOpacity>
-                ) : (<View />)}
-              </View>
-
-              {/* Content Area - Show loading, welcome, or messages */}
-              {shouldShowLoading && loadingContent}
-
-              {shouldShowWelcome && welcomeContent}
-
-              {shouldShowMessages && (
-                <>
-                  <FlatList
-                    ref={realtimeActions.flatListRef}
-                    data={realtimeActions.messages}
-                    keyExtractor={keyExtractor}
-                    renderItem={renderItem}
-                    contentContainerStyle={[
-                      styles.flatListContent,
-                      styles.flatListContentWithBanner
-                    ]}
-                    removeClippedSubviews={true}
-                    maxToRenderPerBatch={10}
-                    updateCellsBatchingPeriod={50}
-                    initialNumToRender={10}
-                    windowSize={10}
-                    decelerationRate="normal"
-                    scrollEventThrottle={16}
-                    onScroll={onScroll}
-                    nestedScrollEnabled={true}
-                    getItemLayout={undefined}
-                    extraData={realtimeActions.messages.length}
-                  />
-                  {!realtimeActions.isTyping &&
-                    <ScrollToBottomButton
-                      onPress={realtimeActions.scrollToBottom}
-                      visible={showScrollButton}
+          {/* Use conditional rendering for Android vs iOS keyboard handling */}
+          {Platform.OS === 'android' ? (
+            <View style={[styles.keyboardContainer, { paddingBottom: isKeyboardVisible ? keyboardHeight : 0 }]}>
+              <SafeAreaView style={styles.safeAreaContainer}>
+                <View style={[
+                  styles.header,
+                  Platform.OS === 'android' && { paddingTop: statusBarHeight + 10 }
+                ]}>
+                  <TouchableOpacity onPress={handleToggleSidebar}>
+                    <Image
+                      source={require('@/src/assets/images/menu.png')}
+                      style={styles.menuIcon}
                     />
-                  }
+                  </TouchableOpacity>
 
-                </>
-              )}
-            </SafeAreaView>
+                  <Text style={styles.headerTitle}>NeuroVision</Text>
+                  {realtimeActions.messages.length !== 0 ? (
+                    <TouchableOpacity onPress={realtimeActions.startNewConversation}>
+                      <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
+                    </TouchableOpacity>
+                  ) : (<View />)}
+                </View>
 
-            {/* USER MESSAGE PREVIEW */}
-            <MessagePreview
-              message={messageId ?? ''}
-              messageId={messageId ?? ''}
-              userMessage={true}
-              editMessage={realtimeActions.handleEditMessageCallback}
-            />
+                {/* Content Area - Show loading, welcome, or messages */}
+                {shouldShowLoading && loadingContent}
 
-            {/* Chat input */}
-            <ChatInput
-              onRemoveFile={handleRemoveFile}
-              uploadedFiles={state.attachments}
-              openBottomSheet={HandleOpenBottomSheet}
-              message={realtimeActions.message}
-              setMessage={realtimeActions.setMessage}
-              isEdited={isEdited}
-              isRecording={realtimeActions.isRecording}
-              setIsRecording={realtimeActions.setIsRecording}
-              onSendMessage={realtimeActions.handleSendMessage}
-              onStopMessage={handleStopMessage}
-              isSending={isSending || realtimeActions.isTyping}
-            />
-          </KeyboardAvoidingView>
+                {shouldShowWelcome && welcomeContent}
+
+                {shouldShowMessages && (
+                  <>
+                    <FlatList
+                      ref={realtimeActions.flatListRef}
+                      data={realtimeActions.messages}
+                      keyExtractor={keyExtractor}
+                      renderItem={renderItem}
+                      contentContainerStyle={[
+                        styles.flatListContent,
+                        styles.flatListContentWithBanner
+                      ]}
+                      removeClippedSubviews={true}
+                      maxToRenderPerBatch={10}
+                      updateCellsBatchingPeriod={50}
+                      initialNumToRender={10}
+                      windowSize={10}
+                      decelerationRate="normal"
+                      scrollEventThrottle={16}
+                      onScroll={onScroll}
+                      nestedScrollEnabled={true}
+                      getItemLayout={undefined}
+                      extraData={realtimeActions.messages.length}
+                    />
+                    {!realtimeActions.isTyping &&
+                      <ScrollToBottomButton
+                        onPress={realtimeActions.scrollToBottom}
+                        visible={showScrollButton}
+                      />
+                    }
+                  </>
+                )}
+              </SafeAreaView>
+
+              {/* USER MESSAGE PREVIEW */}
+              <MessagePreview
+                message={messageId ?? ''}
+                messageId={messageId ?? ''}
+                userMessage={true}
+                editMessage={realtimeActions.handleEditMessageCallback}
+              />
+
+              {/* Chat input */}
+              <ChatInput
+                onRemoveFile={handleRemoveFile}
+                uploadedFiles={state.attachments}
+                openBottomSheet={HandleOpenBottomSheet}
+                message={realtimeActions.message}
+                setMessage={realtimeActions.setMessage}
+                isEdited={isEdited}
+                isRecording={realtimeActions.isRecording}
+                setIsRecording={realtimeActions.setIsRecording}
+                onSendMessage={realtimeActions.handleSendMessage}
+                onStopMessage={handleStopMessage}
+                isSending={isSending || realtimeActions.isTyping}
+              />
+            </View>
+          ) : (
+            <KeyboardAvoidingView
+              style={styles.keyboardContainer}
+              behavior="padding"
+              keyboardVerticalOffset={0}
+            >
+              <SafeAreaView style={styles.safeAreaContainer}>
+                <View style={[
+                  styles.header,
+                  Platform.OS === "android" && { paddingTop: statusBarHeight + 10 }
+                ]}>
+                  <TouchableOpacity onPress={handleToggleSidebar}>
+                    <Image
+                      source={require('@/src/assets/images/menu.png')}
+                      style={styles.menuIcon}
+                    />
+                  </TouchableOpacity>
+
+                  <Text style={styles.headerTitle}>NeuroVision</Text>
+                  {realtimeActions.messages.length !== 0 ? (
+                    <TouchableOpacity onPress={realtimeActions.startNewConversation}>
+                      <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
+                    </TouchableOpacity>
+                  ) : (<View />)}
+                </View>
+
+                {/* Content Area - Show loading, welcome, or messages */}
+                {shouldShowLoading && loadingContent}
+
+                {shouldShowWelcome && welcomeContent}
+
+                {shouldShowMessages && (
+                  <>
+                    <FlatList
+                      ref={realtimeActions.flatListRef}
+                      data={realtimeActions.messages}
+                      keyExtractor={keyExtractor}
+                      renderItem={renderItem}
+                      contentContainerStyle={[
+                        styles.flatListContent,
+                        styles.flatListContentWithBanner
+                      ]}
+                      removeClippedSubviews={true}
+                      maxToRenderPerBatch={10}
+                      updateCellsBatchingPeriod={50}
+                      initialNumToRender={10}
+                      windowSize={10}
+                      decelerationRate="normal"
+                      scrollEventThrottle={16}
+                      onScroll={onScroll}
+                      nestedScrollEnabled={true}
+                      getItemLayout={undefined}
+                      extraData={realtimeActions.messages.length}
+                    />
+                    {!realtimeActions.isTyping &&
+                      <ScrollToBottomButton
+                        onPress={realtimeActions.scrollToBottom}
+                        visible={showScrollButton}
+                      />
+                    }
+                  </>
+                )}
+              </SafeAreaView>
+
+              {/* USER MESSAGE PREVIEW */}
+              <MessagePreview
+                message={messageId ?? ''}
+                messageId={messageId ?? ''}
+                userMessage={true}
+                editMessage={realtimeActions.handleEditMessageCallback}
+              />
+
+              {/* Chat input */}
+              <ChatInput
+                onRemoveFile={handleRemoveFile}
+                uploadedFiles={state.attachments}
+                openBottomSheet={HandleOpenBottomSheet}
+                message={realtimeActions.message}
+                setMessage={realtimeActions.setMessage}
+                isEdited={isEdited}
+                isRecording={realtimeActions.isRecording}
+                setIsRecording={realtimeActions.setIsRecording}
+                onSendMessage={realtimeActions.handleSendMessage}
+                onStopMessage={handleStopMessage}
+                isSending={isSending || realtimeActions.isTyping}
+              />
+            </KeyboardAvoidingView>
+          )}
         </View>
-
       </TouchableWithoutFeedback>
 
       {/* Sidebar */}
@@ -445,10 +556,8 @@ const Index = () => {
         <BottomSheetModal
           onFileSelected={(file) => handleFileSelected(file)}
           bottomSheetRef={state.bottomSheetRef}
-
         />
       )}
-
     </>
   );
 };
@@ -477,8 +586,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    height: 60,
-    paddingTop: Platform.OS === 'android' ? 20 : undefined,
+    minHeight: 60,
     zIndex: 999,
   },
   headerWithBanner: {

@@ -8,7 +8,7 @@ import {
   setMessage,
   setMessageId,
   isEdited,
-} from '@/src/redux/slices/messageOptionsSlice';
+} from '@/src/redux/actions/messageOptionsSlice';
 import { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');

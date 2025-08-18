@@ -80,6 +80,7 @@ const _layout = () => {
         options={{
           title: "Contact support",
           headerShown: true,
+          presentation: 'card',
           headerStyle: {
             backgroundColor: Colors.dark.bgPrimary,
           },
@@ -89,6 +90,15 @@ const _layout = () => {
             fontWeight: 'bold',
           },
           headerTintColor: Colors.dark.txtPrimary, 
+        }}
+      />
+
+      <Stack.Screen
+        name='settings/account'
+        options={{
+          title: "Account",
+          headerShown: false,
+          presentation: 'card'
         }}
       />
 

@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     premiumIcon: {
-        backgroundColor: '#FFD700',
+        backgroundColor: '#FFD70020',
     },
     settingText: {
         flex: 1,
@@ -110,8 +110,8 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     settingSubtitle: {
-        fontSize: 14,
-        color: Colors.dark.txtSecondary,
+        fontSize: 13,
+        color: 'gray',
     },
     dangerText: {
         color: '#FF4444',

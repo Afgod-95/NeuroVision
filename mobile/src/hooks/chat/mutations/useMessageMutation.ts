@@ -1,8 +1,9 @@
 import { useMutation } from "@tanstack/react-query"
-import { Message, MessageContent, RootState } from "@/src/utils/interfaces/TypescriptInterfaces";
+import { Message, MessageContent } from "@/src/utils/interfaces/TypescriptInterfaces";
 import { UploadedAudioFile } from "@/src/utils/interfaces/TypescriptInterfaces";
 import api from "@/src/services/axiosClient";
 import { useSelector } from "react-redux";
+import { RootState } from "@/src/redux/store";
 
 
 type sendMessageMutationType = {
@@ -46,8 +47,10 @@ type sendMessageMutationType = {
     scrollToBottom
 } : sendMessageMutationType ) => {
 
-    const accessToken = useSelector((state: RootState) => state?.user);
+     const { accessToken, refreshToken } = useSelector((state: RootState) => state?.auth);
+    
     console.log(`Access Token Send message mutation: ${accessToken}`)
+    console.log(`Refresh Token: ${refreshToken}`)
 
     const sendMessageMutation = useMutation({
         mutationFn: async ({ messageText, audioFile }: { messageText: string, audioFile?: UploadedAudioFile }) => {
@@ -87,6 +90,13 @@ type sendMessageMutationType = {
                 userDetails
             };
 
+            if(!accessToken){
+                console.log(`Access Token is null: ${accessToken}`)
+            }
+
+            if (accessToken){
+                console.log(`Sending Message with access token: \n ${accessToken}`)
+            }
          
             const response = await api.post("/api/conversations/send-message", payload, {
                 signal: controller.signal,

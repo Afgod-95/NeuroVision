@@ -10,6 +10,7 @@ import {
     TouchableWithoutFeedback,
     FlatList,
     ListRenderItem,
+    ActivityIndicator,
     Animated,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
@@ -39,6 +40,7 @@ type RecentMessagesProps = {
     messages: ConversationSummary[];
     search?: string;
     isLoading: boolean,
+    isFetching: boolean,
     activeConversationId?: string;
     onShareChat?: (messageId: string) => void;
     onRenameChat?: (messageId: string) => void;
@@ -160,6 +162,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
     messages = [],
     search = '',
     isLoading,
+    isFetching,
     activeConversationId,
     onShareChat,
     onRenameChat,
@@ -384,6 +387,15 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
     // Show shimmer loading when isLoading is true
     if (isLoading) {
         return <ShimmerLoading />;
+    }
+
+    // Add this to your JSX if you want a subtle background loading indicator
+    {
+        isFetching && (
+            <View style={{ position: 'absolute', top: 10, right: 10 }}>
+                <ActivityIndicator size="small" color={Colors.dark.txtSecondary} />
+            </View>
+        )
     }
 
     return (

@@ -157,7 +157,6 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             useDatabase = false
         }: ChatRequest & {
             conversationId?: string;
-            userId?: number;
             useDatabase?: boolean;
         } = req.body;
 

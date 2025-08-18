@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation';
+import { useCustomAlert } from '@/src/components/alert/CustomAlert';
 
 const { width } = Dimensions.get('screen');
 
@@ -26,6 +27,8 @@ const SignUp = () => {
   });
 
   const [isDisabled, setIsDisabled] = useState<boolean>(true);
+
+  const { AlertComponent, showAlert, showSuccess, showError } = useCustomAlert();
 
 
 
@@ -126,6 +129,7 @@ const SignUp = () => {
 
         <ContinueWithGoogle />
       </Animated.View>
+      <AlertComponent />
     </ScreenWrapper>
   );
 };

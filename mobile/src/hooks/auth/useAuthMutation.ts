@@ -3,15 +3,24 @@ import { Alert } from "react-native";
 import axios from "axios";
 import { router } from "expo-router";
 import api from "@/src/services/axiosClient";
+import { useSelector, useDispatch  } from "react-redux";
+import { RootState } from "@/src/redux/store";
+import { resetState } from "@/src/redux/actions/authSlice";
+import { useCustomAlert } from "@/src/components/alert/CustomAlert";
 
 
 //delete user account 
 interface DeleteUserAccountMutationVariables {
-    id: number;
+    userId: number;
 }
 
 
 export const useAuthMutation = () => {
+
+    const { accessToken } = useSelector((state: RootState) => state.auth);
+    const dispatch = useDispatch();
+    const { showSuccess, showError } = useCustomAlert();
+
     //sign up users endpoint 
     const useSignupMutation = () => {
         return useMutation({
@@ -22,26 +31,21 @@ export const useAuthMutation = () => {
             onSuccess: (data) => {
                 const { userId, email } = data;
                 console.log(`User id in signup mut: ${userId}, ${email}`)
-                Alert.alert('Success', data.message, [
-                    {
-                        text: 'OK',
-                        onPress: () => {
-                            setTimeout(() => {
-                                router.push({
-                                    pathname: '/(auth)/verify/[userId]',
-                                    params: {
-                                        userId: userId,
-                                        email: email
-                                    }
-                                });
-                            }, 500);
-                        }
-                    }
-                ]);
+                showSuccess('Success', data.message,{
+                    autoClose: true
+                });
+                setTimeout(() => {
+                    router.push({
+                        pathname: '/(auth)/verify/[userId]',
+                        params: { userId, email }
+                    })
+                },3000)
             },
             onError: (error) => {
                 console.log('Error signing up', error.message)
-                Alert.alert("Error", "An error occured whilst signing up");
+                showError('Oops!!!', 'An error occured whilst signing up',{
+                    autoClose: true
+                });
             }
         });
     };
@@ -60,7 +64,9 @@ export const useAuthMutation = () => {
             onError: (error) => {
                 console.log('Error resending OTP', error.message);
                 console.log(error);
-                Alert.alert("Error", "An error occured whilst resending OTP");
+                showError('Oops!!!', 'An error occured whilst resending OTP',{
+                    autoClose: true
+                });
             }
         });
     }
@@ -77,7 +83,9 @@ export const useAuthMutation = () => {
             onError: (error) => {
                 console.log('Error verifying password reset OTP', error.message);
                 console.log(error);
-                Alert.alert("Error", "An error occured whilst verifying password reset OTP");
+                showError('Oops!!!', 'An error occured whilst signing up',{
+                    autoClose: true
+                });
             }
         });
     };
@@ -94,6 +102,9 @@ export const useAuthMutation = () => {
                     return result.data;
                 } catch (error) {
                     console.error('Axios error:', error);
+                    showError('Oops!!!', 'An error occured whilst sending reset password request',{
+                    autoClose: true
+                });
                     throw error;
                 }
             },
@@ -137,7 +148,9 @@ export const useAuthMutation = () => {
             onError: (error) => {
                 console.log('Error verifying email', error.message);
                 console.log(error);
-                Alert.alert("Error", "An error occured whilst verifying email");
+                showError('Oops!!!', 'An error occured whilst verifying email',{
+                    autoClose: true
+                });
             }
         });
 
@@ -147,17 +160,29 @@ export const useAuthMutation = () => {
     //delete user account
     const useDeleteUserAccountMutation = () => {
         return useMutation({
-            mutationFn: async ({ id }: DeleteUserAccountMutationVariables) => {
-                const response = await api.delete(`/api/auth/delete-account/${id}`)
+            mutationFn: async ({ userId }: DeleteUserAccountMutationVariables) => {
+                const response = await api.delete(`/api/auth/delete-account/${userId}`,
+                    {
+                        headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                        }
+                    }
+                )
                 return response.data
             },
             onSuccess: (data) => {
-                Alert.alert(data.message);
-                router.push('/(auth)')
+                router.push('/(auth)');
+                dispatch(resetState());
+                showSuccess('Success', 'Account deleted successfully',{
+                    autoClose: true
+                });
                 console.log(data);
             },
             onError: (error) => {
                 console.log(error);
+                showError('Oops!!!', 'An error occured whilst deleting account',{
+                    autoClose: true
+                });
             }
         })
     }

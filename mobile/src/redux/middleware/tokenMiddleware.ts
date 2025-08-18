@@ -1,6 +1,6 @@
 import { createListenerMiddleware } from '@reduxjs/toolkit';
-import { updateTokens, resetState } from '../slices/authSlice';
-import { refreshTokens } from '../actions/tokenAction';
+import { updateTokens, resetState } from '../actions/authSlice';
+import { refreshAccessToken } from '../actions/authSlice';
 import axios from 'axios';
 import Constants from 'expo-constants';
 
@@ -8,7 +8,7 @@ export const tokenMiddleware = createListenerMiddleware();
 
 // Listen for token refresh requests
 tokenMiddleware.startListening({
-  actionCreator: refreshTokens,
+  actionCreator: refreshAccessToken,
   effect: async (action, listenerApi) => {
     try {
       const state = listenerApi.getState() as any;
@@ -29,15 +29,19 @@ tokenMiddleware.startListening({
       });
 
       console.log('Middleware: Token refresh successful');
-
+      const { accessToken, refreshToken: newRefreshToken } = data.tokens;
       listenerApi.dispatch(updateTokens({
-        accessToken: data.tokens.accessToken,
-        refreshToken: data.tokens.refreshToken,
+        accessToken,
+        refreshToken: newRefreshToken,
         user: data.user
       }));
 
+     
+
       // Resolve the promise if provided
-      action.payload.resolve?.(data.tokens.accessToken);
+      action.payload.resolve?.(accessToken);
+      console.log(`Resolving token: ${accessToken}`);
+      console.log(`Resolving new refresh token: ${newRefreshToken}`)
 
     } catch (error) {
       console.error('Middleware: Token refresh failed:', error);

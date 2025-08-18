@@ -34,7 +34,7 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
   const recordingRef = React.useRef<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = React.useState(false);
   // variables
-  const snapPoints = useMemo(() => ["25%", "50%", "75%"], []);
+  const snapPoints = useMemo(() => ["50%"], []);
 
 
   const handleSheetChanges = useCallback((index: number) => {
@@ -99,11 +99,11 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false, // Disable editing for multiple selection
+        mediaTypes: [],
+        allowsEditing: false, 
         quality: 0.8,
         allowsMultipleSelection: true,
-        selectionLimit: 10, // Limit to 10 images, adjust as needed
+        selectionLimit: 3, 
       });
 
       if (!result.canceled && result.assets.length > 0) {
@@ -117,7 +117,7 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
           result.assets.forEach((asset, index) => {
             setTimeout(() => {
               onFileSelected?.(asset);
-            }, index * 100); // Small delay between each file
+            }, index * 100); 
           });
         }
       }
@@ -308,7 +308,7 @@ const ActionCard = ({
 
 const styles = StyleSheet.create({
   bottomSheetBackground: {
-    backgroundColor: Colors.dark.bgSecondary,
+    backgroundColor: Colors.dark.bgPrimary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: '#000',

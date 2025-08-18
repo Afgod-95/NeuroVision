@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -9,7 +9,7 @@ import {
     Switch,
     Alert,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, {
@@ -17,7 +17,7 @@ import Animated, {
     useSharedValue,
     useAnimatedStyle,
     interpolate,
-    Extrapolate,
+    Extrapolation,
 } from 'react-native-reanimated';
 import { Colors } from '@/src/constants/Colors';
 import SettingItem from '@/src/components/settings/SettingItem';
@@ -26,9 +26,12 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '@/src/redux/store';
-
-import {  logoutUser, resetState } from '@/src/redux/slices/authSlice';
-
+import { logoutUser, resetState, setUseBiometrics } from '@/src/redux/actions/authSlice';
+import * as Haptics from 'expo-haptics';
+import { setEnableHepticFeedback } from '@/src/redux/actions/hepticFeedbackSlice';
+import AccountDeletionSheet from '@/src/components/settings/AccountDeletion';
+import BottomSheet from '@gorhom/bottom-sheet';
+import { useCustomAlert } from '@/src/components/alert/CustomAlert';
 const BASE_HEADER_HEIGHT = 30;
 
 interface SettingItemData {
@@ -55,13 +58,30 @@ const SettingsScreen: React.FC = () => {
     const scrollY = useSharedValue(0);
     const insets = useSafeAreaInsets();
     const dispatch = useDispatch<AppDispatch>();
-    const { user: userCredentials } = useSelector((state: RootState) => state.user);
-
-    // Settings state
+    const { user: userCredentials, useBiometrics } = useSelector((state: RootState) => state.auth);
+    const { enableHepticFeedback } = useSelector((state: RootState) => state.hepticFeedback);
+    // Essential AI app settings
     const [speechEnabled, setSpeechEnabled] = useState<boolean>(true);
-    const [hapticFeedback, setHapticFeedback] = useState<boolean>(true);
-    const [soundEffects, setSoundEffects] = useState<boolean>(false);
     const [autoSave, setAutoSave] = useState<boolean>(true);
+    const [dataSharing, setDataSharing] = useState<boolean>(false);
+
+    const [openAccountDeletion, setOpenAccountDeletion] = useState<boolean>(false);
+    const openAccountDeletionRef = useRef<BottomSheet>(null);
+
+    const { AlertComponent } = useCustomAlert()
+
+    
+    //open account deletion modal 
+    const handleOpenAccountDeletion = () => {
+        setOpenAccountDeletion(true);
+        openAccountDeletionRef.current?.expand();
+    }
+
+    
+    //function to toggle use biometrics 
+    const toggleUseBiometric = () => {
+        dispatch(setUseBiometrics(!useBiometrics));
+    }
 
     const onScroll = useAnimatedScrollHandler({
         onScroll: (event) => {
@@ -69,184 +89,155 @@ const SettingsScreen: React.FC = () => {
         },
     });
 
-    const { useDeleteUserAccountMutation } = useAuthMutation()
+    //delete user account
+    const { useDeleteUserAccountMutation } = useAuthMutation();
     const deleteUserAccount = useDeleteUserAccountMutation();
+    const handleDeleteAccount = () => {
+        deleteUserAccount.mutate({
+            userId: userCredentials?.id as number
+        })
+    }
+   
 
-    //platform compatibility
-    const isAndroid = Platform.OS === 'android';
+
     const isIos = Platform.OS === 'ios';
+    const isAndroid = Platform.OS === 'android';
 
     const headerAnimatedStyle = useAnimatedStyle(() => {
-    const backgroundColor = interpolate(
-        scrollY.value,
-        [0, 80],
-        [0, 1],
-        Extrapolate.CLAMP
-    );
+        const backgroundColor = interpolate(
+            scrollY.value,
+            [0, 80],
+            [0, 1],
+            Extrapolation.CLAMP
+        );
 
-    const shadowOpacity = interpolate(
-        scrollY.value,
-        [0, 80],
-        [0, 0.2],
-        Extrapolate.CLAMP
-    );
+        const shadowOpacity = interpolate(
+            scrollY.value,
+            [0, 80],
+            [0, 0.2],
+            Extrapolation.CLAMP
+        );
 
-    const borderBottomWidth = interpolate(
-        scrollY.value,
-        [0, 1],
-        [0, StyleSheet.hairlineWidth],
-        Extrapolate.CLAMP
-    );
+        const borderBottomWidth = interpolate(
+            scrollY.value,
+            [0, 1],
+            [0, StyleSheet.hairlineWidth],
+            Extrapolation.CLAMP
+        );
 
-    return {
-        backgroundColor: `rgba(18,18,18,${backgroundColor})`,
-        shadowOpacity,
-        borderBottomWidth,
-        borderBottomColor: Colors.dark.borderColor,
+        return {
+            backgroundColor: Colors.dark.bgPrimary,
+            shadowOpacity,
+            borderBottomWidth,
+            borderBottomColor: Colors.dark.borderColor,
+        };
+    });
+
+    const handleToggleHepticFeedback = () => {
+        const newValue = !enableHepticFeedback;
+        dispatch(setEnableHepticFeedback(newValue));
+
+        if (newValue) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
     };
-});
-
 
     const handleUpgrade = (): void => {
-        Alert.alert('Upgrade to Plus', 'Get access to NeuroVision-4, faster responses, and priority access to new features.');
+        Alert.alert('Upgrade to Pro', 'Unlock advanced AI features, unlimited conversations, and priority support.');
     };
 
-    const handleDataExport = (): void => {
-        Alert.alert('Export Data', 'Your conversation history will be prepared for download.');
-    };
-
-    const handleDeleteAccount = (): void => {
+    const handleClearHistory = (): void => {
         Alert.alert(
-            'Delete Account',
-            'This action cannot be undone. All your data will be permanently deleted.',
+            'Clear All Conversations',
+            'This will permanently delete all your chat history. This action cannot be undone.',
             [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive',
-                    onPress: () => {
-                        if (userCredentials?.id !== undefined) {
-                            deleteUserAccount.mutate({ id: userCredentials.id });
-                            dispatch(resetState());
-                        } else {
-                            Alert.alert('Error', 'User ID is missing.');
-                        }
-                    }
-                },
-              
-
+                { text: 'Clear', style: 'destructive', onPress: () => { } }
             ]
         );
     };
 
-    // Settings sections configuration
+
+
+    // Streamlined settings sections - only essentials
     const settingSections: SettingSection[] = [
         {
-            // Account Section (no title)
+            title: 'Account',
             items: [
                 {
                     icon: 'person-circle',
-                    title: 'Account',
-                    subtitle: userCredentials?.email,
-                    onPress: () => { },
+                    title: "Name",
+                    children: (
+                        <Text style={{ color: "gray", fontSize: 14 }}>{userCredentials?.username}</Text>
+                    ),
+                    showArrow: false,
+                    danger: false,
                 },
+                {
+                    icon: 'mail',
+                    title: "Email",
+                    children: (
+                        <Text style={{ color: "gray", fontSize: 14 }}>{userCredentials?.email}</Text>
+                    ),
+                    showArrow: false,
+                    danger: false,
+                },
+
+                {
+                    icon: 'add',
+                    title: 'Subscription',
+                    children: (
+                        <Text style={{ color: "gray", fontSize: 14 }}>Free Plan</Text>
+                    ),
+                    isPremium: false,
+                    danger: false,
+                },
+                {
+                    icon: 'lock-closed',
+                    title: 'Password',
+                    subtitle: 'Change your password',
+                    showArrow: true,
+                },
+            ],
+        },
+        {
+            // subscription
+            title: 'Subscription',
+            items: [
                 {
                     icon: 'diamond',
-                    title: 'Upgrade to Plus',
-                    subtitle: 'Get NeuroVision-4, faster responses, and more',
-                    onPress: handleUpgrade,
+                    title: 'Upgrade to Neurovision Plus',
+                    onPress: () => {
+
+                    },
                     isPremium: true,
+                    danger: false,
                 },
             ],
         },
         {
-            title: 'Preferences',
+            title: 'App & Preferences',
             items: [
                 {
-                    icon: 'chatbubbles',
-                    title: 'Chat History & Training',
-                    subtitle: 'Manage your conversations',
-                    onPress: () => { },
-                },
-                {
-                    icon: 'download',
-                    title: 'Export Data',
-                    subtitle: 'Download your conversations',
-                    onPress: handleDataExport,
-                },
-                {
-                    icon: 'moon',
-                    title: 'Theme',
-                    subtitle: 'Dark',
-                    onPress: () => { },
-                },
-                {
-                    icon: 'language',
-                    title: 'Language',
-                    subtitle: 'English',
-                    onPress: () => { },
-                },
-            ],
-        },
-        {
-            title: 'Audio & Accessibility',
-            items: [
-                {
-                    icon: 'volume-high',
-                    title: 'Speech',
-                    subtitle: 'Read responses aloud',
+                    icon: 'finger-print',
+                    title: 'Biometric Authentication',
+                    subtitle: 'Use Face ID or Touch ID to sign in',
                     showArrow: false,
                     children: (
                         <Switch
-                            value={speechEnabled}
-                            onValueChange={setSpeechEnabled}
+                            value={useBiometrics}
+                            onValueChange={toggleUseBiometric}
                             trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
                             thumbColor="#FFFFFF"
                         />
                     ),
                 },
                 {
-                    icon: 'phone-portrait',
-                    title: 'Haptic Feedback',
-                    showArrow: false,
-                    children: (
-                        <Switch
-                            value={hapticFeedback}
-                            onValueChange={setHapticFeedback}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
-                            thumbColor="#FFFFFF"
-                        />
-                    ),
-                },
-                {
-                    icon: 'musical-notes',
-                    title: 'Sound Effects',
-                    showArrow: false,
-                    children: (
-                        <Switch
-                            value={soundEffects}
-                            onValueChange={setSoundEffects}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
-                            thumbColor="#FFFFFF"
-                        />
-                    ),
-                },
-            ],
-        },
-        {
-            title: 'Privacy & Data',
-            items: [
-                {
-                    icon: 'shield-checkmark',
-                    title: 'Privacy Policy',
-                    onPress: () => {router.push('/(home)/settings/privacy')},
-                },
-                {
-                    icon: 'document-text',
-                    title: 'Terms of Service',
-                    onPress: () => {router.push('/(home)/settings/terms')},
-                },
-                {
-                    icon: 'save',
-                    title: 'Auto-save Conversations',
+                    icon: 'notifications',
+                    title: 'Push Notifications',
+                    subtitle: 'Get notified about updates',
                     showArrow: false,
                     children: (
                         <Switch
@@ -258,9 +249,76 @@ const SettingsScreen: React.FC = () => {
                     ),
                 },
                 {
+                    icon: 'phone-portrait',
+                    title: 'Haptic Feedback',
+                    subtitle: 'Vibration for interactions',
+                    showArrow: false,
+                    children: (
+                        <Switch
+                            value={enableHepticFeedback}
+                            onValueChange={handleToggleHepticFeedback}
+                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            thumbColor="#FFFFFF"
+                        />
+                    ),
+                },
+                {
+                    icon: 'volume-high',
+                    title: 'Voice Responses',
+                    subtitle: 'Read AI responses aloud',
+                    showArrow: false,
+                    children: (
+                        <Switch
+                            value={speechEnabled}
+                            onValueChange={setSpeechEnabled}
+                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            thumbColor="#FFFFFF"
+                        />
+                    ),
+                },
+                {
+                    icon: 'save',
+                    title: 'Auto-save Conversations',
+                    subtitle: 'Automatically save chat history',
+                    showArrow: false,
+                    children: (
+                        <Switch
+                            value={autoSave}
+                            onValueChange={setAutoSave}
+                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            thumbColor="#FFFFFF"
+                        />
+                    ),
+                },
+            ],
+        },
+        {
+            title: 'Privacy & Data',
+            items: [
+                {
+                    icon: 'analytics',
+                    title: 'Improve AI Responses',
+                    subtitle: 'Share conversations to enhance AI quality',
+                    showArrow: false,
+                    children: (
+                        <Switch
+                            value={dataSharing}
+                            onValueChange={setDataSharing}
+                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            thumbColor="#FFFFFF"
+                        />
+                    ),
+                },
+                {
+                    icon: 'shield-checkmark',
+                    title: 'Privacy Policy',
+                    onPress: () => { router.push('/(home)/settings/privacy') },
+                },
+                {
                     icon: 'trash',
                     title: 'Clear All Conversations',
-                    onPress: () => { },
+                    subtitle: 'Delete chat history permanently',
+                    onPress: handleClearHistory,
                     danger: true,
                 },
             ],
@@ -271,43 +329,37 @@ const SettingsScreen: React.FC = () => {
                 {
                     icon: 'help-circle',
                     title: 'Help & FAQ',
-                    onPress: () => {router.push('/(home)/settings/help')},
+                    onPress: () => { router.push('/(home)/settings/help') },
                 },
                 {
                     icon: 'mail',
                     title: 'Contact Support',
-                    onPress: () => {router.push('/(home)/settings/support')},
-                },
-                {
-                    icon: 'star',
-                    title: 'Rate App',
-                    onPress: () => { },
+                    onPress: () => { router.push('/(home)/settings/support') },
                 },
             ],
         },
         {
-            // Account Actions (no title)
+            // Account Actions
             items: [
                 {
                     icon: 'log-out',
                     title: 'Sign Out',
-                    onPress: () => { 
-                       dispatch(logoutUser());
+                    onPress: () => {
+                        dispatch(logoutUser());
                         router.push('/(auth)')
                     },
                     danger: true,
                 },
+
                 {
                     icon: 'person-remove',
                     title: 'Delete Account',
-                    onPress: handleDeleteAccount,
+                    onPress: handleOpenAccountDeletion,
                     danger: true,
                 },
             ],
         },
     ];
-
-
 
     const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => (
         <Text style={styles.sectionHeader}>{title}</Text>
@@ -339,50 +391,64 @@ const SettingsScreen: React.FC = () => {
     );
 
     return (
-        <View style={styles.container}>
-            <Animated.View
-                style={[
-                    styles.header,
-                    {
-                       
-                        height: BASE_HEADER_HEIGHT + insets.top,
-                    },
-                    headerAnimatedStyle,
-                ]}
-            >
-                <View />
-                <Text style={styles.headerTitle}>Settings</Text>
-                <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-                    <Ionicons name="close" size={24} color={Colors.dark.txtPrimary} />
-                </TouchableOpacity>
-            </Animated.View>
+        <>
+            <SafeAreaView style={{ flex: 1, backgroundColor: Colors.dark.bgPrimary }}>
+                <View style={styles.container}>
+                    <Animated.View
+                        style={[
+                            styles.header,
+                            {
+                                height: BASE_HEADER_HEIGHT + insets.top,
+                            },
+                            headerAnimatedStyle,
+                        ]}
+                    >
+                        <View />
+                        <Text style={styles.headerTitle}>Settings</Text>
+                        <TouchableOpacity onPress={() => router.canGoBack()} style={styles.closeButton}>
+                            <Ionicons name="close" size={24} color={Colors.dark.txtPrimary} />
+                        </TouchableOpacity>
+                    </Animated.View>
 
+                    <Animated.ScrollView
+                        contentContainerStyle={{
+                            paddingTop: BASE_HEADER_HEIGHT + insets.top + 20,
+                            paddingBottom: insets.bottom + 20,
+                        }}
+                        onScroll={onScroll}
+                        scrollEventThrottle={16}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {settingSections.map(renderSection)}
 
-            <Animated.ScrollView
-                contentContainerStyle={{
-                    paddingTop: BASE_HEADER_HEIGHT + insets.top + 20,
-                    paddingBottom: insets.bottom + 20,
-                }}
-                onScroll={onScroll}
-                scrollEventThrottle={16}
-                showsVerticalScrollIndicator={false}
-            >
-                {settingSections.map(renderSection)}
-
-                {/* Version Info */}
-                <View style={styles.versionContainer}>
-                    <Text style={styles.versionText}>Version 1.2025.01</Text>
-                    <Text style={styles.versionSubtext}>NeuroVision for {isIos ? 'iOS' : isAndroid ? 'Android' : "Web"}</Text>
+                        {/* Version Info */}
+                        <View style={styles.versionContainer}>
+                            <Text style={styles.versionText}>Version 1.2025.01</Text>
+                            <Text style={styles.versionSubtext}>NeuroVision for {isIos ? 'iOS' : isAndroid ? 'Android' : "Web"}</Text>
+                        </View>
+                    </Animated.ScrollView>
                 </View>
-            </Animated.ScrollView>
-        </View>
+            </SafeAreaView>
+            <AlertComponent />
+            {/* open bottom sheet */}
+            {openAccountDeletion && (
+                <AccountDeletionSheet
+                    bottomSheetRef={openAccountDeletionRef}
+                    onDelete={() => {handleDeleteAccount()}}
+                    onCancel={() => {openAccountDeletionRef.current?.close()}}
+                    userName={userCredentials?.username}
+                />
+            )}
+            
+        </>
+
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000000',
+        backgroundColor: Colors.dark.bgPrimary,
     },
     header: {
         position: 'absolute',
@@ -393,25 +459,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between', 
+        justifyContent: 'space-between',
     },
-
-
     headerTitle: {
         color: Colors.dark.txtPrimary,
         fontWeight: '600',
         fontSize: 18,
     },
-
     closeButton: {
-
         padding: 4,
         height: BASE_HEADER_HEIGHT,
         justifyContent: 'center',
         alignItems: 'center',
     },
-
-
     section: {
         marginHorizontal: 16,
     },
@@ -437,6 +497,23 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: Colors.dark.txtSecondary,
         fontWeight: '500',
+    },
+
+    profileBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFD70020',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: '#FFD70040',
+    },
+    profileBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFD700',
+        marginLeft: 4,
     },
     versionSubtext: {
         fontSize: 12,

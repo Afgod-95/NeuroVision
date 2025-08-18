@@ -46,7 +46,10 @@ export const useRealtimeChat = ({
         temperature,
         maxTokens,
         ...state,
+      
         setNewChat: state.setNewChat,
+        setIsAborted: state.setIsAborted,
+        setShowAIButtonAction: state.setShowAIButtonAction,
         setAttachment: state.setAttachments,
         scrollToBottom: messageUtils.scrollToBottom,
         cleanupSubscription: supabaseRealtimeSubscription.cleanupSubscription,
@@ -71,7 +74,7 @@ export const useRealtimeChat = ({
         if (state.isEdited && state.messageId) {
             state.setMessage(state.messageId);
         }
-    }, [state.isEdited, state.messageId]);
+    }, [state]);
 
     const { handleEditMessage } = useMessageOptions();
     const handleEditMessageCallback = useCallback(() => {
@@ -106,6 +109,10 @@ export const useRealtimeChat = ({
         username: state.username,
 
         userCredentials: state.userDetails,
+        setIsAborted: state.setIsAborted,
+        isAborted: state.isAborted,
+        setShowAIActionButton: state.setShowAIButtonAction,
+        showAIActionButton: state.showAIButtonAction,
 
         // Actions
         handleSendMessage: conversationActions.handleSendMessage,

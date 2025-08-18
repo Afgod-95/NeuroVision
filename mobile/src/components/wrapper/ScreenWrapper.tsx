@@ -19,20 +19,49 @@ interface AuthWrapperProps {
 const ScreenWrapper = ({ children, safeArea = true }: AuthWrapperProps) => {
   const Container = safeArea ? SafeAreaView : View;
 
+  if (Platform.OS === 'android') {
+    return (
+      <Container style={[styles.container, { backgroundColor: Colors.dark.bgPrimary }]}>
+        <Animated.ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={() => Keyboard.dismiss()}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <Animated.View style={styles.contentWrapper}>
+            {children}
+          </Animated.View>
+        </Animated.ScrollView>
+        
+        <Image
+          source={require('../../assets/images/CircularGradient.png')}
+          style={styles.image}
+        />
+      </Container>
+    );
+  }
+
+  // iOS layout with KeyboardAvoidingView
   return (
     <Container style={[styles.container, { backgroundColor: Colors.dark.bgPrimary }]}>
-      <Animated.ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={() => Keyboard.dismiss()}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1, width: '100%' }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <Animated.ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={() => Keyboard.dismiss()}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <Animated.View>{children}</Animated.View>
-        </KeyboardAvoidingView>
-      </Animated.ScrollView>
+          <Animated.View style={styles.contentWrapper}>
+            {children}
+          </Animated.View>
+        </Animated.ScrollView>
+      </KeyboardAvoidingView>
         
       <Image
         source={require('../../assets/images/CircularGradient.png')}
@@ -43,15 +72,26 @@ const ScreenWrapper = ({ children, safeArea = true }: AuthWrapperProps) => {
 };
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    width: '100%',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  contentWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100%',
   },
   image: {
     position: 'absolute',

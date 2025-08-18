@@ -38,11 +38,6 @@ app.use('/api/auth', authRouter);
 
 app.use('/api/conversations', chatsRouter);
 
-console.log(process.env.ACCESS_TOKEN_SECRET);
-
-
-
-
 // Start server with proper error handling
 const startServer = async () => {
   try {

@@ -26,6 +26,7 @@ import useLoadingDots from './AIResponseUI/useLoadingDots';
 import { AIResponseProps, GeneratedImage } from '@/src/utils/types/Types';
 import useImageGallery from './AIResponseUI/ImageGallery';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
+import { start } from 'repl';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -35,13 +36,14 @@ const AdvancedAIResponse = ({
   onRegenerate,
   onFeedback,
   isTyping,
+  showAIButtonAction,
+  isAborted,
   messageId,
   generatedImages = [],
   onImageSave,
 }: AIResponseProps) => {
   const [isLiked, setIsLiked] = useState<'like' | 'dislike' | null>(null);
 
-  const { isAborted, showAIButtons } = useRealtimeChatState()
   //code block component
   const {
     renderCustomMarkdown,
@@ -85,7 +87,7 @@ const AdvancedAIResponse = ({
         easing: Easing.out(Easing.quad),
       });
     }
-  }, [loading]);
+  }, [loading, fadeOpacity, startTypingAnimation]);
 
   // Modal animation effect
   useEffect(() => {
@@ -99,7 +101,7 @@ const AdvancedAIResponse = ({
       modalOpacity.value = withTiming(0, { duration: 150 });
       modalScale.value = withTiming(0.8, { duration: 150 });
     }
-  }, [selectedImage]);
+  }, [selectedImage, modalOpacity, modalScale]);
 
   const handleLike = (type: 'like' | 'dislike') => {
     const newState = isLiked === type ? null : type;
@@ -109,7 +111,7 @@ const AdvancedAIResponse = ({
 
   const handleCopy = async (text: string, blockId?: string) => {
     try {
-      await Clipboard.setString(text);
+      await Clipboard.setStringAsync(text);
 
       if (blockId) {
         setCopiedStates(prev => ({ ...prev, [blockId]: true }));
@@ -123,6 +125,7 @@ const AdvancedAIResponse = ({
         }, 2000);
       }
     } catch (error) {
+      console.log(error)
       Alert.alert('Error', 'Failed to copy content');
     }
   };
@@ -142,7 +145,8 @@ const AdvancedAIResponse = ({
     try {
       onImageSave?.(imageUri);
       Alert.alert('Success', 'Image saved to gallery');
-    } catch (error) {
+    } catch (error: any) {
+      console.log(`Failed to save image to gallery: ${error}`)
       Alert.alert('Error', 'Failed to save image');
     }
   };
@@ -158,9 +162,7 @@ const AdvancedAIResponse = ({
     }
   };
 
-  // Determine if action bar should be shown
-  const shouldShowActionBar = isAborted && showAIButtons || !isTyping;
-
+ 
   if (loading) {
     return (
       <LoadingDots />
@@ -180,8 +182,9 @@ const AdvancedAIResponse = ({
               {renderCustomMarkdown(message)}
             </View>
 
-            {/* Action Bar - Show when not typing OR when aborted */}
-            {shouldShowActionBar && (
+            
+            {/* Action Bar - Show when not typing */}
+            {!isTyping && (
               <View style={styles.actionBar}>
                 <TouchableOpacity
                   style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
@@ -233,6 +236,61 @@ const AdvancedAIResponse = ({
                 )}
               </View>
             )}
+
+            {/* Action Bar - Show when when aborted */}
+            {isAborted && showAIButtonAction && (
+              <View style={styles.actionBar}>
+                <TouchableOpacity
+                  style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
+                  onPress={() => handleCopy(message)}
+                >
+                  <Feather
+                    name={mainCopied ? "check" : "copy"}
+                    size={16}
+                    color={mainCopied ? "#10b981" : "#8e8ea0"}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
+                  onPress={() => handleLike('like')}
+                >
+                  <Feather
+                    name="thumbs-up"
+                    size={16}
+                    color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
+                  onPress={() => handleLike('dislike')}
+                >
+                  <Feather
+                    name="thumbs-down"
+                    size={16}
+                    color={isLiked === 'dislike' ? "#ef4444" : "#8e8ea0"}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={handleShare}
+                >
+                  <Feather name="share" size={16} color="#8e8ea0" />
+                </TouchableOpacity>
+
+                {onRegenerate && (
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={onRegenerate}
+                  >
+                    <MaterialIcons name="refresh" size={20} color="#8e8ea0" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
           </View>
 
           {/* Image Modal */}

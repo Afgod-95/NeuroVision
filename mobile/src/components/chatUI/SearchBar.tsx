@@ -79,7 +79,8 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.dark.bgSecondary,
         borderRadius: 10,
         paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingVertical: 8,
+        
     },
     searchInput: {
         flex: 1,

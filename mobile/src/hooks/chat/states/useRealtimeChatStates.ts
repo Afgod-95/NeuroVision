@@ -16,16 +16,16 @@ export const useRealtimeChatState = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [isAborted, setIsAborted] = useState<boolean>(false);
-  const [showAIButtons, setShowAIButtons] = useState<boolean>(false);
+  const [showAIButtonAction, setShowAIButtonAction] = useState<boolean>(false);
 
   const [newChat, setNewChat] = useState<boolean>(false);
   //bottomsheet states 
   const [openBottomSheet, setOpenBottomSheet] = useState<boolean>(false);
   const bottomSheetRef = useRef<BottomSheet>(null);
-  
+
   //files upload state 
   const [attachments, setAttachments] = useState<any[]>([]);
- 
+
 
 
   // All refs
@@ -44,11 +44,31 @@ export const useRealtimeChatState = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
 
 
-   const { user: userDetails, accessToken, refreshToken } = useSelector((state: RootState) => state.user);
-    const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
-    const queryClient = useQueryClient();
+  const { user: userDetails, accessToken, refreshToken } = useSelector((state: RootState) => state.auth);
+  const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
+  const queryClient = useQueryClient();
 
-    const username = useMemo(() => userDetails?.username?.split(" ")[0], [userDetails?.username]);
+  const username = useMemo(() => {
+    const getDisplayName = (username?: string) => {
+      if (!username) return "";
+
+      const parts = username.trim().split(" ").filter(Boolean);
+
+      if (parts.length === 1) {
+        return parts[0]; 
+      }
+
+      if (parts.length === 2) {
+        return parts[0];
+      }
+
+      return parts[parts.length - 1]; 
+    };
+
+    return getDisplayName(userDetails?.username); 
+  }, [userDetails?.username]);
+
+
   return {
     // State
     isSidebarVisible, setIsSidebarVisible,
@@ -60,7 +80,7 @@ export const useRealtimeChatState = () => {
     loading, setLoading,
     isTyping, setIsTyping,
     isAborted, setIsAborted,
-    showAIButtons, setShowAIButtons,
+    showAIButtonAction, setShowAIButtonAction,
     openBottomSheet, setOpenBottomSheet,
     attachments, setAttachments,
     newChat, setNewChat,
@@ -74,8 +94,8 @@ export const useRealtimeChatState = () => {
     userDetails,
     username,
     queryClient,
-    messageId, isEdited, 
-    
+    messageId, isEdited,
+
     // Refs
     realtimeChannelRef,
     flatListRef,

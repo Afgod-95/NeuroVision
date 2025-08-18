@@ -11,15 +11,15 @@ import {
 } from "redux-persist";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import authReducer from "./slices/authSlice";
-import messageOptionsReducer from "./slices/messageOptionsSlice";
-import { injectStore } from "../services/axiosClient";
-
-
+import authReducer, { updateTokens, resetState } from "./actions/authSlice";
+import hepticFeedbackReducer from './actions/hepticFeedbackSlice'
+import messageOptionsReducer from "./actions/messageOptionsSlice";
+import { injectStore, setTokenRefreshCallback, setLogoutCallback } from "../services/axiosClient";
 
 // Combine all reducers
 const rootReducer = combineReducers({
-  user: authReducer,
+  auth: authReducer,
+  hepticFeedback:hepticFeedbackReducer,
   messageOptions: messageOptionsReducer
 });
 
@@ -44,7 +44,20 @@ export const store = configureStore({
     }),
 });
 
+// Inject store and set up callbacks
 injectStore(store);
+
+// Set up token refresh callback
+setTokenRefreshCallback((tokens: any) => {
+  console.log('Updating tokens in store:', tokens);
+  store.dispatch(updateTokens(tokens));
+});
+
+// Set up logout callback
+setLogoutCallback(() => {
+  console.log('Logging out user due to failed token refresh');
+  store.dispatch(resetState());
+});
 
 // Create the persistor
 export const persistor = persistStore(store);

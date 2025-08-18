@@ -2,7 +2,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import { resetOptions } from '@/src/redux/slices/messageOptionsSlice';
+import { resetOptions } from '@/src/redux/actions/messageOptionsSlice';
 import { RootState } from '@/src/redux/store';
 import Animated, {
   FadeIn,
@@ -20,44 +20,50 @@ const SCREEN_WIDTH = Dimensions.get('screen').width;
 interface EditedMessagePromptProps {
     message: string;
     setMessage: (msg: string) => void;
+    showEditedMessagePopup: boolean;
+    setShowEditedMessagePopup: (show: boolean) => void;
 }
 
 type ClearMessage = () => void;
 
 export const EditedMessagePrompt: React.FC<EditedMessagePromptProps & { clearMessage: ClearMessage }> = (
-    { message, setMessage, clearMessage }
+  { message, setMessage, showEditedMessagePopup, setShowEditedMessagePopup, clearMessage }
 ) => {
-    const { isEdited } = useSelector((state: RootState) => state.messageOptions);
-    const dispatch = useDispatch();
+  const handleClose = () => {
+    clearMessage();
+    setShowEditedMessagePopup(false);
+  };
 
-    if (!isEdited) return null;
-
-    return (
+  return (
+    <>
+      {showEditedMessagePopup && (
         <Animated.View
-            style={styles.searchContainer}
-            exiting={FadeOutUp.delay(1).duration(10)}
-            entering={FadeInUp}
+          style={styles.searchContainer}
+          exiting={FadeOutUp.delay(1).duration(10)}
+          entering={FadeInUp}
         >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                <View style={styles.searchIcon}>
-                    <Feather name="edit-2" size={20} color={Colors.dark.txtSecondary} />
-                </View>
-                <Text style={styles.text}>Editing Message</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={styles.searchIcon}>
+              <Feather name="edit-2" size={20} color={Colors.dark.txtSecondary} />
             </View>
+            <Text style={styles.text}>Editing Message</Text>
+          </View>
 
-            {message.length > 0 && (
-                <Animated.View entering={FadeIn} exiting={FadeOut}>
-                    <TouchableOpacity
-                        onPress={clearMessage}
-                        style={[styles.searchIcon, { marginLeft: 10, marginRight: 0 }]}
-                    >
-                        <AntDesign name="closecircle" size={20} color={Colors.dark.txtSecondary} />
-                    </TouchableOpacity>
-                </Animated.View>
-            )}
+          {message.length > 0 && (
+            <Animated.View entering={FadeIn} exiting={FadeOut}>
+              <TouchableOpacity
+                onPress={handleClose} // Close + clear
+                style={[styles.searchIcon, { marginLeft: 10, marginRight: 0 }]}
+              >
+                <AntDesign name="closecircle" size={20} color={Colors.dark.txtSecondary} />
+              </TouchableOpacity>
+            </Animated.View>
+          )}
         </Animated.View>
-    );
-};
+      )}
+    </>
+  );
+}
 
 
 const styles = StyleSheet.create({
