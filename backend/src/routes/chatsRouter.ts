@@ -35,7 +35,13 @@ chatsRouter.post('/transcribe-audio', verifyAccessToken as RequestHandler, async
 chatsRouter.get('/messages',verifyAccessToken as RequestHandler, getConversationMessages);
 
 //get conversation history
-chatsRouter.get('/:conversationId/history',verifyAccessToken as RequestHandler, getConversation)
+chatsRouter.get(
+    '/conversations/:conversationId',
+    verifyAccessToken as RequestHandler,
+    (req: Request, res: Response, next) => {
+        Promise.resolve(getMessages(req, res)).catch(next);
+    }
+)
 
 
 
