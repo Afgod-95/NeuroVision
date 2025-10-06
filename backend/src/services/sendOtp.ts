@@ -49,7 +49,7 @@ export const sendOtp = async (user: User, isForgotPassword: boolean = false) => 
     console.log('OTP saved to database successfully');
 
     const mailOptions = {
-        from: `"NeuroVision" <onboarding@resend.dev>`,
+        from: `NeuroVision <onboarding@resend.dev>`,
         to: user.email,
         subject: 'Your OTP Code - NeuroVision',
         html: `
