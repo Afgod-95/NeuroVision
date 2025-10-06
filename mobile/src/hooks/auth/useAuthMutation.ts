@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import api from "@/src/services/axiosClient";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/src/redux/store";
-import { resetState } from "@/src/redux/actions/authSlice";
+import { resetState } from "@/src/redux/slices/authSlice";
 import { useCustomAlert } from "@/src/components/alert/CustomAlert";
 import authApi from "@/src/services/authApiClient";
 

@@ -1,4 +1,3 @@
-// Updated CustomSideBar component with silent background refetching
 import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
@@ -7,27 +6,21 @@ import {
     Dimensions,
     StyleSheet,
     TouchableWithoutFeedback,
-    Pressable,
     TouchableOpacity,
     PanResponder,
-    FlatList
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
-import { LinearGradient } from 'expo-linear-gradient';
 import SearchBar from './SearchBar';
 import RecentMessages from '../chatUI/RecentMessages';
-import dummyMessages from '@/src/utils/dummyMessage';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
 import { router } from 'expo-router';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
-import { useRealtimeChat } from '@/src/hooks/chat/realtime/useRealtimeChats';
 import api from '@/src/services/axiosClient';
 
 const { width } = Dimensions.get('window');
@@ -71,7 +64,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                     Authorization: `Bearer ${accessToken}`,
                 },
             });
-            console.log(res.data);
             return res.data;
         },
         enabled: !!userDetails?.id && !!accessToken,
@@ -79,14 +71,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
         retry: 3,
         retryDelay: () => 1000 * 2,
         refetchIntervalInBackground: true,
-        keepPreviousData: true,
         staleTime: 5000,
-        cacheTime: 1000 * 60 * 30,
     });
-
-
-    console.log(`Summaries: ${JSON.stringify(data)}`);
-    console.log(`Is fetching: ${isFetching}`);
 
     useEffect(() => {
         if (error) {
@@ -109,8 +95,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
             setSummaryTitle(formatted);
         }
     }, [data]);
-
-    console.log(userDetails?.id)
 
     //getting username from redux state
     const username = userDetails?.username
@@ -136,7 +120,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
             duration: 300,
             useNativeDriver: false,
         }).start();
-    }, [searchbarVisible]);
+    }, [searchbarVisible, sidebarWidth]);
 
     const panResponder = useRef(
         PanResponder.create({
@@ -209,9 +193,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
         extrapolate: 'clamp',
     });
 
-    const searchbarOpen = () => {
-        setSearchbarVisible(true);
-    };
 
     return shouldRender ? (
         <View style={[StyleSheet.absoluteFillObject, styles.overlay]}>
@@ -259,9 +240,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                                 <Text style={styles.userText}>{userInitials}</Text>
                             </View>
                             <Text style={styles.userText}>{username}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={{ opacity: 0.5 }} onPress={openSettings}>
-                            <Feather name="more-horizontal" size={24} color={Colors.dark.txtSecondary} />
                         </TouchableOpacity>
                     </TouchableOpacity>
                 </View>

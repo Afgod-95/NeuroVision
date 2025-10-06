@@ -79,7 +79,7 @@ export const useCodeBlock = () => {
 
     const handleCopy = async (text: string, blockId?: string) => {
       try {
-        await Clipboard.setString(text);
+       Clipboard.setStringAsync(text);
 
         if (blockId) {
           setCopiedStates(prev => ({ ...prev, [blockId]: true }));
@@ -513,17 +513,7 @@ const markdownStyles = StyleSheet.create({
     borderColor: '#30363d',
     overflow: 'scroll',
   },
-  fence: {
-    backgroundColor: '#0d1117',
-    color: '#e6edf3',
-    fontFamily: 'Courier',
-    fontSize: 13,
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#30363d',
-    overflow: 'scroll',
-  },
+  // Ensure pre tags have no background
   pre: {
     backgroundColor: 'transparent',
   },

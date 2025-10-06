@@ -1,34 +1,41 @@
-import { useState, useRef, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 import { FlatList } from 'react-native';
 import { Message } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/redux/store';
+import { useSelector, useDispatch } from 'react-redux';
+import { AppDispatch, RootState } from '@/src/redux/store';
+import {
+  setSidebarVisible,
+  setMessage,
+  setIsRecording,
+  setMessages,
+  addMessage,
+  updateMessage,
+  removeMessage,
+  setIsAIResponding,
+  setConversationId,
+  setLoading,
+  setIsTyping,
+  setIsAborted,
+  setShowAIButtonAction,
+  setOpenBottomSheet,
+  setAttachments,
+  addAttachment,
+  removeAttachment,
+  setNewChat,
+} from '@/src/redux/slices/chatSlice';
 import BottomSheet from '@gorhom/bottom-sheet';
-// Manages all state variables and basic state operations
+
+// Redux-compatible state management hook
 export const useRealtimeChatState = () => {
-  const [isSidebarVisible, setIsSidebarVisible] = useState<boolean>(false);
-  const [message, setMessage] = useState<string>('');
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isAIResponding, setIsAIResponding] = useState<boolean>(false);
-  const [conversationId, setConversationId] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
-  const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [isAborted, setIsAborted] = useState<boolean>(false);
-  const [showAIButtonAction, setShowAIButtonAction] = useState<boolean>(false);
+  const dispatch = useDispatch<AppDispatch>();
+  
+  // Get state from Redux instead of local useState
+  const chatState = useSelector((state: RootState) => state.chat);
+  const { user: userDetails, accessToken, refreshToken } = useSelector((state: RootState) => state.auth);
+  const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
 
-  const [newChat, setNewChat] = useState<boolean>(false);
-  //bottomsheet states 
-  const [openBottomSheet, setOpenBottomSheet] = useState<boolean>(false);
-  const bottomSheetRef = useRef<BottomSheet>(null);
-
-  //files upload state 
-  const [attachments, setAttachments] = useState<any[]>([]);
-
-
-
-  // All refs
+  // Keep refs as local since they don't need to be in Redux
   const realtimeChannelRef = useRef<any>(null);
   const flatListRef = useRef<FlatList>(null);
   const pendingUserMessageRef = useRef<string | null>(null);
@@ -42,61 +49,103 @@ export const useRealtimeChatState = () => {
   const typingTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
   const currentTypingMessageIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const bottomSheetRef = useRef<BottomSheet>(null);
 
-
-  const { user: userDetails, accessToken, refreshToken } = useSelector((state: RootState) => state.auth);
-  const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
   const queryClient = useQueryClient();
 
   const username = useMemo(() => {
     const getDisplayName = (username?: string) => {
       if (!username) return "";
-
       const parts = username.trim().split(" ").filter(Boolean);
-
       if (parts.length === 1) {
         return parts[0]; 
       }
-
       if (parts.length === 2) {
         return parts[0];
       }
-
       return parts[parts.length - 1]; 
     };
-
     return getDisplayName(userDetails?.username); 
   }, [userDetails?.username]);
 
+  // Redux-compatible setter functions
+  const setIsSidebarVisible = (value: boolean) => dispatch(setSidebarVisible(value));
+  const setMessageText = (value: string) => dispatch(setMessage(value));
+  const setIsRecordingState = (value: boolean) => dispatch(setIsRecording(value));
+  const setMessagesArray = (value: Message[]) => dispatch(setMessages(value));
+  const setIsAIRespondingState = (value: boolean) => dispatch(setIsAIResponding(value));
+  const setConversationIdValue = (value: string) => dispatch(setConversationId(value));
+  const setLoadingState = (value: boolean) => dispatch(setLoading(value));
+  const setIsTypingState = (value: boolean) => dispatch(setIsTyping(value));
+  const setIsAbortedState = (value: boolean) => dispatch(setIsAborted(value));
+  const setShowAIButtonActionState = (value: boolean) => dispatch(setShowAIButtonAction(value));
+  const setOpenBottomSheetState = (value: boolean) => dispatch(setOpenBottomSheet(value));
+  const setAttachmentsArray = (value: any[]) => dispatch(setAttachments(value));
+  const setNewChatState = (value: boolean) => dispatch(setNewChat(value));
+
+  // Message management functions
+  const addMessageToState = (message: Message) => dispatch(addMessage(message));
+  const updateMessageInState = (id: string, updates: Partial<Message>) => 
+    dispatch(updateMessage({ id, updates }));
+  const removeMessageFromState = (id: string) => dispatch(removeMessage(id));
+
+  // Attachment management functions
+  const addAttachmentToState = (attachment: any) => dispatch(addAttachment(attachment));
+  const removeAttachmentFromState = (index: number) => dispatch(removeAttachment(index));
 
   return {
-    // State
-    isSidebarVisible, setIsSidebarVisible,
-    message, setMessage,
-    isRecording, setIsRecording,
-    messages, setMessages,
-    isAIResponding, setIsAIResponding,
-    conversationId, setConversationId,
-    loading, setLoading,
-    isTyping, setIsTyping,
-    isAborted, setIsAborted,
-    showAIButtonAction, setShowAIButtonAction,
-    openBottomSheet, setOpenBottomSheet,
-    attachments, setAttachments,
-    newChat, setNewChat,
+    // Redux State (read-only, use setters to update)
+    isSidebarVisible: chatState.isSidebarVisible,
+    message: chatState.message,
+    isRecording: chatState.isRecording,
+    messages: chatState.messages,
+    isAIResponding: chatState.isAIResponding,
+    conversationId: chatState.conversationId,
+    loading: chatState.loading,
+    isTyping: chatState.isTyping,
+    isAborted: chatState.isAborted,
+    showAIButtonAction: chatState.showAIButtonAction,
+    openBottomSheet: chatState.openBottomSheet,
+    attachments: chatState.attachments,
+    newChat: chatState.newChat,
 
-    accessToken, refreshToken,
+    // Redux Setters
+    setIsSidebarVisible,
+    setMessage: setMessageText,
+    setIsRecording: setIsRecordingState,
+    setMessages: setMessagesArray,
+    setIsAIResponding: setIsAIRespondingState,
+    setConversationId: setConversationIdValue,
+    setLoading: setLoadingState,
+    setIsTyping: setIsTypingState,
+    setIsAborted: setIsAbortedState,
+    setShowAIButtonAction: setShowAIButtonActionState,
+    setOpenBottomSheet: setOpenBottomSheetState,
+    setAttachments: setAttachmentsArray,
+    setNewChat: setNewChatState,
 
-    //bottomsheet states 
-    bottomSheetRef,
+    // Message Management
+    addMessage: addMessageToState,
+    updateMessage: updateMessageInState,
+    removeMessage: removeMessageFromState,
 
-    //user
+    // Attachment Management
+    addAttachment: addAttachmentToState,
+    removeAttachment: removeAttachmentFromState,
+
+    // Auth & User Data
+    accessToken,
+    refreshToken,
     userDetails,
     username,
-    queryClient,
-    messageId, isEdited,
+    messageId,
+    isEdited,
 
-    // Refs
+    // Other utilities
+    queryClient,
+    bottomSheetRef,
+
+    // Refs (these stay the same)
     realtimeChannelRef,
     flatListRef,
     pendingUserMessageRef,

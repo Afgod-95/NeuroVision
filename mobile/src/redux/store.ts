@@ -11,16 +11,18 @@ import {
 } from "redux-persist";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import authReducer, { updateTokens, resetState } from "./actions/authSlice";
-import hepticFeedbackReducer from './actions/hepticFeedbackSlice'
-import messageOptionsReducer from "./actions/messageOptionsSlice";
+import authReducer, { updateTokens, resetState } from "./slices/authSlice";
+import hepticFeedbackReducer from './slices/hepticFeedbackSlice'
+import messageOptionsReducer from "./slices/messageOptionsSlice";
 import { injectStore, setTokenRefreshCallback, setLogoutCallback } from "../services/axiosClient";
+import chatReducer from "./slices/chatSlice";
 
 // Combine all reducers
 const rootReducer = combineReducers({
   auth: authReducer,
   hepticFeedback:hepticFeedbackReducer,
-  messageOptions: messageOptionsReducer
+  messageOptions: messageOptionsReducer,
+  chat: chatReducer,
 });
 
 // Configuration for persistence
@@ -40,6 +42,7 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+        serializableCheck: false,
       },
     }),
 });

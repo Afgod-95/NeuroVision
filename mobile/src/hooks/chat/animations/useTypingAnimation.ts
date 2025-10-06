@@ -1,92 +1,176 @@
-import { useCallback, Dispatch, SetStateAction } from "react";
-import { Message } from "@/src/utils/interfaces/TypescriptInterfaces";
+import { useCallback, useRef } from "react";
+import { useDispatch } from "react-redux";
+import { updateMessage, setIsAIResponding } from "@/src/redux/slices/chatSlice";
+import { AppDispatch } from "@/src/redux/store";
 
-interface UseTypingAnimationProps {
-  setMessages: Dispatch<SetStateAction<Message[]>>;
-  setIsTyping: Dispatch<SetStateAction<boolean>>;
+type UseTypingAnimationProps = {
+  isProcessingResponseRef: React.RefObject<boolean>;
+  currentLoadingIdRef: React.RefObject<string | null>;
   typingIntervalRef: React.RefObject<NodeJS.Timeout | number | null>;
-  typingTimeoutRef: React.RefObject<NodeJS.Timeout | number | null>;
-  currentTypingMessageIdRef: React.RefObject<string | null>;
-  scrollToBottom: () => void;
-}
+};
 
-// Handles all typing animation logic
-export const useTypingAnimation = ({ 
-  setMessages, 
-  setIsTyping,
-  typingIntervalRef,
-  typingTimeoutRef,
-  currentTypingMessageIdRef,
-  scrollToBottom 
+export const useTypingAnimation = ({
+  isProcessingResponseRef,
+  currentLoadingIdRef,
+  typingIntervalRef
 }: UseTypingAnimationProps) => {
+  const dispatch = useDispatch<AppDispatch>();
   
+  const currentTextRef = useRef<string>("");
+  const targetTextRef = useRef<string>("");
+  const currentIndexRef = useRef<number>(0);
+  const currentMessageIdRef = useRef<string | null>(null);
+
   const cleanupTypingAnimation = useCallback(() => {
+    console.log("🧹 Cleanup: typingIntervalRef.current:", typingIntervalRef.current);
+    
     if (typingIntervalRef.current) {
-      clearInterval(typingIntervalRef.current);
+      clearInterval(typingIntervalRef.current as any);
       typingIntervalRef.current = null;
+      console.log("✅ Cleared interval");
     }
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
+    
+    if (currentMessageIdRef.current && targetTextRef.current) {
+      console.log("📝 Finalizing message:", currentMessageIdRef.current);
+      dispatch(updateMessage({
+        id: currentMessageIdRef.current,
+        updates: {
+          text: targetTextRef.current,
+          isTyping: false,
+          isLoading: false,
+        }
+      }));
     }
-    currentTypingMessageIdRef.current = null;
-    setIsTyping(false);
-  }, [setIsTyping, currentTypingMessageIdRef,  typingIntervalRef, typingTimeoutRef]);
+    
+    currentTextRef.current = "";
+    targetTextRef.current = "";
+    currentIndexRef.current = 0;
+    currentMessageIdRef.current = null;
+    
+    dispatch(setIsAIResponding(false));
+    isProcessingResponseRef.current = false;
+    console.log("🧹 Cleanup complete");
+  }, [dispatch, isProcessingResponseRef, typingIntervalRef]);
 
-  const startTypingAnimation = useCallback((fullText: string, messageId: string) => {
-  // Clear any existing typing animation
-  if (typingIntervalRef.current) {
-    clearInterval(typingIntervalRef.current);
-    typingIntervalRef.current = null;
-  }
-  if (typingTimeoutRef.current) {
-    clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = null;
-  }
-  
-  setIsTyping(true);
-  currentTypingMessageIdRef.current = messageId;
-  let currentIndex = 0;
-  const typingSpeed = 10;
+  const startTypingAnimation = useCallback((
+    fullText: string, 
+    messageId: string,
+    speed: number = 20
+  ) => {
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("🎬 START TYPING ANIMATION");
+    console.log("  Message ID:", messageId);
+    console.log("  Text length:", fullText.length);
+    console.log("  Speed:", speed);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-  const typeNextCharacter = () => {
-    if (currentIndex <= fullText.length && currentTypingMessageIdRef.current === messageId) {
-      const currentText = fullText.substring(0, currentIndex);
+    cleanupTypingAnimation();
 
-      setMessages((prev: Message[]) =>
-        prev.map((msg: Message) =>
-          msg.id === messageId
-            ? { ...msg, text: currentText, isTyping: currentIndex < fullText.length }
-            : msg
-        )
-      );
+    targetTextRef.current = fullText;
+    currentMessageIdRef.current = messageId;
+    currentIndexRef.current = 0;
+    currentTextRef.current = "";
 
-      if (currentIndex < fullText.length) {
-        currentIndex++;
-        typingIntervalRef.current = setTimeout(typeNextCharacter, typingSpeed);
-      } else {
-        // Typing animation complete
-        currentTypingMessageIdRef.current = null;
-        setIsTyping(false);
-        setMessages((prev: Message[]) =>
-          prev.map((msg: Message) =>
-            msg.id === messageId
-              ? { ...msg, isTyping: false }
-              : msg
-          )
-        );
+    // Short message path
+    if (fullText.length < 50) {
+      console.log("📄 Short message - showing immediately");
+      dispatch(updateMessage({
+        id: messageId,
+        updates: {
+          text: fullText,
+          isTyping: false,
+          isLoading: false,
+        }
+      }));
+      
+      setTimeout(() => {
+        dispatch(setIsAIResponding(false));
+        isProcessingResponseRef.current = false;
+        console.log("✅ Short message complete");
+      }, 100);
+      
+      return;
+    }
+
+    // Long message - start interval
+    console.log("⏳ Creating interval for long message...");
+    
+    const intervalId = setInterval(() => {
+      const remainingChars = fullText.length - currentIndexRef.current;
+      
+      console.log(`⌨️ Typing: ${currentIndexRef.current}/${fullText.length} (${remainingChars} remaining)`);
+      
+      if (remainingChars <= 0) {
+        console.log("🏁 Animation complete - finalizing");
+        
+        dispatch(updateMessage({
+          id: messageId,
+          updates: {
+            text: fullText,
+            isTyping: false,
+            isLoading: false,
+          }
+        }));
+        
+        if (typingIntervalRef.current) {
+          clearInterval(typingIntervalRef.current as any);
+          typingIntervalRef.current = null;
+        }
+        
+        currentTextRef.current = "";
+        targetTextRef.current = "";
+        currentIndexRef.current = 0;
+        currentMessageIdRef.current = null;
+        
+        dispatch(setIsAIResponding(false));
+        isProcessingResponseRef.current = false;
+        
+        console.log("✅ Typing animation finished");
+        return;
       }
 
-      // Call scrollToBottom directly without dependency
-      scrollToBottom();
-    }
-  };
+      const chunkSize = Math.min(speed, remainingChars);
+      currentIndexRef.current += chunkSize;
+      currentTextRef.current = fullText.substring(0, currentIndexRef.current);
 
-  typeNextCharacter();
-}, []);
+      console.log(`  Dispatching update: ${currentTextRef.current.length} chars`);
+      
+      dispatch(updateMessage({
+        id: messageId,
+        updates: {
+          text: currentTextRef.current,
+          isTyping: true,
+          isLoading: false,
+        }
+      }));
+
+    }, 50);
+    
+    typingIntervalRef.current = intervalId as any;
+    console.log("✅ Interval created:", typingIntervalRef.current);
+
+  }, [dispatch, cleanupTypingAnimation, isProcessingResponseRef, typingIntervalRef]);
+
+  const skipTypingAnimation = useCallback(() => {
+    if (currentMessageIdRef.current && targetTextRef.current) {
+      console.log("⏭️ Skipping to end of typing animation");
+      
+      dispatch(updateMessage({
+        id: currentMessageIdRef.current,
+        updates: {
+          text: targetTextRef.current,
+          isTyping: false,
+          isLoading: false,
+        }
+      }));
+      
+      cleanupTypingAnimation();
+    }
+  }, [dispatch, cleanupTypingAnimation]);
 
   return {
-    cleanupTypingAnimation,
     startTypingAnimation,
+    cleanupTypingAnimation,
+    skipTypingAnimation,
   };
 };

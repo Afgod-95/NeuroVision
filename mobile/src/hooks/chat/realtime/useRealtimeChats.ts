@@ -8,130 +8,206 @@ import { useMessageMutation } from "../mutations/useMessageMutation";
 import { useSupabaseRealtime } from "../supabase/useSupabaseRealtime";
 import { useConversationActions } from "../actions/useConversationActions";
 import { useMessageOptions } from "@/src/hooks/userMessagePreview/useMessageOptions";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/src/redux/store";
+import { setConversationId } from "@/src/redux/slices/chatSlice";
+import { setMessage as setMessageOptions } from "@/src/redux/slices/messageOptionsSlice";
 
-// Main hook that orchestrates all the smaller hooks
 export const useRealtimeChat = ({
-    uniqueConvId,
-    systemPrompt = "You are a helpful AI Assistant",
-    temperature = 0.7,
-    maxTokens = 1048576,
-    onMessagesChange,
-    onLoadingChange,
+  uniqueConvId,
+  systemPrompt = "You are a helpful AI Assistant",
+  temperature = 0.7,
+  maxTokens = 1048576,
+  onMessagesChange,
+  onLoadingChange,
 }: RealtimeChatProps) => {
+  const chatState = useRealtimeChatState();
+  const dispatch = useDispatch<AppDispatch>();
+  const { messages, message  } = useSelector((state: RootState) => state.chat);
+  const { isEdited, messageId } = useSelector((state: RootState) => state.messageOptions);
 
-    const state = useRealtimeChatState();
+  // Helpers
+  const { transformSupabaseMessage, extractAIResponseText, 
+    scrollToBottom } = useMessageUtils(chatState.flatListRef);
+  
+    // Initialize typing animation FIRST (without clearAIResponding for now)
+  const { startTypingAnimation, cleanupTypingAnimation } = useTypingAnimation({
+    ...chatState
+  });
+  
+  
+  // Initialize AI response manager
+  const { clearAIResponding } = useAIResponseManager({
+    isProcessingResponseRef: chatState.isProcessingResponseRef,
+    currentLoadingIdRef: chatState.currentLoadingIdRef,
+    abortControllerRef: chatState.abortControllerRef,
+    cleanupTypingAnimation,
+  });
 
-    // Helpers
-    const messageUtils = useMessageUtils(state.flatListRef);
-    const typingAnimation = useTypingAnimation({ ...state, ...messageUtils });
-    const aiResponseManager = useAIResponseManager({ ...state, ...typingAnimation });
+  // Supabase realtime subscription
+  const { cleanupSubscription } = useSupabaseRealtime({
+    ...chatState,
+    transformSupabaseMessage,
+    startTypingAnimation,
+    clearAIResponding,
+    scrollToBottom,
+    cleanupTypingAnimation,
+  });
 
-    // supabase real time subscription
-    const supabaseRealtimeSubscription = useSupabaseRealtime({ ...state, ...typingAnimation, ...aiResponseManager, ...messageUtils })
+  
 
-    //send message mutation
-    const sendMessageMutation = useMessageMutation({
-        systemPrompt,
-        temperature,
-        maxTokens,
-        ...state,
-        ...typingAnimation,
-        ...aiResponseManager,
-        ...messageUtils
-    })
+  // Send message mutation
+  const { sendMessageMutation } = useMessageMutation({
+    systemPrompt,
+    temperature,
+    maxTokens,
+    ...chatState,
+    startTypingAnimation,
+    clearAIResponding,
+    extractAIResponseText,
+    scrollToBottom,
+  });
 
-    //actions 
-    const conversationActions = useConversationActions({
-        systemPrompt,
-        temperature,
-        maxTokens,
-        ...state,
-      
-        setNewChat: state.setNewChat,
-        setIsAborted: state.setIsAborted,
-        setShowAIButtonAction: state.setShowAIButtonAction,
-        setAttachment: state.setAttachments,
-        scrollToBottom: messageUtils.scrollToBottom,
-        cleanupSubscription: supabaseRealtimeSubscription.cleanupSubscription,
-        clearAIResponding: aiResponseManager.clearAIResponding,
-        sendMessageMutation: sendMessageMutation.sendMessageMutation,
-        cleanupTypingAnimation: typingAnimation.cleanupTypingAnimation,
-        startTypingAnimation: typingAnimation.startTypingAnimation,
-        extractAIResponseText: messageUtils.extractAIResponseText,
-        queryClient: state.queryClient,
-    })
+  // Actions
+  const {
+    handleSendMessage,
+    abortMessage,
+    handleRegenerate,
+    startNewConversation,
+    loadConversationHistory,
+  } = useConversationActions({
+    systemPrompt,
+    temperature,
+    maxTokens,
+    ...chatState,
+    scrollToBottom,
+    cleanupSubscription,
+    clearAIResponding,
+    sendMessageMutation,
+    cleanupTypingAnimation,
+    startTypingAnimation,
+    extractAIResponseText,
+    queryClient: chatState.queryClient,
+  });
+
+  // Initialize conversationId once
+  useEffect(() => {
+    if (chatState.userDetails?.id && uniqueConvId && !chatState.conversationId) {
+      dispatch(setConversationId(uniqueConvId));
+    }
+  }, [
+    dispatch, 
+    chatState.conversationId, 
+    chatState.userDetails?.id, 
+    uniqueConvId,
+  ]);
+
+  // Auto-load message into input when editing
+  useEffect(() => {
+    if (isEdited && messageId) {
+      const msg = messages.find((m) => m.id === messageId);
+      if (msg) dispatch(setMessageOptions(msg.text));
+    }
+  }, [dispatch, messages, isEdited, messageId]);
+
+  // Message options
+  const { handleEditMessage } = useMessageOptions();
+  const handleEditMessageCallback = useCallback(() => {
+    handleEditMessage(message);
+  }, [handleEditMessage, message]);
+
+  // External listeners
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(chatState.isAIResponding);
+    }
+  }, [chatState.isAIResponding, onLoadingChange]);
+
+  useEffect(() => {
+    if (onMessagesChange) {
+      onMessagesChange(chatState.messages);
+    }
+  }, [chatState.messages, onMessagesChange]);
+
+  return {
+    // State
+    messages: chatState.messages,
+    loading: chatState.loading,
+    newChat: chatState.newChat,
+    isAIResponding: chatState.isAIResponding,
+    isRecording: chatState.isRecording,
+    message: chatState.message,
+    isTyping: chatState.isTyping,
+    isSidebarVisible: chatState.isSidebarVisible,
+    conversationId: chatState.conversationId,
+    username: chatState.username,
+    isAborted: chatState.isAborted,
+    showAIButtonAction: chatState.showAIButtonAction,
+    attachments: chatState.attachments,
+    openBottomSheet: chatState.openBottomSheet,
+    userDetails: chatState.userDetails,
+    accessToken: chatState.accessToken,
+    refreshToken: chatState.refreshToken,
+    messageId: chatState.messageId,
+    isEdited: chatState.isEdited,
+
+    // Actions
+    handleSendMessage,
+    abortMessage,
+    handleRegenerate,
+    handleEditMessageCallback,
+    startNewConversation,
+    loadConversationHistory,
+
+    // State setters
+    setMessages: chatState.setMessages,
+    setIsRecording: chatState.setIsRecording,
+    setIsSidebarVisible: chatState.setIsSidebarVisible,
+    setNewChat: chatState.setNewChat,
+    setIsAIResponding: chatState.setIsAIResponding,
+    setLoading: chatState.setLoading,
+    setIsTyping: chatState.setIsTyping,
+    setIsAborted: chatState.setIsAborted,
+    setShowAIButtonAction: chatState.setShowAIButtonAction,
+    setConversationId: chatState.setConversationId,
+    addMessage: chatState.addMessage,
+    updateMessage: chatState.updateMessage,
+    removeMessage: chatState.removeMessage,
+    setAttachments: chatState.setAttachments,
+    addAttachment: chatState.addAttachment,
+    removeAttachment: chatState.removeAttachment,
+    setOpenBottomSheet: chatState.setOpenBottomSheet,
+    setSidebarVisible: chatState.setIsSidebarVisible,
 
 
-    //Initialize conversationId once
-    useEffect(() => {
-        if (state.userDetails?.id && uniqueConvId && !state.conversationId) {
-            console.log('Setting initial conversation ID:', uniqueConvId);
-            state.setConversationId(uniqueConvId);
-        }
-    }, [state, uniqueConvId]);
+    // Utils
+    scrollToBottom,
+    extractAIResponseText,
+    clearAIResponding,
+    cleanupTypingAnimation,
+    startTypingAnimation,
 
-    useEffect(() => {
-        if (state.isEdited && state.messageId) {
-            state.setMessage(state.messageId);
-        }
-    }, [state]);
+    // Refs
+    flatListRef: chatState.flatListRef,
+    bottomSheetRef: chatState.bottomSheetRef,
+    isProcessingResponseRef: chatState.isProcessingResponseRef,
+    currentLoadingIdRef: chatState.currentLoadingIdRef,
+    abortControllerRef: chatState.abortControllerRef,
+    typingIntervalRef: chatState.typingIntervalRef,
+    typingTimeoutRef: chatState.typingTimeoutRef,
+    currentTypingMessageIdRef: chatState.currentTypingMessageIdRef,
+    realtimeChannelRef: chatState.realtimeChannelRef,
+    pendingUserMessageRef: chatState.pendingUserMessageRef,
+    processedMessageIds: chatState.processedMessageIds,
+    subscriptionReadyRef: chatState.subscriptionReadyRef,
+    isSubscriptionActiveRef: chatState.isSubscriptionActiveRef,
+    subscribedConversationIdRef: chatState.subscribedConversationIdRef,
 
-    const { handleEditMessage } = useMessageOptions();
-    const handleEditMessageCallback = useCallback(() => {
-        handleEditMessage(state.message);
-    }, [handleEditMessage, state.message]);
-
-    useEffect(() => {
-        if (onLoadingChange) {
-            onLoadingChange(state.isAIResponding);
-        }
-    }, [state.isAIResponding, onLoadingChange]);
-
-    useEffect(() => {
-        if (onMessagesChange) {
-            onMessagesChange(state.messages);
-        }
-    }, [state.messages, onMessagesChange]);
-
-
-
-    return {
-        // State
-        messages: state.messages,
-        loading: state.loading,
-        newChat: state.newChat,
-        isAIResponding: state.isAIResponding,
-        isRecording: state.isRecording,
-        message: state.message,
-        isTyping: state.isTyping,
-        isSidebarVisible: state.isSidebarVisible,
-        conversationId: state.conversationId,
-        username: state.username,
-
-        userCredentials: state.userDetails,
-        setIsAborted: state.setIsAborted,
-        isAborted: state.isAborted,
-        setShowAIActionButton: state.setShowAIButtonAction,
-        showAIActionButton: state.showAIButtonAction,
-
-        // Actions
-        handleSendMessage: conversationActions.handleSendMessage,
-        abortMessage: conversationActions.abortMessage,
-        handleRegenerate: conversationActions.handleRegenerate,
-        handleEditMessageCallback: handleEditMessageCallback,
-        startNewConversation: conversationActions.startNewConversation,
-        loadConversationHistory: conversationActions.loadConversationHistory,
-        setMessage: state.setMessage,
-        setMessages: state.setMessages,
-        setIsRecording: state.setIsRecording,
-        setIsSidebarVisible: state.setIsSidebarVisible,
-        scrollToBottom: messageUtils.scrollToBottom,
-        setNewChat: state.setNewChat,
-
-        // Refs for external access
-        flatListRef: state.flatListRef,
-        // Mutation object
-        sendMessageMutation: sendMessageMutation.sendMessageMutation,
-    };
+    // Services
+    sendMessageMutation,
+    queryClient: chatState.queryClient,
+  };
 };
+
+
 

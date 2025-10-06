@@ -7,8 +7,8 @@ import {
   setShowAbove,
   setMessage,
   setMessageId,
-  isEdited,
-} from '@/src/redux/actions/messageOptionsSlice';
+  setIsEdited
+} from '@/src/redux/slices/messageOptionsSlice';
 import { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -58,7 +58,7 @@ export const useMessageOptions = () => {
   //handleEdit message 
   const handleEditMessage = (message: string) => {
     dispatch(setShowOptions(false));
-    dispatch(isEdited(true));
+    dispatch(setIsEdited(true));
     dispatch(setMessage(message));
   }
 

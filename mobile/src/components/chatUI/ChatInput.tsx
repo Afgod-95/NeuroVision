@@ -10,21 +10,27 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/Colors';
 import Feather from '@expo/vector-icons/Feather';
-import { useDispatch } from 'react-redux';
-import { resetOptions } from '@/src/redux/actions/messageOptionsSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { resetOptions } from '@/src/redux/slices/messageOptionsSlice';
+import { setIsRecording, setMessage } from '@/src/redux/slices/chatSlice';
 import { EditedMessagePrompt } from './EditedMessagePrompt';
-import UploadedFiles, { UploadedFile } from './uploaded-files/UploadedFiles';
-import { sampleUploadedFile } from '@/src/utils/data';
+import UploadedFiles, { UploadedFile } from './upload-files/UploadFiles';
+import { RootState } from '@/src/redux/store';
+import { setMessage as setMessageOption } from '@/src/redux/slices/messageOptionsSlice';
+import {
+  useAudioRecorder,
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorderState,
+} from 'expo-audio';
+import MovingWaveform from '../audio/MovingWave';
+import AudioRecorder from '../audio/AudioRecorder';
 
 const SCREEN_WIDTH = Dimensions.get('screen').width;
 
 type ChatInputProps = {
-  message: string;
-  isEdited: boolean;
   openBottomSheet: () => void;
-  setMessage: (message: string) => void;
-  isRecording: boolean;
-  setIsRecording: (isRecording: boolean) => void;
   onSendMessage?: (message: string) => void;
   onStopMessage?: () => void;
   isSending?: boolean;
@@ -33,22 +39,30 @@ type ChatInputProps = {
 };
 
 const ChatInput = ({
-  message,
-  setMessage,
   openBottomSheet,
-  isEdited,
-  isRecording,
-  setIsRecording,
   onSendMessage,
   onStopMessage,
   isSending = false,
   uploadedFiles = [],
   onRemoveFile,
 }: ChatInputProps) => {
+
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
+
   const dispatch = useDispatch();
   const textInputRef = useRef<TextInput>(null);
 
+  // Get message from Redux state
+  const { message, isRecording } = useSelector((state: RootState) => state.chat);
+  const { isEdited } = useSelector((state: RootState) => state.messageOptions);
+
   const [showEditedPopup, setShowEditedPopup] = useState<boolean>(false);
+
+  // Handle text input changes - updates Redux state
+  const handleMessageChange = useCallback((text: string) => {
+    dispatch(setMessage(text));
+  }, [dispatch]);
 
   const handleSendMessage = useCallback(async () => {
     const hasMessage = message.trim();
@@ -58,8 +72,10 @@ const ChatInput = ({
 
     try {
       onSendMessage?.(message);
-      setMessage('');
-      // hide edited message prompt if it was showing
+      // Clear message in Redux state
+      dispatch(setMessage(''));
+
+      // Hide edited message prompt if it was showing
       if (isEdited) {
         setShowEditedPopup(false);
         dispatch(resetOptions());
@@ -68,22 +84,98 @@ const ChatInput = ({
       console.error('Send message error:', error);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
-  }, [message, uploadedFiles, onSendMessage, setMessage, isEdited, dispatch]);
+  }, [message, uploadedFiles, onSendMessage, isEdited, dispatch]);
 
   useEffect(() => {
-   if(isEdited){
-    setShowEditedPopup(true);
-   }
-  }, [isEdited]);
+    if (isEdited) {
+      setShowEditedPopup(true);
+      dispatch(setMessageOption(message));
+    }
+  }, [isEdited, dispatch, message]);
 
   const handleStopMessage = useCallback(() => {
     onStopMessage?.();
   }, [onStopMessage]);
 
-  const handleMicPress = useCallback(() => {
-    setIsRecording(!isRecording);
-    console.log('Microphone pressed, recording:', !isRecording);
-  }, [isRecording, setIsRecording]);
+  useEffect(() => {
+    (async () => {
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      if (!status.granted) {
+        Alert.alert('Permission to access microphone was denied');
+      }
+
+      setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: true,
+      });
+    })();
+  }, []);
+
+  // top recording function
+  const stopRecording = useCallback(async () => {
+    try {
+      console.log('Stopping recording...');
+      await audioRecorder.stop();
+      // Set to false to stop recording state
+      dispatch(setIsRecording(false));
+
+      console.log(`Recording stopped, isRecording set to false \n  Audio URI: ${audioRecorder.uri}`);
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+    }
+  }, [dispatch, audioRecorder]);
+
+  //Transcribe audio function
+  const transcribeAudio = useCallback(async () => {
+    try {
+      console.log('Starting transcription...');
+      
+      // First, stop recording if it's still active
+      if (isRecording) {
+        await audioRecorder.stop();
+      }
+      
+      // Set recording state to false
+      dispatch(setIsRecording(false));
+      
+      // TODO: Add your actual transcription logic here
+      // const recordingUri = audioRecorder.uri;
+      // const transcriptionResult = await transcribeAudioFile(recordingUri);
+      // dispatch(setMessage(transcriptionResult));
+      
+      console.log('Transcription process initiated');
+    } catch (error) {
+      console.error('Error during transcription:', error);
+      dispatch(setIsRecording(false));
+    }
+  }, [dispatch, audioRecorder, isRecording]);
+
+  // FIXED: Handle mic press function
+  const handleMicPress = useCallback(async () => {
+    console.log('Mic pressed, current isRecording:', isRecording);
+    
+    if (isRecording) {
+      // If currently recording, stop it
+      console.log('Stopping current recording...');
+      await stopRecording();
+    } else {
+      // If not recording, start recording
+      console.log('Starting recording...');
+      try {
+        // Set recording state to true first
+        dispatch(setIsRecording(true));
+        // Prepare and start recording
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
+        console.log('Recording started successfully');
+      } catch (error) {
+        console.error('Error starting recording:', error);
+        // Reset recording state on error
+        dispatch(setIsRecording(false));
+        Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
+      }
+    }
+  }, [isRecording, dispatch, audioRecorder, stopRecording]);
 
   // Add handler for focusing the input when container is pressed
   const handleInputContainerPress = useCallback(() => {
@@ -92,21 +184,24 @@ const ChatInput = ({
     }
   }, [isSending]);
 
+  // Clear message function for EditedMessagePrompt
+  const clearMessage = useCallback(() => {
+    dispatch(setMessage(''));
+    dispatch(resetOptions());
+  }, [dispatch]);
+
   const canSendMessage = (message.trim() || uploadedFiles.length > 0) && !isSending;
   const showStopButton = isSending;
 
   return (
     <>
-      <View style={styles.container}>
+      <View style={[styles.container]}>
         <EditedMessagePrompt
           message={message}
-          setMessage={setMessage}
+          setMessage={handleMessageChange}
           showEditedMessagePopup={showEditedPopup}
           setShowEditedMessagePopup={setShowEditedPopup}
-          clearMessage={() => {
-            setMessage('');
-            dispatch(resetOptions());
-          }}
+          clearMessage={clearMessage}
         />
 
         {/* Uploaded files component */}
@@ -117,89 +212,101 @@ const ChatInput = ({
 
         {/* Main input area */}
         <View style={styles.mainInputArea}>
-          <TouchableOpacity 
-            style={styles.inputContainer}
-            onPress={handleInputContainerPress}
-            activeOpacity={1}
-          >
-            <TextInput
-              ref={textInputRef}
-              style={styles.textInput}
-              placeholder="Ask anything"
-              placeholderTextColor="#9CA3AF"
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              editable={!isSending}
-              scrollEnabled={true}
-              textAlignVertical="top"
-              returnKeyType="default"
-            />
-          </TouchableOpacity>
-
-          <View style={styles.iconsContainer}>
-            <TouchableOpacity
-              onPress={openBottomSheet}
-              style={[styles.iconButton, { borderWidth: 1, borderColor: Colors.dark.borderColor }]}
-            >
-              <Feather name="plus" size={20} color="white" />
-            </TouchableOpacity>
-            <View style={styles.iconContainer}>
+          {isRecording ? (
+            <>
+              {/* Show audio recorder when recording */}
+              <AudioRecorder
+                transcribeAudio={transcribeAudio}
+                stopRecording={stopRecording}
+              />
+            </>
+          ) : (
+            <>
+              {/* Show text input when not recording */}
               <TouchableOpacity
-                style={[
-                  styles.iconButton,
-                  isRecording && styles.recordingButton,
-                  { borderWidth: isRecording ? 0 : 1, borderColor: Colors.dark.borderColor }
-                ]}
-                onPress={handleMicPress}
-                activeOpacity={0.7}
-                disabled={isSending}
+                style={styles.inputContainer}
+                onPress={handleInputContainerPress}
+                activeOpacity={1}
               >
-                <Ionicons
-                  name={isRecording ? "mic" : "mic-outline"}
-                  size={20}
-                  color={isRecording ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
+                <TextInput
+                  ref={textInputRef}
+                  style={styles.textInput}
+                  placeholder="Ask anything"
+                  placeholderTextColor="#9CA3AF"
+                  value={message}
+                  onChangeText={handleMessageChange}
+                  multiline
+                  editable={!isSending}
+                  scrollEnabled={true}
+                  textAlignVertical="top"
+                  returnKeyType="default"
                 />
               </TouchableOpacity>
+              <View style={styles.iconsContainer}>
+                <TouchableOpacity
+                  onPress={openBottomSheet}
+                  style={[styles.iconButton, { borderWidth: 1, borderColor: Colors.dark.borderColor }]}
+                >
+                  <Feather name="plus" size={20} color="white" />
+                </TouchableOpacity>
+                <View style={styles.iconContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.iconButton,
+                      isRecording && styles.recordingButton,
+                      { borderWidth: isRecording ? 0 : 1, borderColor: Colors.dark.borderColor }
+                    ]}
+                    onPress={handleMicPress}
+                    activeOpacity={0.7}
+                    disabled={isSending}
+                  >
+                    <Ionicons
+                      name={isRecording ? "mic" : "mic-outline"}
+                      size={20}
+                      color={isRecording ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
+                    />
+                  </TouchableOpacity>
 
-              {showStopButton ? (
-                <TouchableOpacity
-                  style={[
-                    styles.iconButton,
-                    styles.stopButton,
-                  ]}
-                  onPress={handleStopMessage}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="stop"
-                    size={17}
-                    color={Colors.dark.bgSecondary}
-                  />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={[
-                    styles.iconButton,
-                    canSendMessage && styles.recordingButton,
-                    {
-                      borderWidth: canSendMessage ? 0 : 1,
-                      borderColor: Colors.dark.borderColor,
-                    }
-                  ]}
-                  onPress={handleSendMessage}
-                  activeOpacity={0.7}
-                  disabled={!canSendMessage}
-                >
-                  <Ionicons
-                    name="send"
-                    size={17}
-                    color={canSendMessage ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
+                  {showStopButton ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.iconButton,
+                        styles.stopButton,
+                      ]}
+                      onPress={handleStopMessage}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="stop"
+                        size={17}
+                        color={Colors.dark.bgSecondary}
+                      />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.iconButton,
+                        canSendMessage && styles.recordingButton,
+                        {
+                          borderWidth: canSendMessage ? 0 : 1,
+                          borderColor: Colors.dark.borderColor,
+                        }
+                      ]}
+                      onPress={handleSendMessage}
+                      activeOpacity={0.7}
+                      disabled={!canSendMessage}
+                    >
+                      <Ionicons
+                        name="send"
+                        size={17}
+                        color={canSendMessage ? Colors.dark.bgPrimary : Colors.dark.txtSecondary}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </>
@@ -213,6 +320,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingBottom: 35,
     backgroundColor: Colors.dark.bgSecondary,
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    gap: 15,
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingBottom: 10,
   },
   mainInputArea: {
     paddingHorizontal: 16,
@@ -233,7 +347,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     maxHeight: 150,
     minHeight: 40,
-    paddingBottom:10,
+    paddingBottom: 10,
     paddingVertical: 0,
     paddingHorizontal: 0,
     margin: 0,

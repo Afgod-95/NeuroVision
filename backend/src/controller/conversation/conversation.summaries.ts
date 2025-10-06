@@ -84,7 +84,7 @@ Title:`;
                     summary: summary,
                     summary_type: 'auto',
                     updated_at: new Date().toISOString()
-                });
+                }, { onConflict: 'conversation_id,user_id' });
 
             console.log(`Auto-summary generated for conversation ${conversationId}`);
         }

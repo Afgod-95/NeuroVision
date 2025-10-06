@@ -16,7 +16,13 @@ import BottomSheet, {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { Audio } from 'expo-audio'
+import {
+  useAudioRecorder,
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorderState,
+} from 'expo-audio';
 import * as FileSystem from 'expo-file-system';
 import { Colors } from '../../constants/Colors';
 import { useRealtimeChatState } from '../../hooks/chat/states/useRealtimeChatStates';
@@ -45,8 +51,6 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
     bottomSheetRef.current?.close();
   };
 
-  //states
-  const state = useRealtimeChatState();
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -236,7 +240,7 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
   return (
     <BottomSheet
       ref={bottomSheetRef}
-      index={1}
+      index={-1}
       snapPoints={snapPoints}
       onChange={handleSheetChanges}
       backdropComponent={renderBackdrop}

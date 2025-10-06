@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { TouchableOpacity } from 'react-native-gesture-handler';
+import { Pressable } from 'react-native-gesture-handler';
 
 type Props = {
   onPress: () => void;
@@ -39,9 +39,9 @@ const ScrollToBottomButton: React.FC<Props> = ({ onPress, visible }) => {
 
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
-      <TouchableOpacity style={styles.button} onPress={onPress} activeOpacity={0.7}>
+      <Pressable style={styles.button} onPress={onPress} >
         <Feather name="chevron-down" size={24} color="#fff" />
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   );
 };
@@ -51,11 +51,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     justifyContent: 'center',
     alignSelf: 'center',
-    bottom: 50,
+    bottom: 20,
+    right: 10,
     zIndex: 10,
   },
   button: {
-    backgroundColor: Colors.dark.button,
+    backgroundColor: Colors.dark.bgSecondary,
+    borderWidth: 1,
+    borderColor: Colors.dark.borderColor,
     borderRadius: 50,
     padding: 8,
     shadowColor: '#000',

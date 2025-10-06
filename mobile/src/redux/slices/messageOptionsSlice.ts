@@ -12,9 +12,9 @@ interface MessageOptionsState {
   touchPos: TouchPos;
   showAbove: boolean;
   message: string | null;
-  isEdited: boolean,
+  isEdited: boolean;
   messageId: string | null;
-  editingMessage: Message | null,
+  editingMessage: Message | null;
 }
 
 const initialState: MessageOptionsState = {
@@ -49,8 +49,9 @@ export const messageOptionsSlice = createSlice({
     setMessageId: (state, action: PayloadAction<string>) => {
       state.messageId = action.payload;
     },
-    isEdited: (state, action: PayloadAction<boolean>) => {
-      state.isEdited = action.payload
+    // Fixed: renamed from 'isEdited' to 'setIsEdited' to follow naming convention
+    setIsEdited: (state, action: PayloadAction<boolean>) => {
+      state.isEdited = action.payload;
     },
     resetOptions: () => initialState,
   },
@@ -62,7 +63,8 @@ export const {
   setShowAbove,
   setMessage,
   setMessageId,
-  isEdited,
+  setIsEdited, 
+  setEditingMessage,
   resetOptions,
 } = messageOptionsSlice.actions;
 

@@ -53,10 +53,6 @@ api.interceptors.request.use(
     if (injectedStore) {
       const state = injectedStore.getState().auth;
       const token = state.accessToken;
-      
-      console.log("Access token being sent:", token ? `${token.substring(0, 20)}...` : 'null');
-      console.log("User authenticated:", state.isAuthenticated);
-      
       // Only add token if user is authenticated and token exists
       if (state.isAuthenticated && token) {
         config.headers.Authorization = `Bearer ${token}`;

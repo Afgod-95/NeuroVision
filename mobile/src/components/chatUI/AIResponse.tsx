@@ -25,8 +25,7 @@ import { useCodeBlock } from './AIResponseUI/CodeBlocks';
 import useLoadingDots from './AIResponseUI/useLoadingDots';
 import { AIResponseProps, GeneratedImage } from '@/src/utils/types/Types';
 import useImageGallery from './AIResponseUI/ImageGallery';
-import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
-import { start } from 'repl';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -36,8 +35,6 @@ const AdvancedAIResponse = ({
   onRegenerate,
   onFeedback,
   isTyping,
-  showAIButtonAction,
-  isAborted,
   messageId,
   generatedImages = [],
   onImageSave,
@@ -185,60 +182,6 @@ const AdvancedAIResponse = ({
             
             {/* Action Bar - Show when not typing */}
             {!isTyping && (
-              <View style={styles.actionBar}>
-                <TouchableOpacity
-                  style={[styles.actionButton, mainCopied && styles.actionButtonActive]}
-                  onPress={() => handleCopy(message)}
-                >
-                  <Feather
-                    name={mainCopied ? "check" : "copy"}
-                    size={16}
-                    color={mainCopied ? "#10b981" : "#8e8ea0"}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, isLiked === 'like' && styles.actionButtonActive]}
-                  onPress={() => handleLike('like')}
-                >
-                  <Feather
-                    name="thumbs-up"
-                    size={16}
-                    color={isLiked === 'like' ? "#10b981" : "#8e8ea0"}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, isLiked === 'dislike' && styles.actionButtonActive]}
-                  onPress={() => handleLike('dislike')}
-                >
-                  <Feather
-                    name="thumbs-down"
-                    size={16}
-                    color={isLiked === 'dislike' ? "#ef4444" : "#8e8ea0"}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={handleShare}
-                >
-                  <Feather name="share" size={16} color="#8e8ea0" />
-                </TouchableOpacity>
-
-                {onRegenerate && (
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={onRegenerate}
-                  >
-                    <MaterialIcons name="refresh" size={20} color="#8e8ea0" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* Action Bar - Show when when aborted */}
-            {isAborted && showAIButtonAction && (
               <View style={styles.actionBar}>
                 <TouchableOpacity
                   style={[styles.actionButton, mainCopied && styles.actionButtonActive]}

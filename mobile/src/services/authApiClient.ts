@@ -21,7 +21,6 @@ authApi.interceptors.request.use(
 // Simple response interceptor for logging
 authApi.interceptors.response.use(
   (response) => {
-    console.log("Auth API response:", response.status, response.config.url);
     return response;
   },
   (error) => {

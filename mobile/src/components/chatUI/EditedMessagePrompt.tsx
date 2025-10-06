@@ -2,7 +2,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import { resetOptions } from '@/src/redux/actions/messageOptionsSlice';
+import { resetOptions } from '@/src/redux/slices/messageOptionsSlice';
 import { RootState } from '@/src/redux/store';
 import Animated, {
   FadeIn,

@@ -18,24 +18,24 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Colors } from '@/src/constants/Colors';
 import ChatInput from '@/src/components/chatUI/ChatInput';
 import CustomSideBar from '@/src/components/chatUI/SideBar';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/redux/store';
-import { Message, ApiResponse, ApiMessage } from '@/src/utils/interfaces/TypescriptInterfaces';
+import { AppDispatch, RootState } from '@/src/redux/store';
+import { Message, ApiMessage } from '@/src/utils/interfaces/TypescriptInterfaces';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-import UserMessageBox, { MessagePreview, MessageContent } from '@/src/components/chatUI/UserMessageBox';
+import UserMessageBox, { MessagePreview } from '@/src/components/chatUI/UserMessageBox';
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
-import UploadedFiles, { UploadedFile } from '@/src/components/chatUI/uploaded-files/UploadedFiles';
+import UploadedFiles, { UploadedFile } from '@/src/components/chatUI/upload-files/UploadFiles';
 import { uniqueConvId } from '@/src/constants/generateConversationId';
 import { useRealtimeChat } from '@/src/hooks/chat/realtime/useRealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
 import ScrollToBottomButton from '@/src/components/chatUI/ScrollToBottomButton';
 import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
-import { setOptions } from 'expo-splash-screen';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
 import BottomSheetModal from '@/src/components/chatUI/FileUploadBottomSheet';
 import Welcome from '@/src/components/chatUI/welcome-screen/Welcome';
+import api from '@/src/services/axiosClient';
+import { useDispatch, useSelector } from 'react-redux';
+import { setOpenBottomSheet, setSidebarVisible, setMessage, setMessages, setLoading } from '@/src/redux/slices/chatSlice';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = UploadedFile & {
@@ -71,43 +71,51 @@ const MemoizedAdvancedAIResponse = React.memo(AdvancedAIResponse, (prevProps, ne
 const Index = () => {
   // Get message options from Redux
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
+  const dispatch = useDispatch<AppDispatch>();
+  const { openBottomSheet, isSidebarVisible } = useSelector((state: RootState) => state.chat);
+
+  // Use Redux as single source of truth for messages
+  const reduxMessages = useSelector((state: RootState) => state.chat.messages);
+  const { loading, isAIResponding, isTyping, isAborted } = useSelector((state: RootState) => state.chat);
+  
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
-  
+
   // Add keyboard height tracking
   const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState<boolean>(false);
-  
+
   // Get status bar height for proper header spacing
   const statusBarHeight = StatusBar.currentHeight || 0;
-  
+
   const { conversation_id } = useLocalSearchParams();
-  console.log(`Conversation ID: ${conversation_id}`);
-
-  const { user, accessToken, refreshToken } = useSelector((state: RootState) => state.auth);
-
-  console.log(`User Details: ${user}`);
-  console.log(`AccessToken: ${accessToken}`);
-  console.log(`RefreshToken: ${refreshToken}`)
-
+  const { accessToken } = useSelector((state: RootState) => state.auth);
   const queryClient = useQueryClient();
 
-  // Get the actual conversation ID
-  const actualConversationId = Array.isArray(conversation_id) ? conversation_id[0] : conversation_id;
+  // Get the actual conversation ID - memoize to prevent re-renders
+  const actualConversationId = useMemo(() => 
+    Array.isArray(conversation_id) ? conversation_id[0] : conversation_id,
+    [conversation_id]
+  );
 
-  // Initialize the realtime chat hook
+  // Initialize the realtime chat hook with stable callbacks
+  const stableOnMessagesChange = useCallback((messages: Message[]) => {
+    console.log('Messages updated from hook:', messages?.length);
+    // Don't dispatch here to avoid conflicts - Redux is source of truth
+  }, []);
+
+  const stableOnLoadingChange = useCallback((loading: boolean) => {
+    console.log('Loading state from hook:', loading);
+  }, []);
+
   const realtimeActions = useRealtimeChat({
     uniqueConvId: uniqueConvId,
     systemPrompt: "You are NeuroVision, a helpful AI assistant specialized in providing comprehensive and accurate assistance across various topics.",
     temperature: 0.7,
     maxTokens: 4096,
-    onMessagesChange: (messages) => {
-      console.log('Messages updated:', messages.length);
-    },
-    onLoadingChange: (loading) => {
-      console.log('Loading state:', loading);
-    },
+    onMessagesChange: stableOnMessagesChange,
+    onLoadingChange: stableOnLoadingChange,
     initialMessages: [],
     enableSampleMessages: true,
   });
@@ -136,25 +144,29 @@ const Index = () => {
     }));
   }, []);
 
+  // Ref to track if prefetch has been called to prevent multiple calls
+  const prefetchCalledRef = useRef(false);
+
   // Prefetch messages for specific conversation id
   const prefetchMessages = useCallback(async (conversationId: string, userId: string) => {
-    if (!conversationId || !userId) {
-      console.log('Missing conversationId or userId for prefetch');
+    if (!conversationId || !userId || prefetchCalledRef.current) {
+      console.log('Skipping prefetch - already called or missing params');
       return;
     }
+
+    prefetchCalledRef.current = true;
 
     try {
       setIsInitialLoading(true);
       console.log(`Prefetching messages for conversation: ${conversationId}`);
 
       const data = await queryClient.fetchQuery({
-        queryKey: ['conversationMessages', conversationId, userId],
+        queryKey: ['conversationMessages', conversationId],
         queryFn: async () => {
-          const response = await axios.get<ApiResponse>('/api/conversations/messages', {
-            params: {
-              conversationId,
-              userId,
-            },
+          const response = await api.get(`/api/conversations/messages/${conversationId}`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
           });
           return response.data;
         },
@@ -163,35 +175,43 @@ const Index = () => {
       });
 
       if (data && data.messages) {
-        console.log(`Fetched ${data.messages.length} messages`);
+        console.log(`Fetched ${data.messages?.length} messages`);
         const transformedMessages = transformApiMessages(data.messages);
-        realtimeActions.setMessages(transformedMessages);
-        realtimeActions.scrollToBottom();
+        dispatch(setMessages(transformedMessages));
+        dispatch(setLoading(false));
+        
+        // Small delay to ensure state is updated before scrolling
+        setTimeout(() => {
+          realtimeActions.scrollToBottom();
+        }, 100);
       }
     } catch (error) {
       console.error('Error prefetching messages:', error);
     } finally {
       setIsInitialLoading(false);
     }
-  }, [queryClient, transformApiMessages, realtimeActions]);
+  }, [queryClient, dispatch, transformApiMessages, accessToken, realtimeActions]);
 
-  // Effect to prefetch messages when conversation_id is available
+  // Effect to prefetch messages - only run once per conversation
   useEffect(() => {
-    if (actualConversationId && realtimeActions.userCredentials?.id) {
+    if (actualConversationId && realtimeActions.userDetails?.id && !prefetchCalledRef.current) {
+      const userId = String(realtimeActions.userDetails.id);
       console.log('Triggering prefetch for:', actualConversationId);
-      prefetchMessages(
-        actualConversationId,
-        String(realtimeActions.userCredentials.id)
-      );
+      prefetchMessages(actualConversationId, userId);
     }
-  }, [actualConversationId, realtimeActions.userCredentials?.id, prefetchMessages]);
+  }, [actualConversationId, realtimeActions.userDetails?.id]);
 
-  // Track sending state based on mutation status
+  // Reset prefetch flag when conversation changes
   useEffect(() => {
-    if (realtimeActions.sendMessageMutation) {
-      setIsSending(realtimeActions.sendMessageMutation.isPending || realtimeActions.sendMessageMutation.isPending);
-    }
-  }, [realtimeActions]);
+    prefetchCalledRef.current = false;
+  }, [actualConversationId]);
+
+  // Track sending state - use mutation status directly without effect
+  const mutationIsPending = realtimeActions.sendMessageMutation?.isPending || false;
+  
+  useEffect(() => {
+    setIsSending(mutationIsPending);
+  }, [mutationIsPending]);
 
   // Scroll to bottom handler
   const onScroll = useCallback((event: any) => {
@@ -200,49 +220,41 @@ const Index = () => {
     const layoutHeight = event.nativeEvent.layoutMeasurement.height;
 
     const isAtBottom = offsetY + layoutHeight >= contentHeight - 50;
-
     setShowScrollButton(!isAtBottom && offsetY > 50);
   }, []);
 
   // Sidebar handlers
   const handleToggleSidebar = useCallback(() => {
-    realtimeActions.setIsSidebarVisible(!realtimeActions.isSidebarVisible);
-  }, [realtimeActions]);
+    dispatch(setSidebarVisible(true));
+  }, [dispatch]);
 
   const handleCloseSidebar = useCallback(() => {
-    realtimeActions.setIsSidebarVisible(false);
-  }, [realtimeActions]);
+    dispatch(setSidebarVisible(false));
+  }, [dispatch]);
 
   const handleOpenSidebar = useCallback(() => {
-    realtimeActions.setIsSidebarVisible(true);
-  }, [realtimeActions]);
+    realtimeActions.setIsSidebarVisible(!isSidebarVisible);
+  }, [realtimeActions, isSidebarVisible]);
 
-  //state for bottom sheet
-  const state = useRealtimeChatState()
+  // State for bottom sheet
+  const state = useRealtimeChatState();
 
-  //bottom sheet
-  const HandleOpenBottomSheet = () => {
-    state.setOpenBottomSheet(true);
-    state.bottomSheetRef.current?.expand()
-  };
+  // Bottom sheet handler
+  const HandleOpenBottomSheet = useCallback(() => {
+    dispatch(setOpenBottomSheet(!openBottomSheet));
+    state.bottomSheetRef.current?.expand();
+  }, [dispatch, state.bottomSheetRef, openBottomSheet]);
 
-  //handle file upload
-  const handleFileSelected = (file: UploadedFile) => {
-    state.setAttachments((prev) => [...prev, file]);
-  };
+  // File upload handlers
+  const handleFileSelected = useCallback((file: UploadedFile) => {
+    const newAttachments = [...state.attachments, file];
+    state.setAttachments(newAttachments);
+  }, [state]);
 
-  const handleRemoveFile = (fileId: string) => {
-    state.setAttachments((prev) => prev.filter((item) => item.id !== fileId));
-  }
-
-  // Message input handlers
-  const handleMessageOnChange = useCallback((text: string) => {
-    realtimeActions.setMessage(text);
-  }, [realtimeActions]);
-
-  const handleIsRecording = useCallback((recording: boolean) => {
-    realtimeActions.setIsRecording(recording);
-  }, [realtimeActions]);
+  const handleRemoveFile = useCallback((fileId: string) => {
+    const filteredAttachments = state.attachments.filter((item: any) => item?.id !== fileId);
+    state.setAttachments(filteredAttachments);
+  }, [state]);
 
   // Handle send message with proper typing
   const handleSendMessageWithAudio = useCallback((messageText: string, audioFile?: UploadedAudioFile) => {
@@ -287,78 +299,109 @@ const Index = () => {
     };
   }, []);
 
-  // Render item function for FlatList
+  // Render item function for FlatList - simplified dependencies
   const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => {
-    console.log(`Rendering message ${index}:`, { id: item.id, user: item.user, sender: item.sender });
-
-    if (item.user) {
+    if (item?.user) {
       return (
         <MemoizedUserMessageBox
           message={item.text}
-          messageId={item.id}
+          messageId={item?.id}
           userMessage={true}
           messageContent={item.content}
         />
       );
     } else {
-      const isLastMessage = index === realtimeActions.messages.length - 1;
-      const shouldShowLoading = isLastMessage &&
-        realtimeActions.isAIResponding &&
-        (item.text.trim() === '' || item.isLoading === true);
-
-      // Force loading to false if AI is not responding
-      const finalLoadingState = realtimeActions.isAIResponding ? shouldShowLoading : false;
+      const isLastMessage = index === reduxMessages?.length - 1;
+      const shouldShowLoading = isLastMessage && isAIResponding && (item.text.trim() === '' || item.isLoading === true);
+      const finalLoadingState = isAIResponding ? shouldShowLoading : false;
 
       return (
         <MemoizedAdvancedAIResponse
-          isTyping={realtimeActions.isTyping}
-          showAIButtonAction={realtimeActions.showAIActionButton}
-          isAborted={realtimeActions.isAborted}
+          isTyping={isTyping}
           message={item.text}
           loading={finalLoadingState}
-          onRegenerate={() => realtimeActions.handleRegenerate(item.id)}
+          onRegenerate={() => realtimeActions.handleRegenerate(item?.id)}
         />
       );
     }
-  }, [realtimeActions]);
-
-  // Debug logging for loading states
-  useEffect(() => {
-    if (realtimeActions.messages.length > 0) {
-      const lastMessage = realtimeActions.messages[realtimeActions.messages.length - 1];
-      console.log('Loading State Debug:', {
-        messageId: lastMessage.id,
-        messageText: lastMessage.text.substring(0, 30) + '...',
-        messageIsLoading: lastMessage.isLoading,
-        globalIsAIResponding: realtimeActions.isAIResponding,
-        globalLoading: realtimeActions.loading,
-        initialLoading: isInitialLoading,
-      });
-    }
-  }, [realtimeActions.messages, realtimeActions.isAIResponding, realtimeActions.loading, isInitialLoading]);
+  }, [reduxMessages?.length, isAIResponding, isTyping, realtimeActions]);
 
   // Key extractor for FlatList
   const keyExtractor = useCallback((item: Message) => {
-    return `${item.id}-${item.sender}-${item.user ? 'user' : 'ai'}`;
+    return `${item?.id}-${item?.sender}-${item.user ? 'user' : 'ai'}`;
   }, []);
 
-  // Memoized content components
+  // Memoized content components - stable references
   const welcomeContent = useMemo(() => (
     <Welcome
-      username={realtimeActions.username}
+      username={realtimeActions?.username}
       newChat={realtimeActions.newChat}
-      onPromptSelect={(prompt) => realtimeActions.setMessage(prompt)}
+      onPromptSelect={(prompt) => dispatch(setMessage(prompt))}
     />
-  ), [realtimeActions]);
+  ), [realtimeActions.username, realtimeActions.newChat, dispatch]);
 
   const loadingContent = useMemo(() => (
     <Loading />
   ), []);
 
-  // Determine what to show based on loading states
-  const shouldShowLoading = realtimeActions.loading || isInitialLoading;
-  const shouldShowWelcome = !shouldShowLoading && realtimeActions.messages.length === 0;
-  const shouldShowMessages = !shouldShowLoading && realtimeActions.messages.length > 0;
+  // Determine what to show based on loading states - stable references
+  const shouldShowLoading = loading || isInitialLoading;
+  const shouldShowWelcome = !shouldShowLoading && reduxMessages?.length === 0;
+  const shouldShowMessages = !shouldShowLoading && reduxMessages?.length > 0;
+
+  // Main content - simplified to prevent re-render loops
+  const mainContent = useMemo(() => {
+    if (shouldShowLoading) return loadingContent;
+    if (shouldShowWelcome) return welcomeContent;
+    if (shouldShowMessages) {
+      return (
+        <>
+          <FlatList
+            ref={realtimeActions.flatListRef}
+            data={reduxMessages}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            contentContainerStyle={[
+              styles.flatListContent,
+              styles.flatListContentWithBanner
+            ]}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={10}
+            windowSize={10}
+            decelerationRate="normal"
+            scrollEventThrottle={16}
+            onScroll={onScroll}
+            nestedScrollEnabled={true}
+            getItemLayout={undefined}
+            extraData={reduxMessages?.length}
+          />
+          {!isTyping && (
+            <ScrollToBottomButton
+              onPress={realtimeActions.scrollToBottom}
+              visible={showScrollButton}
+            />
+          )}
+        </>
+      );
+    }
+    return null;
+  }, [
+    shouldShowLoading,
+    shouldShowWelcome, 
+    shouldShowMessages,
+    loadingContent,
+    welcomeContent,
+    reduxMessages,
+    keyExtractor,
+    renderItem,
+    onScroll,
+    showScrollButton,
+    isTyping,
+    realtimeActions.flatListRef,
+    realtimeActions.scrollToBottom
+  ]);
 
   return (
     <>
@@ -376,7 +419,7 @@ const Index = () => {
               <SafeAreaView style={styles.safeAreaContainer}>
                 <View style={[
                   styles.header,
-                  Platform.OS === 'android' && { paddingTop: statusBarHeight + 10 }
+                  (Platform.OS as any) === 'android' ? { paddingTop: statusBarHeight + 10 } : {}
                 ]}>
                   <TouchableOpacity onPress={handleToggleSidebar}>
                     <Image
@@ -386,49 +429,15 @@ const Index = () => {
                   </TouchableOpacity>
 
                   <Text style={styles.headerTitle}>NeuroVision</Text>
-                  {realtimeActions.messages.length !== 0 ? (
+                  {reduxMessages?.length !== 0 ? (
                     <TouchableOpacity onPress={realtimeActions.startNewConversation}>
                       <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
                     </TouchableOpacity>
                   ) : (<View />)}
                 </View>
 
-                {/* Content Area - Show loading, welcome, or messages */}
-                {shouldShowLoading && loadingContent}
-
-                {shouldShowWelcome && welcomeContent}
-
-                {shouldShowMessages && (
-                  <>
-                    <FlatList
-                      ref={realtimeActions.flatListRef}
-                      data={realtimeActions.messages}
-                      keyExtractor={keyExtractor}
-                      renderItem={renderItem}
-                      contentContainerStyle={[
-                        styles.flatListContent,
-                        styles.flatListContentWithBanner
-                      ]}
-                      removeClippedSubviews={true}
-                      maxToRenderPerBatch={10}
-                      updateCellsBatchingPeriod={50}
-                      initialNumToRender={10}
-                      windowSize={10}
-                      decelerationRate="normal"
-                      scrollEventThrottle={16}
-                      onScroll={onScroll}
-                      nestedScrollEnabled={true}
-                      getItemLayout={undefined}
-                      extraData={realtimeActions.messages.length}
-                    />
-                    {!realtimeActions.isTyping &&
-                      <ScrollToBottomButton
-                        onPress={realtimeActions.scrollToBottom}
-                        visible={showScrollButton}
-                      />
-                    }
-                  </>
-                )}
+                {/* Content Area */}
+                {mainContent}
               </SafeAreaView>
 
               {/* USER MESSAGE PREVIEW */}
@@ -444,14 +453,9 @@ const Index = () => {
                 onRemoveFile={handleRemoveFile}
                 uploadedFiles={state.attachments}
                 openBottomSheet={HandleOpenBottomSheet}
-                message={realtimeActions.message}
-                setMessage={realtimeActions.setMessage}
-                isEdited={isEdited}
-                isRecording={realtimeActions.isRecording}
-                setIsRecording={realtimeActions.setIsRecording}
                 onSendMessage={realtimeActions.handleSendMessage}
                 onStopMessage={handleStopMessage}
-                isSending={isSending || realtimeActions.isTyping}
+                isSending={isSending || isTyping}
               />
             </View>
           ) : (
@@ -463,7 +467,7 @@ const Index = () => {
               <SafeAreaView style={styles.safeAreaContainer}>
                 <View style={[
                   styles.header,
-                  Platform.OS === "android" && { paddingTop: statusBarHeight + 10 }
+                  Platform.OS as any === 'android' ? { paddingTop: statusBarHeight + 10 } : {}
                 ]}>
                   <TouchableOpacity onPress={handleToggleSidebar}>
                     <Image
@@ -473,49 +477,15 @@ const Index = () => {
                   </TouchableOpacity>
 
                   <Text style={styles.headerTitle}>NeuroVision</Text>
-                  {realtimeActions.messages.length !== 0 ? (
+                  {reduxMessages?.length !== 0 ? (
                     <TouchableOpacity onPress={realtimeActions.startNewConversation}>
                       <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
                     </TouchableOpacity>
                   ) : (<View />)}
                 </View>
 
-                {/* Content Area - Show loading, welcome, or messages */}
-                {shouldShowLoading && loadingContent}
-
-                {shouldShowWelcome && welcomeContent}
-
-                {shouldShowMessages && (
-                  <>
-                    <FlatList
-                      ref={realtimeActions.flatListRef}
-                      data={realtimeActions.messages}
-                      keyExtractor={keyExtractor}
-                      renderItem={renderItem}
-                      contentContainerStyle={[
-                        styles.flatListContent,
-                        styles.flatListContentWithBanner
-                      ]}
-                      removeClippedSubviews={true}
-                      maxToRenderPerBatch={10}
-                      updateCellsBatchingPeriod={50}
-                      initialNumToRender={10}
-                      windowSize={10}
-                      decelerationRate="normal"
-                      scrollEventThrottle={16}
-                      onScroll={onScroll}
-                      nestedScrollEnabled={true}
-                      getItemLayout={undefined}
-                      extraData={realtimeActions.messages.length}
-                    />
-                    {!realtimeActions.isTyping &&
-                      <ScrollToBottomButton
-                        onPress={realtimeActions.scrollToBottom}
-                        visible={showScrollButton}
-                      />
-                    }
-                  </>
-                )}
+                {/* Content Area */}
+                {mainContent}
               </SafeAreaView>
 
               {/* USER MESSAGE PREVIEW */}
@@ -531,14 +501,9 @@ const Index = () => {
                 onRemoveFile={handleRemoveFile}
                 uploadedFiles={state.attachments}
                 openBottomSheet={HandleOpenBottomSheet}
-                message={realtimeActions.message}
-                setMessage={realtimeActions.setMessage}
-                isEdited={isEdited}
-                isRecording={realtimeActions.isRecording}
-                setIsRecording={realtimeActions.setIsRecording}
                 onSendMessage={realtimeActions.handleSendMessage}
                 onStopMessage={handleStopMessage}
-                isSending={isSending || realtimeActions.isTyping}
+                isSending={isSending || isTyping}
               />
             </KeyboardAvoidingView>
           )}
@@ -552,12 +517,12 @@ const Index = () => {
         onOpen={handleOpenSidebar}
         startNewConversation={realtimeActions.startNewConversation}
       />
-      {state.openBottomSheet && (
+      
         <BottomSheetModal
-          onFileSelected={(file) => handleFileSelected(file)}
+          onFileSelected={handleFileSelected}
           bottomSheetRef={state.bottomSheetRef}
         />
-      )}
+    
     </>
   );
 };

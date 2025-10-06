@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useDispatch, useSelector } from 'react-redux';
-import { loginUser, resetState } from '@/src/redux/actions/authSlice';
+import { loginUser, resetState } from '@/src/redux/slices/authSlice';
 import type { RootState, AppDispatch } from '@/src/redux/store';
 import { useCustomAlert } from '@/src/components/alert/CustomAlert';
 

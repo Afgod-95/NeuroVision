@@ -26,9 +26,9 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/src/redux/store';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '@/src/redux/store';
-import { logoutUser, resetState, setUseBiometrics } from '@/src/redux/actions/authSlice';
+import { logoutUser, resetState, setUseBiometrics } from '@/src/redux/slices/authSlice';
 import * as Haptics from 'expo-haptics';
-import { setEnableHepticFeedback } from '@/src/redux/actions/hepticFeedbackSlice';
+import { setEnableHepticFeedback } from '@/src/redux/slices/hepticFeedbackSlice';
 import AccountDeletionSheet from '@/src/components/settings/AccountDeletion';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useCustomAlert } from '@/src/components/alert/CustomAlert';
@@ -261,7 +261,7 @@ const SettingsScreen: React.FC = () => {
                         <Switch
                             value={useBiometrics}
                             onValueChange={toggleUseBiometric}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            trackColor={{ false: '#3A3A3C', true: 'lemon' }}
                             thumbColor="#FFFFFF"
                         />
                     ),
@@ -275,7 +275,7 @@ const SettingsScreen: React.FC = () => {
                         <Switch
                             value={autoSave}
                             onValueChange={setAutoSave}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            trackColor={{ false: '#3A3A3C', true: 'lemon' }}
                             thumbColor="#FFFFFF"
                         />
                     ),
@@ -289,7 +289,7 @@ const SettingsScreen: React.FC = () => {
                         <Switch
                             value={enableHepticFeedback}
                             onValueChange={handleToggleHepticFeedback}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            trackColor={{ false: '#3A3A3C', true: 'lemon' }}
                             thumbColor="#FFFFFF"
                         />
                     ),
@@ -303,7 +303,7 @@ const SettingsScreen: React.FC = () => {
                         <Switch
                             value={speechEnabled}
                             onValueChange={setSpeechEnabled}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            trackColor={{ false: '#3A3A3C', true: 'lemon' }}
                             thumbColor="#FFFFFF"
                         />
                     ),
@@ -317,7 +317,7 @@ const SettingsScreen: React.FC = () => {
                         <Switch
                             value={autoSave}
                             onValueChange={setAutoSave}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            trackColor={{ false: '#3A3A3C', true: 'lemon' }}
                             thumbColor="#FFFFFF"
                         />
                     ),
@@ -336,7 +336,7 @@ const SettingsScreen: React.FC = () => {
                         <Switch
                             value={dataSharing}
                             onValueChange={setDataSharing}
-                            trackColor={{ false: '#3A3A3C', true: '#007AFF' }}
+                            trackColor={{ false: '#3A3A3C', true: 'lemon' }}
                             thumbColor="#FFFFFF"
                         />
                     ),
@@ -433,7 +433,7 @@ const SettingsScreen: React.FC = () => {
                     >
                         <View />
                         <Text style={styles.headerTitle}>Settings</Text>
-                        <TouchableOpacity onPress={() => router.canGoBack()} style={styles.closeButton}>
+                        <TouchableOpacity onPress={() => router.dismiss()} style={styles.closeButton}>
                             <Ionicons name="close" size={24} color={Colors.dark.txtPrimary} />
                         </TouchableOpacity>
                     </Animated.View>

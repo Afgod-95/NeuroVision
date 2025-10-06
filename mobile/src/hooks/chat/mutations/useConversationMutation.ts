@@ -21,7 +21,6 @@ export const useConversationMutation = (accessToken: string) => {
       },
 
       onSuccess: (data) => {
-        console.log(data)
         console.log("Messages fetched successfully");
       },
       onError: (error) => {

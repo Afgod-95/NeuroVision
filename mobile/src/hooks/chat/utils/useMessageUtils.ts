@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { MessageContent, SupabaseMessage, Message } from "@/src/utils/interfaces/TypescriptInterfaces";
-import { FlatList } from "react-native";
 
 
 // Utility functions for message processing
@@ -59,7 +58,7 @@ export const useMessageUtils = (flatListRef: React.RefObject<any>) => {
         setTimeout(() => {
             flatListRef?.current?.scrollToEnd({ animated: true });
         }, 100);
-    }, []);
+    }, [flatListRef]);
 
     return {
         transformSupabaseMessage,

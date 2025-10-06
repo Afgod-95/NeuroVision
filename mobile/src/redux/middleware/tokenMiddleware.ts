@@ -1,6 +1,6 @@
 import { createListenerMiddleware } from '@reduxjs/toolkit';
-import { updateTokens, resetState } from '../actions/authSlice';
-import { refreshAccessToken } from '../actions/authSlice';
+import { updateTokens, resetState } from '../slices/authSlice';
+import { refreshAccessToken } from '../slices/authSlice';
 import axios from 'axios';
 import Constants from 'expo-constants';
 
