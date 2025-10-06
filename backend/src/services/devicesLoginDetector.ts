@@ -1,7 +1,7 @@
 import axios from "axios";
 import { UAParser } from "ua-parser-js";
 import supabase from "../lib/supabase";
-import { transporter } from "./sendOtp";
+import { resend } from "./sendOtp";
 import { Request } from "express";
 
 interface LocationData {
@@ -104,7 +104,7 @@ const sendNewDeviceEmail = async (toEmail: string, username: string, device: Dev
         <p>If this wasn't you, please reset your password immediately.</p>
       `;
         
-        await transporter.sendMail({
+        await resend.emails.send({
             from: `"NueroVision" <${process.env.EMAIL_USER}>`,
             to: toEmail,
             subject: 'New Device Detected',
