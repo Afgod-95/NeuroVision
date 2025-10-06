@@ -1,19 +1,12 @@
 import { User } from '../lib/types';
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend';
 import { generateOtp } from "../utils/otp";
 import supabase from "../lib/supabase";
 
-//node mailer setup
-export const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: true,
-    auth: {
-        user: process.env.USER_EMAIL,
-        pass: process.env.USER_PASSWORD
-    }
-})
+// resend setup
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+
 
 const sentOtps = new Map<string, number>();
 
@@ -132,11 +125,18 @@ export const sendOtp = async (user: User, isForgotPassword: boolean = false) => 
     console.log('Sending email to:', user.email);
 
     try {
-        await transporter.sendMail(mailOptions);
+        const { data, error: sendError } = await resend.emails.send(mailOptions);
+        if (sendError) {
+            console.error('Resend email error:', sendError);
+            return { success: false, error: sendError };
+        }
         console.log(`OTP ${otp} sent successfully to ${user.email}`);
 
         // Record the time this OTP was sent
         sentOtps.set(otpKey, now);
+
+        //log the resend response data
+        console.log('Resend response data:', JSON.stringify(data));
 
         // Clean up old entries (optional)
         setTimeout(() => {
