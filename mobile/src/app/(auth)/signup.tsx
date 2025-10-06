@@ -64,11 +64,7 @@ const SignUp = () => {
       showError('Ooops!!!', 'Password must be at least 6 characters');
       return;
     }
-    signUpMutation.mutateAsync({
-      username: user.username,
-      email: user.email,
-      password: user.password
-    }, {
+    signUpMutation.mutateAsync(user, {
       onSuccess: (data) => {
         showSuccess('Success', data.message, {
           autoClose: false,

@@ -11,6 +11,7 @@ import { getDevicesLocation_info, isDeviceNew, saveDevice, sendNewDeviceEmail } 
 import { updateDeviceLastAccessed } from '../helpers/lastAccessedDevice';
 import { generateTokenPair, revokeAllUserTokens, revokeRefreshToken } from '../middlewares/auth.middleware';
 import bcrypt from 'bcrypt';
+import { deleteAuthUser } from '../lib/supabase';
 
 //register user endpoint
 export const registerUser = async (req: Request, res: Response) => {
@@ -582,12 +583,17 @@ const handleSupabaseError = (res: Response, error: any, message: string) => {
 //delete user account
 export const deleteUserAccount = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id, authUserId } = req.params;
 
+    //delete user from auth table
+    await deleteAuthUser(authUserId);
+
+    //delete user data from users table which is referenced to other tables
     const { error } = await supabase
       .from('users')
       .delete()
       .eq('id', id);
+
 
     if (handleSupabaseError(res, error, 'Error deleting user account')) return;
 
@@ -597,4 +603,7 @@ export const deleteUserAccount = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+
+
 

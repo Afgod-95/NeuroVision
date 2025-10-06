@@ -97,6 +97,7 @@ const SettingsScreen: React.FC = () => {
         })
         dispatch(resetState());
         showSuccess(`Success`, 'You have successfully deleted your account.');
+        
         setTimeout(() => {
             router.push('/(auth)/login')
         }, 2000)
