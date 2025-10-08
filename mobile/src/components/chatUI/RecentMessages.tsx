@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
         top: 0,
         bottom: 0,
         width: 3,
-        backgroundColor: '#3b82f6',
+        backgroundColor: Colors.dark.button,
         borderTopRightRadius: 2,
         borderBottomRightRadius: 2,
     },

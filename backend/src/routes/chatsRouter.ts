@@ -51,10 +51,6 @@ chatsRouter.get(
 )
 
 
-/**
- * GET CONVERSATION SUMMARIES FOR A SPECIFIC USER
-*/
-chatsRouter.get('/user/summaries/',verifyAccessToken as RequestHandler, getUserConversationSummaries);
 
 //chatsRouter.put('/conversations/summary', updateConversationSummary);
 chatsRouter.post('/summaries/bulk-generate',verifyAccessToken as RequestHandler, bulkGenerateSummaries);

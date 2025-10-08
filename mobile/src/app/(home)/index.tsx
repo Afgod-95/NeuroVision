@@ -166,7 +166,7 @@ const Index = () => {
       const data = await queryClient.fetchQuery({
         queryKey: ['conversationMessages', conversationId],
         queryFn: async () => {
-          const response = await api.get(`/api/conversations/messages?conversationId=${conversationId}`, {
+          const response = await api.get(`/api/conversations/summary/message?conversationId=${conversationId}`, {
             headers: {
               'Authorization': `Bearer ${accessToken}`
             }

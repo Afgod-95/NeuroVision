@@ -76,6 +76,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         queryKey: ['conversationSummaries', userDetails?.id],
         queryFn: async () => {
             const res = await api.get('/api/conversations/user/summaries', authHeader);
+            console.log(res.data);
             return res.data;
         },
         enabled: !!userDetails?.id && !!accessToken,
