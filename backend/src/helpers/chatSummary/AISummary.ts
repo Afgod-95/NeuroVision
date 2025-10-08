@@ -2,7 +2,7 @@
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
-import { isValidUUID } from "../../middlewares/isValidUUID";
+import { isValidUUID } from "../isValidUUID";
 import geminiService from "../../services/GeminiInitiation";
 import { GenerateConversationSummaryRequest } from "../../interfaces/typescriptInterfaces";
 import { SUMMARY_SYSTEM_PROMPT } from "../../utils/AIPrompts";

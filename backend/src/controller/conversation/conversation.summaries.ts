@@ -4,6 +4,8 @@ import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
 import { getConversationHistory } from "./conversations.controller";
 import geminiService from "../../services/GeminiInitiation";
+import { generateConversationSummary } from "../../helpers/chatSummary/AISummary";
+
 
 
 /**
@@ -120,13 +122,14 @@ export const getUserConversationSummaries = async (req: Request, res: Response):
     if (error) throw error;
 
     res.json({
-      success: true,
-      conversations: data || [],
-      totalCount: count || 0,
-      page,
-      limit,
-      hasMore: (count || 0) > offset + limit,
-      timestamp: new Date().toISOString()
+        success: true,
+        conversations: data || [],
+        totalCount: count || 0,
+        page,
+        limit,
+        hasMore: (count || 0) > offset + limit,
+        conversationId: data?.map(item => item.conversation_id) || [],
+        timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     console.error('Get user conversations error:', error);
@@ -212,6 +215,58 @@ export const bulkGenerateSummaries = async (req: Request, res: Response): Promis
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to bulk generate summaries'
+        });
+    }
+};
+
+
+
+/**
+ * Alternative function to force generate a summary for testing
+ */
+export const forceGenerateSummary = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { conversationId } = req.body;
+        const authUserId = req?.user?.id;
+        const userId = parseInt(authUserId as string);
+        if (!userId) {
+            res.status(400).json({
+                success: false,
+                error: 'userId is required'
+            });
+            return;
+        }
+
+        if (!conversationId || !userId) {
+            res.status(400).json({
+                success: false,
+                error: 'conversationId and userId are required'
+            });
+            return;
+        }
+
+        console.log(`🔧 Force generating summary for conversation ${conversationId}, user ${userId}`);
+
+        // Get current message count
+        const { data: messages, error } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .eq('user_id', userId);
+
+        if (error) {
+            throw error;
+        }
+
+        console.log(`Found ${messages?.length || 0} messages in conversation`);
+
+        await generateConversationSummary(conversationId, userId, undefined, req, res);
+
+    } catch (error: any) {
+        console.error('Force generate summary error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 };

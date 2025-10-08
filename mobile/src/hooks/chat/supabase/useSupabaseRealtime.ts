@@ -2,7 +2,7 @@ import { useCallback, useEffect } from "react";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import supabase from "@/src/utils/supabase/supabaseClient";
 import { SupabaseMessage, Message } from "@/src/utils/interfaces/TypescriptInterfaces";
-import { setMessages, addMessage, updateMessage } from "@/src/redux/slices/chatSlice";
+import { setMessages, addMessage, updateMessage, removeMessage } from "@/src/redux/slices/chatSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/src/redux/store";
 
@@ -85,27 +85,48 @@ export const useSupabaseRealtime = ({
           const newMessage = payload.new as SupabaseMessage;
           if (newMessage.conversation_id !== conversationId) return;
           if (processedMessageIds.current.has(newMessage.id)) return;
+          
+          console.log("📨 Realtime INSERT:", newMessage.sender, newMessage.id);
           processedMessageIds.current.add(newMessage.id);
 
           const transformedMessage = transformSupabaseMessage(newMessage);
 
-          // Handle temp replacement for pending user message
-          let updatedMessages = messages;
-          if (newMessage.sender === "user" && pendingUserMessageRef.current) {
-            updatedMessages = messages.filter(msg => msg.id !== pendingUserMessageRef.current);
-            pendingUserMessageRef.current = null;
-          }
-
           if (newMessage.sender === "assistant") {
-            updatedMessages = updatedMessages.filter(
-              msg => msg.id !== currentLoadingIdRef.current && !msg.isLoading
-            );
-            const messageWithEmptyText = { ...transformedMessage, text: "", isTyping: true };
-            dispatch(setMessages([...updatedMessages, messageWithEmptyText]));
-            setTimeout(() => startTypingAnimation(transformedMessage.text, transformedMessage.id), 100);
-            clearAIResponding();
-          } else {
-            dispatch(setMessages([...updatedMessages, transformedMessage]));
+            console.log("🤖 Assistant message received:", newMessage.id);
+            
+            // Remove loading message if it exists
+            if (currentLoadingIdRef.current) {
+              console.log("🗑️ Removing loading message:", currentLoadingIdRef.current);
+              
+              // Remove the old loading message completely
+              dispatch(removeMessage(currentLoadingIdRef.current));
+              
+              // Add the new AI message with typing state
+              const messageWithTyping = { 
+                ...transformedMessage, 
+                text: "", 
+                isTyping: true,
+                isLoading: false 
+              };
+              dispatch(addMessage(messageWithTyping));
+              
+              // Update the ref to point to the new message
+              currentLoadingIdRef.current = transformedMessage.id;
+              
+              // Start typing animation
+              setTimeout(() => {
+                console.log("🎬 Starting typing animation for:", transformedMessage.id);
+                startTypingAnimation(transformedMessage.text, transformedMessage.id);
+              }, 100);
+            } else {
+              // No loading message, add new message with typing
+              const messageWithTyping = { ...transformedMessage, text: "", isTyping: true };
+              dispatch(addMessage(messageWithTyping));
+              
+              setTimeout(() => {
+                startTypingAnimation(transformedMessage.text, transformedMessage.id);
+              }, 100);
+            }
           }
 
           scrollToBottom();
@@ -118,29 +139,34 @@ export const useSupabaseRealtime = ({
           const updatedMessage = payload.new as SupabaseMessage;
           if (updatedMessage.conversation_id !== conversationId) return;
 
+          console.log("🔄 Realtime UPDATE:", updatedMessage.sender, updatedMessage.id);
           const transformedMessage = transformSupabaseMessage(updatedMessage);
 
           if (updatedMessage.sender === "assistant") {
-            // Replace with typing animation
-            const cleanedMessages = messages.filter(msg => !msg.isLoading);
-            const withTyping = cleanedMessages.map(msg =>
-              msg.id === transformedMessage.id ? { ...transformedMessage, text: "", isTyping: true } : msg
-            );
-            dispatch(setMessages(withTyping));
-            setTimeout(() => startTypingAnimation(transformedMessage.text, transformedMessage.id), 100);
-            clearAIResponding();
+            // Update message and start typing animation
+            dispatch(updateMessage({
+              id: transformedMessage.id,
+              updates: {
+                text: "",
+                isTyping: true,
+                isLoading: false
+              }
+            }));
+            
+            setTimeout(() => {
+              startTypingAnimation(transformedMessage.text, transformedMessage.id);
+            }, 100);
           } else {
-            dispatch(
-              setMessages(
-                messages.map(msg =>
-                  msg.id === transformedMessage.id ? { ...transformedMessage, isTyping: false } : msg
-                )
-              )
-            );
+            // Just update the message
+            dispatch(updateMessage({
+              id: transformedMessage.id,
+              updates: transformedMessage
+            }));
           }
         }
       )
       .subscribe((status: string) => {
+        console.log("🔌 Subscription status:", status);
         if (status === "SUBSCRIBED") {
           subscriptionReadyRef.current = true;
         } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {

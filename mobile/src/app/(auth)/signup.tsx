@@ -66,6 +66,9 @@ const SignUp = () => {
     }
     signUpMutation.mutateAsync(user, {
       onSuccess: (data) => {
+        if(data.error) {
+          showError("Error", data.error.message);
+        }
         showSuccess('Success', data.message, {
           autoClose: false,
           onPrimaryPress: () => {

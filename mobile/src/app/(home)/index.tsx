@@ -35,7 +35,7 @@ import BottomSheetModal from '@/src/components/chatUI/FileUploadBottomSheet';
 import Welcome from '@/src/components/chatUI/welcome-screen/Welcome';
 import api from '@/src/services/axiosClient';
 import { useDispatch, useSelector } from 'react-redux';
-import { setOpenBottomSheet, setSidebarVisible, setMessage, setMessages, setLoading } from '@/src/redux/slices/chatSlice';
+import { setOpenBottomSheet, setSidebarVisible, setMessage, setMessages, setLoading, setAttachments } from '@/src/redux/slices/chatSlice';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = UploadedFile & {
@@ -77,7 +77,7 @@ const Index = () => {
   // Use Redux as single source of truth for messages
   const reduxMessages = useSelector((state: RootState) => state.chat.messages);
   const { loading, isAIResponding, isTyping, isAborted } = useSelector((state: RootState) => state.chat);
-  
+
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
@@ -94,7 +94,7 @@ const Index = () => {
   const queryClient = useQueryClient();
 
   // Get the actual conversation ID - memoize to prevent re-renders
-  const actualConversationId = useMemo(() => 
+  const actualConversationId = useMemo(() =>
     Array.isArray(conversation_id) ? conversation_id[0] : conversation_id,
     [conversation_id]
   );
@@ -109,6 +109,7 @@ const Index = () => {
     console.log('Loading state from hook:', loading);
   }, []);
 
+  //realtime actions endpoint
   const realtimeActions = useRealtimeChat({
     uniqueConvId: uniqueConvId,
     systemPrompt: "You are NeuroVision, a helpful AI assistant specialized in providing comprehensive and accurate assistance across various topics.",
@@ -119,6 +120,8 @@ const Index = () => {
     initialMessages: [],
     enableSampleMessages: true,
   });
+
+  
 
   // Stop message handler
   const handleStopMessage = useCallback(() => {
@@ -163,7 +166,7 @@ const Index = () => {
       const data = await queryClient.fetchQuery({
         queryKey: ['conversationMessages', conversationId],
         queryFn: async () => {
-          const response = await api.get(`/api/conversations/messages/${conversationId}`, {
+          const response = await api.get(`/api/conversations/messages?conversationId=${conversationId}`, {
             headers: {
               'Authorization': `Bearer ${accessToken}`
             }
@@ -179,7 +182,7 @@ const Index = () => {
         const transformedMessages = transformApiMessages(data.messages);
         dispatch(setMessages(transformedMessages));
         dispatch(setLoading(false));
-        
+
         // Small delay to ensure state is updated before scrolling
         setTimeout(() => {
           realtimeActions.scrollToBottom();
@@ -199,7 +202,7 @@ const Index = () => {
       console.log('Triggering prefetch for:', actualConversationId);
       prefetchMessages(actualConversationId, userId);
     }
-  }, [actualConversationId, realtimeActions.userDetails?.id]);
+  }, [actualConversationId, realtimeActions.userDetails?.id, prefetchMessages]);
 
   // Reset prefetch flag when conversation changes
   useEffect(() => {
@@ -208,7 +211,7 @@ const Index = () => {
 
   // Track sending state - use mutation status directly without effect
   const mutationIsPending = realtimeActions.sendMessageMutation?.isPending || false;
-  
+
   useEffect(() => {
     setIsSending(mutationIsPending);
   }, [mutationIsPending]);
@@ -256,10 +259,31 @@ const Index = () => {
     state.setAttachments(filteredAttachments);
   }, [state]);
 
-  // Handle send message with proper typing
-  const handleSendMessageWithAudio = useCallback((messageText: string, audioFile?: UploadedAudioFile) => {
-    realtimeActions.handleSendMessage(messageText, audioFile);
-  }, [realtimeActions]);
+  //handle send messages with text, files etc
+  const onSendMessage = useCallback((message: string) => {
+  console.log('onSendMessage called:', {
+    message: message.substring(0, 50),
+    attachmentsCount: state.attachments.length,
+    conversationId: actualConversationId
+  });
+
+  // Log attachments for debugging
+  if (state.attachments.length > 0) {
+    console.log('Attachments:', state.attachments.map(f => ({
+      name: f.name,
+      type: f.type,
+      size: f.size
+    })));
+  }
+
+  // Send message with text and uploaded files
+  realtimeActions.handleSendMessage(
+    message,
+    undefined,
+    state.attachments
+  );
+}, [realtimeActions, state.attachments, actualConversationId]);
+
 
   // Enhanced keyboard handling for Android
   useEffect(() => {
@@ -299,7 +323,7 @@ const Index = () => {
     };
   }, []);
 
-  // Render item function for FlatList - simplified dependencies
+  // renderItem function with proper loading state logic
   const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => {
     if (item?.user) {
       return (
@@ -312,19 +336,23 @@ const Index = () => {
       );
     } else {
       const isLastMessage = index === reduxMessages?.length - 1;
-      const shouldShowLoading = isLastMessage && isAIResponding && (item.text.trim() === '' || item.isLoading === true);
-      const finalLoadingState = isAIResponding ? shouldShowLoading : false;
+
+      // Show loading only if:
+      // 1. It's explicitly marked as loading (isLoading: true)
+      // 2. OR it's the last message, AI is responding, and text is empty
+      const shouldShowLoading = item.isLoading === true ||
+        (isLastMessage && isAIResponding && item.text.trim() === '');
 
       return (
         <MemoizedAdvancedAIResponse
-          isTyping={isTyping}
+          isTyping={item.isTyping || false}  // Pass the message's typing state
           message={item.text}
-          loading={finalLoadingState}
+          loading={shouldShowLoading}
           onRegenerate={() => realtimeActions.handleRegenerate(item?.id)}
         />
       );
     }
-  }, [reduxMessages?.length, isAIResponding, isTyping, realtimeActions]);
+  }, [reduxMessages?.length, isAIResponding, realtimeActions]);
 
   // Key extractor for FlatList
   const keyExtractor = useCallback((item: Message) => {
@@ -337,8 +365,12 @@ const Index = () => {
       username={realtimeActions?.username}
       newChat={realtimeActions.newChat}
       onPromptSelect={(prompt) => dispatch(setMessage(prompt))}
+      handleSendMessage={(prompt) => realtimeActions.handleSendMessage(prompt)}
     />
-  ), [realtimeActions.username, realtimeActions.newChat, dispatch]);
+  ), [ dispatch, realtimeActions]);
+
+  
+
 
   const loadingContent = useMemo(() => (
     <Loading />
@@ -389,7 +421,7 @@ const Index = () => {
     return null;
   }, [
     shouldShowLoading,
-    shouldShowWelcome, 
+    shouldShowWelcome,
     shouldShowMessages,
     loadingContent,
     welcomeContent,
@@ -453,7 +485,7 @@ const Index = () => {
                 onRemoveFile={handleRemoveFile}
                 uploadedFiles={state.attachments}
                 openBottomSheet={HandleOpenBottomSheet}
-                onSendMessage={realtimeActions.handleSendMessage}
+                onSendMessage={onSendMessage}
                 onStopMessage={handleStopMessage}
                 isSending={isSending || isTyping}
               />
@@ -517,12 +549,12 @@ const Index = () => {
         onOpen={handleOpenSidebar}
         startNewConversation={realtimeActions.startNewConversation}
       />
-      
-        <BottomSheetModal
-          onFileSelected={handleFileSelected}
-          bottomSheetRef={state.bottomSheetRef}
-        />
-    
+
+      <BottomSheetModal
+        onFileSelected={handleFileSelected}
+        bottomSheetRef={state.bottomSheetRef}
+      />
+
     </>
   );
 };

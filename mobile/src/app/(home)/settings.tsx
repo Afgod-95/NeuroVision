@@ -32,6 +32,7 @@ import { setEnableHepticFeedback } from '@/src/redux/slices/hepticFeedbackSlice'
 import AccountDeletionSheet from '@/src/components/settings/AccountDeletion';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useCustomAlert } from '@/src/components/alert/CustomAlert';
+import { resetChatState } from '@/src/redux/slices/chatSlice';
 const BASE_HEADER_HEIGHT = 30;
 
 interface SettingItemData {
@@ -96,8 +97,9 @@ const SettingsScreen: React.FC = () => {
             userId: userCredentials?.id as number
         })
         dispatch(resetState());
+        dispatch(resetChatState());
         showSuccess(`Success`, 'You have successfully deleted your account.');
-        
+
         setTimeout(() => {
             router.push('/(auth)/login')
         }, 2000)

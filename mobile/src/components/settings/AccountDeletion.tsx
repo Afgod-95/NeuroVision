@@ -34,7 +34,7 @@ const AccountDeletionSheet = ({
   userName = "User"
 }: AccountDeletionSheetProps) => {
   // Variables
-  const snapPoints = useMemo(() => ["45%"], []);
+  const snapPoints = useMemo(() => ["80%"], []);
   const { AlertComponent, showWarning } = useCustomAlert();
 
   const handleSheetChanges = useCallback((index: number) => {

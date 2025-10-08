@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.dark.bgSecondary,
+        backgroundColor: Colors.dark.borderColor,
         borderRadius: 10,
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -85,6 +85,7 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         color: Colors.dark.txtPrimary,
+        paddingVertical: 3,
         fontSize: 16,
         fontFamily: 'Manrope-Regular',
     },

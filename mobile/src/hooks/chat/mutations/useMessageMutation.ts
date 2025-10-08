@@ -1,12 +1,13 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
-import { Message, MessageContent, UploadedAudioFile } from "@/src/utils/interfaces/TypescriptInterfaces";
+import { Message, MessageContent, UploadedAudioFile, UploadedFile } from "@/src/utils/interfaces/TypescriptInterfaces";
 import api from "@/src/services/axiosClient";
 import { AppDispatch, RootState } from "@/src/redux/store";
 import {
   addMessage, updateMessage, setIsAIResponding, setConversationId,
 } from "@/src/redux/slices/chatSlice";
 import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
 
 type sendMessageMutationType = {
   systemPrompt: string,
@@ -49,7 +50,15 @@ export const useMessageMutation = ({
   messagesRef.current = messages;
 
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ messageText, audioFile }: { messageText: string, audioFile?: UploadedAudioFile }) => {
+    mutationFn: async ({ 
+      messageText, 
+      audioFile, 
+      files 
+    }: { 
+      messageText: string, 
+      audioFile?: UploadedAudioFile,
+      files?: UploadedFile[]
+    }) => {
       try {
         let finalMessage = messageText;
         let messageContent: MessageContent | undefined;
@@ -58,6 +67,7 @@ export const useMessageMutation = ({
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
+        // Handle audio file
         if (audioFile) {
           messageContent = {
             type: messageText.trim() ? 'mixed' : 'audio',
@@ -67,43 +77,130 @@ export const useMessageMutation = ({
             audioDuration: audioFile.duration ? audioFile.duration * 1000 : undefined,
           };
           finalMessage = messageText.trim() || 'Voice message';
-        } else if (messageText.trim()) {
+        } 
+        // Handle regular files
+        else if (files && files.length > 0) {
+          messageContent = {
+            type: messageText.trim() ? 'mixed' : 'files',
+            text: messageText.trim() || undefined,
+            files: files.map(f => ({
+              id: f.id,
+              name: f.name,
+              type: f.type,
+              size: f.size,
+            })),
+          };
+          
+          // If no text message, create a default one
+          if (!messageText.trim()) {
+            finalMessage = `Sent ${files.length} file${files.length > 1 ? 's' : ''}`;
+          }
+        } 
+        // Handle text only
+        else if (messageText.trim()) {
           messageContent = { type: 'text', text: messageText };
         }
 
-        const payload = {
-          message: finalMessage,
-          messageContent,
-          systemPrompt,
-          temperature,
-          maxTokens,
-          conversationId,
-          userDetails,
-          useDatabase: true
-        };
-
-        console.log("📨 Sending message to backend:", {
+        console.log("📨 Preparing request:", {
           message: finalMessage,
           conversationId,
-          hasAudio: !!audioFile
+          hasAudio: !!audioFile,
+          filesCount: files?.length || 0,
+          fileNames: files?.map(f => f.name)
         });
 
-        const response = await api.post("/api/conversations/send-message", payload, {
-          signal: controller.signal,
-          headers: { Authorization: `Bearer ${accessToken}` },
-          timeout: 30000,
-        });
+        // ===== USE FORMDATA FOR FILE UPLOADS =====
+        const hasFiles = files && files.length > 0;
+        
+        let response;
+        
+        if (hasFiles) {
+          // Use FormData for file uploads
+          const formData = new FormData();
+          
+          // Add text fields
+          formData.append('message', finalMessage);
+          formData.append('useDatabase', 'true');
+          formData.append('temperature', temperature.toString());
+          formData.append('maxTokens', maxTokens.toString());
+          formData.append('systemPrompt', systemPrompt);
+          
+          if (conversationId) {
+            formData.append('conversationId', conversationId);
+          }
+          
+          // Add conversation history (last 10 messages)
+          const conversationHistory = messages.slice(-10).map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.text
+          }));
+          formData.append('conversationHistory', JSON.stringify(conversationHistory));
+
+          // Add files
+          for (const file of files) {
+            if (file.uri) {
+              // For React Native files with URI
+              const fileData: any = {
+                uri: file.uri,
+                type: file.type || 'application/octet-stream',
+                name: file.name || `file_${Date.now()}`,
+              };
+              formData.append('files', fileData);
+            } else if (file.base64) {
+              // For base64 files, convert to blob
+              const blob = base64ToBlob(file.base64, file.type);
+              formData.append('files', blob, file.name);
+            }
+          }
+
+          console.log("📤 Sending FormData request with files");
+
+          // Use axios directly for FormData
+          response = await axios.post(
+            `${process.env.EXPO_PUBLIC_API_URL}/api/conversations/chat/send`,
+            formData,
+            {
+              signal: controller.signal,
+              headers: { 
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'multipart/form-data',
+              },
+              timeout: 60000,
+            }
+          );
+        } else {
+          // Use regular JSON for text-only messages
+          const payload = {
+            message: finalMessage,
+            messageContent,
+            systemPrompt,
+            temperature,
+            maxTokens,
+            conversationId,
+            userDetails,
+            useDatabase: true,
+          };
+
+          console.log("📤 Sending JSON request (no files)");
+
+          response = await api.post("/api/conversations/send-message", payload, {
+            signal: controller.signal,
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 30000,
+          });
+        }
 
         if (!response.data) {
           throw new Error("No response data received from AI service");
         }
 
-        console.log("✅ Response received from backend");
+        console.log(`✅ Response received:`, response.data);
 
         return {
           userMessage: finalMessage,
           aiResponse: response.data,
           originalAudioFile: audioFile,
+          originalFiles: files,
           conversationId: response.data.conversationId,
         };
       } catch (error) {
@@ -112,14 +209,8 @@ export const useMessageMutation = ({
       }
     },
 
-    onMutate: ({ messageText, audioFile }) => {
-      // Cancel any existing request first
-      if (abortControllerRef.current) {
-        console.log("⚠️ Aborting previous request");
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-
+    onMutate: ({ messageText, audioFile, files }) => {
+      // Don't abort here - just check if already processing
       if (isProcessingResponseRef.current) {
         console.log("⚠️ Already processing a request");
         throw new Error("Already processing a request");
@@ -133,6 +224,7 @@ export const useMessageMutation = ({
       let finalMessage = messageText;
       let messageContent: MessageContent | undefined;
 
+      // Handle audio file
       if (audioFile) {
         messageContent = {
           type: messageText.trim() ? "mixed" : "audio",
@@ -142,7 +234,26 @@ export const useMessageMutation = ({
           audioDuration: audioFile.duration ? audioFile.duration * 1000 : undefined,
         };
         finalMessage = messageText.trim() || "Voice message";
-      } else if (messageText.trim()) {
+      } 
+      // Handle regular files
+      else if (files && files.length > 0) {
+        messageContent = {
+          type: messageText.trim() ? "mixed" : "files",
+          text: messageText.trim() || undefined,
+          files: files.map(f => ({
+            id: f.id,
+            name: f.name,
+            type: f.type,
+            size: f.size,
+          })),
+        };
+        
+        if (!messageText.trim()) {
+          finalMessage = `Sent ${files.length} file${files.length > 1 ? 's' : ''}`;
+        }
+      } 
+      // Handle text only
+      else if (messageText.trim()) {
         messageContent = { type: "text", text: messageText };
       }
 
@@ -170,7 +281,11 @@ export const useMessageMutation = ({
       pendingUserMessageRef.current = tempUserMessageId;
       currentLoadingIdRef.current = loadingMessageId;
 
-      console.log("📝 Adding user message and loading message to Redux");
+      console.log("📝 Adding messages to Redux", {
+        hasFiles: !!(files && files.length > 0),
+        filesCount: files?.length || 0
+      });
+      
       dispatch(addMessage(tempUserMessage));
       dispatch(addMessage(loadingMessage));
       dispatch(setIsAIResponding(true));
@@ -180,6 +295,7 @@ export const useMessageMutation = ({
 
     onSuccess: async (data) => {
       console.log("✅ Message sent successfully");
+
       isProcessingResponseRef.current = false;
       abortControllerRef.current = null;
 
@@ -192,32 +308,24 @@ export const useMessageMutation = ({
         const aiResponseText = extractAIResponseText(data.aiResponse);
 
         if (!aiResponseText?.trim()) {
+          console.error("❌ AI response is empty");
           throw new Error("AI response is empty or invalid");
         }
 
-        console.log(`📥 AI response received (${aiResponseText.length} chars)`);
+        console.log(`📥 AI response (${aiResponseText.length} chars)`);
 
         if (currentLoadingIdRef.current) {
-          // Update the loading message to show it's now typing
-          console.log("🎬 Starting typing animation");
-          
           dispatch(updateMessage({
             id: currentLoadingIdRef.current,
             updates: { isLoading: false, isTyping: true, text: "" }
           }));
 
-          // Start typing animation which will update Redux with the text
           setTimeout(() => {
             if (currentLoadingIdRef.current) {
               startTypingAnimation(aiResponseText, currentLoadingIdRef.current);
             }
           }, 100);
         }
-
-        // Clear AI responding state after a short delay to allow typing to start
-        setTimeout(() => {
-          clearAIResponding();
-        }, 200);
 
       } catch (err) {
         console.error("⚠️ Failed to process AI response:", err);
@@ -232,25 +340,18 @@ export const useMessageMutation = ({
             }
           }));
         }
+       
         clearAIResponding();
       }
     },
 
     onError: (error: any) => {
-      console.error("❌ Failed to send message:", error);
-      
       isProcessingResponseRef.current = false;
       abortControllerRef.current = null;
 
-      // Handle canceled requests gracefully
+      // Handle canceled requests
       if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
-        console.log("⚠️ Request was canceled - cleaning up");
-        
-        // Remove loading and pending messages
-        if (currentLoadingIdRef.current || pendingUserMessageRef.current) {
-          console.log("🗑️ Removing canceled messages from Redux");
-        }
-        
+        console.log("⚠️ Request was canceled");
         clearAIResponding();
         pendingUserMessageRef.current = null;
         currentLoadingIdRef.current = null;
@@ -263,7 +364,7 @@ export const useMessageMutation = ({
 
       if (error.response?.data?.error) {
         const backendError = error.response.data.error;
-        if (backendError.includes("Message is required")) errorText = "Please provide a message to send.";
+        if (backendError.includes("Message is required")) errorText = "Please provide a message or files to send.";
         else if (backendError.includes("Message is too long")) errorText = "Your message is too long. Please shorten it and try again.";
         else if (backendError.includes("userId is required")) errorText = "Authentication error. Please log in again.";
         else if (backendError.includes("Invalid conversation ID")) errorText = "Conversation error. Starting a new conversation.";
@@ -271,16 +372,20 @@ export const useMessageMutation = ({
         else if (backendError.includes("API quota exceeded")) errorText = "Service temporarily unavailable. Please try again later.";
         else if (backendError.includes("Database error")) errorText = "Database connection error. Please try again.";
         else if (backendError.includes("Failed to get response from Gemini")) errorText = "AI service temporarily unavailable. Please try again.";
+        else if (backendError.includes("file")) errorText = "File processing error. Please check your files and try again.";
+        else if (backendError.includes("Maximum")) errorText = backendError;
+        else if (backendError.includes("exceeds")) errorText = backendError;
         else errorText = backendError;
       } else if (error.message.includes("Transcription")) {
         errorText = `Audio transcription error: ${error.message}`;
       } else if (error.response?.status === 400) errorText = "Invalid request. Please check your input and try again.";
       else if (error.response?.status === 404) errorText = "Service not found. Please check your API configuration.";
+      else if (error.response?.status === 413) errorText = "Files are too large. Please reduce file size and try again.";
       else if (error.response?.status === 429) errorText = "Too many requests. Please wait a moment and try again.";
       else if (error.response?.status === 500) errorText = "Server error. Please try again in a moment.";
       else if (error.message) errorText = `Error: ${error.message}`;
 
-      console.log("💬 Showing error message:", errorText);
+      console.log("💬 Error:", errorText);
 
       if (currentLoadingIdRef.current) {
         dispatch(updateMessage({
@@ -305,4 +410,25 @@ export const useMessageMutation = ({
   });
 
   return { sendMessageMutation };
+};
+
+// Helper function to convert base64 to blob
+const base64ToBlob = (base64: string, mimeType: string = 'application/octet-stream'): Blob => {
+  const base64Data = base64.replace(/^data:[^;]+;base64,/, '');
+  const byteCharacters = atob(base64Data);
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+
+  return new Blob(byteArrays, { type: mimeType });
 };

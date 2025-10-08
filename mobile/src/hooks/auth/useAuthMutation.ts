@@ -26,16 +26,19 @@ export const useAuthMutation = () => {
     const useSignupMutation = () => {
         return useMutation({
             mutationFn: async (user: any) => {
-                const result = await authApi.post('/api/auth/register', user); 
+                const result = await authApi.post('/api/auth/register', user);
                 return result.data;
             },
-            
+
             onError: (error: any) => {
-                console.log('Error signing up', error.response?.data || error.message);
-                showError('Oops!!!', error.response?.data?.error || 'An error occurred whilst signing up', {
-                    autoClose: true
-                });
-            }
+                console.log("Error signing up", error.response?.data || error.message);
+
+                showError(
+                    "Oops!!!",
+                    error.response?.data?.error || "An error occurred whilst signing up",
+                    { autoClose: true }
+                );
+            },
         });
     };
 

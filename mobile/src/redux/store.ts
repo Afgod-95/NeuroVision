@@ -16,10 +16,12 @@ import hepticFeedbackReducer from './slices/hepticFeedbackSlice'
 import messageOptionsReducer from "./slices/messageOptionsSlice";
 import { injectStore, setTokenRefreshCallback, setLogoutCallback } from "../services/axiosClient";
 import chatReducer from "./slices/chatSlice";
+import searchReducer from "./slices/searchSlice"
 
 // Combine all reducers
 const rootReducer = combineReducers({
   auth: authReducer,
+  search: searchReducer,
   hepticFeedback:hepticFeedbackReducer,
   messageOptions: messageOptionsReducer,
   chat: chatReducer,

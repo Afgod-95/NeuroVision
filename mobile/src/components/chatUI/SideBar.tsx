@@ -13,15 +13,21 @@ import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
 import SearchBar from './SearchBar';
 import RecentMessages from '../chatUI/RecentMessages';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/redux/store';
+import { useSelector, useDispatch } from 'react-redux';
+import { AppDispatch, RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
 import { router } from 'expo-router';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { useQuery } from '@tanstack/react-query';
-import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
 import api from '@/src/services/axiosClient';
+import { Edit, Images, Library } from 'lucide-react-native';
+import { setSearch } from '@/src/redux/slices/searchSlice';
+import { setConversationId } from '@/src/redux/slices/chatSlice';
+import useAuthHeaders from '@/src/constants/RequestHeader';
+
+
+
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
@@ -32,9 +38,16 @@ type CustomSideBarProps = {
     onClose: () => void;
     onOpen: () => void;
     startNewConversation?: () => void;
+    onLibraryPress?: () => void;
 };
 
-const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpen, startNewConversation }) => {
+const CustomSideBar: React.FC<CustomSideBarProps> = ({ 
+    isVisible, 
+    onClose, 
+    onOpen, 
+    startNewConversation,
+    onLibraryPress 
+}) => {
 
     //states
     const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
@@ -47,9 +60,12 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     const { accessToken } = useSelector((state: RootState) => state.auth);
 
     const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
+    const { conversationId: activeConversationId } = useSelector((state: RootState) => state.chat);
 
     //search function
-    const [searchQuery, setSearchQuery] = useState('');
+    const { search: searchQuery } = useSelector((state: RootState) => state.search);
+    const dispatch = useDispatch<AppDispatch>();
+    const { authHeader } = useAuthHeaders();
 
     const {
         data,
@@ -59,11 +75,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     } = useQuery({
         queryKey: ['conversationSummaries', userDetails?.id],
         queryFn: async () => {
-            const res = await api.get('/api/conversations/user/summaries', {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-            });
+            const res = await api.get('/api/conversations/user/summaries', authHeader);
             return res.data;
         },
         enabled: !!userDetails?.id && !!accessToken,
@@ -73,6 +85,19 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
         refetchIntervalInBackground: true,
         staleTime: 5000,
     });
+
+    const deleteSummary = async (conversationId: string) => {
+        try {
+            console.log(`active conversation id: ${conversationId}`)
+            //const response = await api.delete(`/api/conversations/${activeConversationId}`, authHeader);
+            //console.log(response.data);
+        }
+        catch (error) {
+            console.log(error)
+        }
+    }
+
+
 
     useEffect(() => {
         if (error) {
@@ -99,19 +124,26 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
     //getting username from redux state
     const username = userDetails?.username
     const userInitials = getUsernameInitials({ fullname: userDetails?.username ?? '' });
-    //onChange tfunction for searchbar
+    
+    //onChange function for searchbar
     const onSearch = (query: string) => {
-        setSearchQuery(query)
+        dispatch(setSearch(query));
     }
 
     //clear search function
     const clearSearch = () => {
-        setSearchQuery('')
+        dispatch(setSearch(''));
     }
 
-    //open seetings screen
+    //open settings screen
     const openSettings = () => {
         router.push('/(home)/settings');
+    }
+
+    //handle library press
+    const handleLibraryPress = () => {
+        console.log('Library pressed');
+        onLibraryPress?.();
     }
 
     useEffect(() => {
@@ -211,18 +243,49 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                 {...panResponder.panHandlers}
             >
                 <View style={styles.contentContainer}>
-                    <View style={styles.itemContainer}>
-                        <SearchBar
-                            value={searchQuery}
-                            onChangeText={onSearch}
-                            onSearch={() => { /* implement search logic here if needed */ }}
-                            onClear={clearSearch}
-                            onCancel={() => setSearchbarVisible(false)}
-                        />
-                        <TouchableOpacity onPress={startNewConversation} >
-                            <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
-                        </TouchableOpacity>
-                    </View>
+                    {/* Search Bar */}
+                    <SearchBar
+                        value={searchQuery}
+                        onChangeText={onSearch}
+                        onSearch={() => { /* implement search logic here if needed */ }}
+                        onClear={clearSearch}
+                        onCancel={() => setSearchbarVisible(false)}
+                    />
+
+                    {/* New chat Section */}
+                    <TouchableOpacity 
+                        style={[styles.libraryContainer, { marginBottom: 2}]}
+                        onPress={() => {
+                            setSearchbarVisible(false);
+                            startNewConversation?.();
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.libraryContent}>
+                            <Feather 
+                                size={20} 
+                                name = "edit"
+                                color={Colors.dark.txtSecondary} 
+                             />
+                            <Text style={styles.libraryText}>New Chat</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Library Section */}
+                    <TouchableOpacity 
+                        style={[styles.libraryContainer, { marginBottom: 2, marginTop: 0 }]}
+                        onPress={handleLibraryPress}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.libraryContent}>
+                            <Images strokeWidth={2} color={Colors.dark.txtSecondary} />
+                            <Text style={styles.libraryText}>Library</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionHeaderText}>Recents</Text>
                 </View>
 
                 {/* recent messages - Only show loading for initial load */}
@@ -231,6 +294,10 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({ isVisible, onClose, onOpe
                     isLoading={isLoading}
                     messages={summaryTitle}
                     search={searchQuery}
+                    activeConversationId={activeConversationId}
+                    onArchiveChat={() => console.log}
+                    onDeleteChat={(id) => deleteSummary(id)}
+                    onRenameChat={() => console.log}
                 />
 
                 <View style={styles.bottom}>
@@ -320,14 +387,46 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontFamily: 'Manrope-ExtraBold',
     },
+    sectionHeader: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.dark.borderColor,
+        marginBottom: 4,
+    },
+    sectionHeaderText: {
+        color: '#6b7280',
+        fontSize: 12,
+        fontFamily: 'Manrope-SemiBold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
     itemContainer: {
-        paddingVertical: 10,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         gap: 20,
         paddingHorizontal: 10,
-    }
+    },
+    libraryContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        marginTop: 12,
+        marginBottom: 8,
+        borderRadius: 12,
+    },
+    libraryContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    libraryText: {
+        color: Colors.dark.txtPrimary,
+        fontSize: 15,
+        fontFamily: 'Manrope-SemiBold',
+    },
 });
 
 export default CustomSideBar;

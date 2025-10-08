@@ -14,7 +14,7 @@ import {
   addMessage,
 } from "@/src/redux/slices/chatSlice";
 
-import { Message, UploadedAudioFile } from "@/src/utils/interfaces/TypescriptInterfaces";
+import { Message, UploadedAudioFile, UploadedFile } from "@/src/utils/interfaces/TypescriptInterfaces";
 import { useConversationMutation } from "../mutations/useConversationMutation";
 import { uniqueConvId as startNewConversationId } from "@/src/constants/generateConversationId";
 import api from "@/src/services/axiosClient";
@@ -69,11 +69,20 @@ export const useConversationActions = ({
   );
   const { accessToken } = useSelector((state: RootState) => state.auth);
 
-  // ===================== SEND MESSAGE =====================
+  // ===================== SEND MESSAGE WITH FILES SUPPORT =====================
   const handleSendMessage = useCallback(
-    async (messageText: string, audioFile?: UploadedAudioFile) => {
-      if (!messageText.trim() && !audioFile) {
-        console.log("⚠️ No message or audio to send");
+    async (
+      messageText: string, 
+      audioFile?: UploadedAudioFile,
+      files?: UploadedFile[]
+    ) => {
+      // Check if there's content to send
+      const hasText = messageText.trim();
+      const hasAudio = !!audioFile;
+      const hasFiles = files && files.length > 0;
+
+      if (!hasText && !hasAudio && !hasFiles) {
+        console.log("⚠️ No message, audio, or files to send");
         return;
       }
       
@@ -82,13 +91,23 @@ export const useConversationActions = ({
         return;
       }
 
-      console.log("📤 Sending message:", messageText);
+      console.log("📤 Sending message:", {
+        text: messageText,
+        hasAudio,
+        filesCount: files?.length || 0,
+        fileNames: files?.map(f => f.name)
+      });
 
       dispatch(setMessage(""));
       dispatch(setAttachments([]));
       dispatch(setIsAborted(false));
 
-      sendMessageMutation.mutate({ messageText, audioFile });
+      // Pass all parameters to the mutation
+      sendMessageMutation.mutate({ 
+        messageText, 
+        audioFile,
+        files
+      });
     },
     [sendMessageMutation, isProcessingResponseRef, dispatch]
   );
@@ -207,6 +226,8 @@ export const useConversationActions = ({
         conversationId: conversationId,
         userDetails: userDetails,
         useDatabase: true,
+        // Include files if they exist in the original message
+        files: previousUserMessage.content?.files
       };
 
       console.log("📨 Regenerating with payload:", payload);
@@ -216,10 +237,11 @@ export const useConversationActions = ({
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
-        timeout: 30000,
+        timeout: 60000, // Increased timeout for files
       });
 
       abortControllerRef.current = null;
+      isProcessingResponseRef.current = false;
 
       const aiResponseText = extractAIResponseText(response.data);
 
@@ -244,14 +266,14 @@ export const useConversationActions = ({
         };
 
         dispatch(addMessage(typingMessage));
+        
+        // Update currentLoadingIdRef to the new typing message
+        currentLoadingIdRef.current = typingMessage.id;
 
         setTimeout(() => {
           startTypingAnimation(aiResponseText, typingMessage.id);
         }, 100);
       }
-
-      clearAIResponding();
-      isProcessingResponseRef.current = false;
 
     } catch (error: any) {
       console.error('❌ Failed to regenerate message:', error);
@@ -276,6 +298,8 @@ export const useConversationActions = ({
           errorText = 'Access denied.';
         } else if (status === 404) {
           errorText = 'Resource not found.';
+        } else if (status === 413) {
+          errorText = 'Files are too large to regenerate.';
         } else if (status === 429) {
           errorText = 'Too many requests. Please wait a moment.';
         } else if (status >= 500) {

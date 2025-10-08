@@ -3,91 +3,18 @@ import { Request, Response } from "express";
 import { ChatRequest, GeminiMessage } from "../../interfaces/typescriptInterfaces";
 import supabase from "../../lib/supabase";
 import { v4 as uuidv4 } from 'uuid';
-import { isValidUUID } from "../../middlewares/isValidUUID";
+import { isValidUUID } from "../../helpers/isValidUUID";
 import { generateConversationSummary, shouldUpdateSummary } from "../../helpers/chatSummary/AISummary";
 import geminiService from "../../services/GeminiInitiation";
 import { DEFAULT_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from "../../utils/AIPrompts";
+import { storeMessage } from "../../helpers/storeMessage/store_message";
+import { getOrCreateConversationId } from "../../helpers/conversations/get_or_generate_conversation_id";
 
 
 
-/**
- * Store message in Supabase with enhanced error handling and retry logic
- */
-const storeMessage = async (
-    conversationId: string,
-    userId: number,
-    sender: 'user' | 'assistant' | 'system',
-    content: string,
-    retries: number = 3
-): Promise<void> => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            // Validate UUID format
-            if (!isValidUUID(conversationId)) {
-                throw new Error(`Invalid conversation_id format: ${conversationId}. Must be a valid UUID.`);
-            }
-
-            // Validate required fields
-            if (!content || content.trim() === '') {
-                throw new Error('Message content cannot be empty');
-            }
-
-            if (!userId || userId <= 0) {
-                throw new Error('Invalid user_id');
-            }
-
-            // Truncate content if too long (adjust based on your DB schema)
-            const truncatedContent = content.length > 50000 ? content.substring(0, 50000) + '...' : content;
-
-            console.log(`Storing message (attempt ${attempt}):`, {
-                conversation_id: conversationId,
-                user_id: userId,
-                sender,
-                content_length: truncatedContent.length
-            });
 
 
-            const { data, error } = await supabase
-                .from('messages')
-                .insert({
-                    conversation_id: conversationId,
-                    user_id: userId,
-                    sender,
-                    content: truncatedContent.trim()
-                })
-                .select();
 
-            if (error) {
-                console.error('Supabase error details:', {
-                    message: error.message,
-                    details: error.details,
-                    hint: error.hint,
-                    code: error.code,
-                    attempt
-                });
-
-                if (attempt === retries) {
-                    throw new Error(`Database error after ${retries} attempts: ${error.message}`);
-                }
-
-                // Wait before retry (exponential backoff)
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                continue;
-            }
-
-            console.log('Message stored successfully:', data?.[0]?.id || 'No ID returned');
-            return;
-        } catch (error) {
-            if (attempt === retries) {
-                console.error('Error in storeMessage after all retries:', error);
-                throw error;
-            }
-
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
-    }
-};
 
 /**
  * Retrieve conversation history from Supabase with pagination
@@ -127,327 +54,6 @@ export const getConversationHistory = async (
     }
 };
 
-/**
- * Generate or validate conversation ID
- */
-const getOrCreateConversationId = (conversationId?: string): string => {
-    if (conversationId && isValidUUID(conversationId)) {
-        return conversationId;
-    }
-
-    // Generate new UUID if not provided or invalid
-    const newId = uuidv4();
-    console.log('Generated new conversation ID:', newId);
-    return newId;
-};
-
-
-/**
- * Chat message handler with better error handling and response formatting
- */
-export const sendChatMessage = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const {
-            message,
-            conversationHistory,
-            systemPrompt,
-            temperature,
-            maxTokens,
-            conversationId: rawConversationId,
-            useDatabase = true
-        }: ChatRequest & {
-            conversationId?: string;
-            useDatabase?: boolean;
-        } = req.body;
-
-        const authUserId = req?.user?.id;
-        const userId = parseInt(authUserId as string);
-        if (!authUserId) {
-            res.status(401).json({ success: false, error: 'Unauthorized' });
-            return;
-        }
-
-        console.log('Request received:', {
-            message: message ? `${message.substring(0, 100)}...` : 'No message',
-            conversationId: rawConversationId,
-            userId,
-            useDatabase,
-            historyLength: conversationHistory?.length || 0
-        });
-
-        // Enhanced validation
-        if (!message || typeof message !== 'string' || message.trim().length === 0) {
-            res.status(400).json({
-                success: false,
-                error: 'Message is required and must be a non-empty string'
-            });
-            return;
-        }
-
-        if (message.length > 50000) {
-            res.status(400).json({
-                success: false,
-                error: 'Message is too long. Maximum length is 50,000 characters.'
-            });
-            return;
-        }
-
-        if (useDatabase && !userId) {
-            res.status(400).json({
-                success: false,
-                error: 'userId is required when useDatabase is true'
-            });
-            return;
-        }
-
-        // Generate or validate conversation ID
-        const conversationId = useDatabase ? getOrCreateConversationId(rawConversationId) : rawConversationId;
-        console.log('Using conversation ID:', conversationId);
-
-        // Get conversation history from database if using database mode
-        let history = conversationHistory || [];
-        if (useDatabase && conversationId && userId) {
-            try {
-                history = await getConversationHistory(userId);
-                console.log(`Retrieved ${history.length} messages from database`);
-            } catch (error) {
-                console.error('Error getting conversation history:', error);
-                // Continue with empty history if database fetch fails
-                history = [];
-            }
-        }
-
-        // Limit history length to prevent token overflow
-        const maxHistoryLength = 20;
-        if (history.length > maxHistoryLength) {
-            history = history.slice(-maxHistoryLength);
-        }
-
-        // Enhanced system prompt for better assistance
-        const enhancedSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
-
-        // Store user message if using database - WAIT for completion
-        let userMessageStored = false;
-        if (useDatabase && conversationId && userId) {
-            console.log('Storing user message...');
-            try {
-                await storeMessage(conversationId, userId, 'user', message);
-                userMessageStored = true;
-                console.log('✅ User message stored successfully');
-            } catch (error) {
-                console.error('❌ Failed to store user message:', error);
-                // Continue without blocking the response
-            }
-        }
-
-        // Send message to Gemini with enhanced configuration
-        console.log('Sending message to Gemini...');
-        const response = await geminiService.sendMessage(
-            message,
-            history,
-            {
-                systemPrompt: enhancedSystemPrompt,
-                temperature: temperature || 0.7,
-                maxTokens: maxTokens || 4096
-            }
-        );
-
-        console.log(`Received response from Gemini (${response.length} characters)`);
-
-        // Store assistant response if using database - WAIT for completion
-        let assistantMessageStored = false;
-        if (useDatabase && conversationId && userId && response) {
-            console.log('Storing assistant message...');
-            try {
-                await storeMessage(conversationId, userId, 'assistant', response);
-                assistantMessageStored = true;
-                console.log('✅ Assistant message stored successfully');
-            } catch (error) {
-                console.error('❌ Failed to store assistant message:', error);
-            }
-        }
-
-        // Prepare updated conversation history for response 
-        const updatedHistory = [
-            ...history,
-            { role: 'user' as const, content: message },
-            { role: 'assistant' as const, content: response }
-        ];
-
-        // Handle AI conversation summary ONLY if both messages were stored successfully
-        if (useDatabase && conversationId && userId && userMessageStored && assistantMessageStored) {
-            console.log('Starting summary generation process...');
-
-            // Get actual message count from database instead of using in-memory history
-            try {
-                const { count: actualMessageCount, error: countError } = await supabase
-                    .from('messages')
-                    .select('content', { count: 'exact', head: true }) //selecting content to get actual message count
-                    .eq('conversation_id', conversationId)
-                    .eq('user_id', userId);
-
-                if (countError) {
-                    console.error('Error getting message count:', countError);
-                } else {
-                    console.log(`Actual message count in DB: ${actualMessageCount}`);
-
-                    // Use actualMessageCount (which is the count) instead of messageCount?.length
-                    const shouldGenerate = await shouldUpdateSummary(
-                        conversationId,
-                        parseInt(userId.toString()),
-                        actualMessageCount || 0
-                    );
-                    console.log(`Should generate summary: ${shouldGenerate}`);
-
-                    if (shouldGenerate) {
-                        console.log('Generating conversation summary...');
-
-                        // Generate summary asynchronously with proper delay
-                        setTimeout(async () => {
-                            try {
-                                console.log('🚀 Starting delayed summary generation...');
-
-                                const result = await generateConversationSummary(
-                                    conversationId,
-                                    userId,
-                                    SUMMARY_SYSTEM_PROMPT
-                                );
-
-                                if (result?.success) {
-                                    console.log("✅ Summary generated successfully:", {
-                                        title: result.title,
-                                        summaryLength: result.summary?.length || 0
-                                    });
-                                } else {
-                                    console.warn("⚠️ Summary generation completed but returned no success confirmation");
-                                }
-                            } catch (err: any) {
-                                console.error("❌ Summary generation failed:");
-                                console.error("Error message:", err.message);
-                                console.error("Error stack:", err.stack);
-                                console.error("Summary params used:", {
-                                    conversationId,
-                                    userId,
-                                    actualMessageCount
-                                });
-                            }
-                        }, 2000);
-                    } else {
-                        console.log('Skipping summary generation (conditions not met)');
-                    }
-                }
-            } catch (error) {
-                console.error('Error in summary generation process:', error);
-            }
-        } else {
-            if (useDatabase) {
-                console.log('Skipping summary generation due to message storage issues:', {
-                    userMessageStored,
-                    assistantMessageStored,
-                    conversationId: !!conversationId,
-                    userId: !!userId
-                });
-            }
-        }
-
-        // Enhanced response format
-        res.json({
-            success: true,
-            response,
-            conversationHistory: updatedHistory,
-            conversationId,
-            metadata: {
-                messageStored: useDatabase && userMessageStored && assistantMessageStored,
-                historyLength: updatedHistory.length,
-                responseLength: response.length,
-                model: "gemini-2.5-flash",
-                timestamp: new Date().toISOString(),
-                summaryProcessed: useDatabase
-            }
-        });
-
-    } catch (error: any) {
-        console.error('Chat message error:', error);
-        console.error('Error stack:', error.stack);
-
-        // Provide more specific error messages
-        let errorMessage = 'Failed to send message to Gemini AI';
-        let statusCode = 500;
-
-        if (error.message?.includes('Invalid conversation_id')) {
-            errorMessage = 'Invalid conversation ID format. Must be a valid UUID.';
-            statusCode = 400;
-        } else if (error.message?.includes('Foreign key constraint')) {
-            errorMessage = 'Invalid user ID. User does not exist.';
-            statusCode = 400;
-        } else if (error.message?.includes('database') || error.message?.includes('store')) {
-            errorMessage = `Database error: ${error.message}`;
-        } else if (error.message?.includes('Gemini') || error.message?.includes('API')) {
-            errorMessage = 'Failed to get response from Gemini AI';
-        } else if (error.message?.includes('quota') || error.message?.includes('limit')) {
-            errorMessage = 'API quota exceeded. Please try again later.';
-            statusCode = 429;
-        }
-
-        res.status(statusCode).json({
-            success: false,
-            error: errorMessage,
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined,
-            timestamp: new Date().toISOString()
-        });
-    }
-};
-
-/**
- * Alternative function to force generate a summary for testing
- */
-export const forceGenerateSummary = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { conversationId} = req.body;
-        const authUserId = req?.user?.id;
-        const userId = parseInt(authUserId as string);
-        if (!userId) {
-            res.status(400).json({
-                success: false,
-                error: 'userId is required'
-            });
-            return;
-        }
-
-        if (!conversationId || !userId) {
-            res.status(400).json({
-                success: false,
-                error: 'conversationId and userId are required'
-            });
-            return;
-        }
-
-        console.log(`🔧 Force generating summary for conversation ${conversationId}, user ${userId}`);
-
-        // Get current message count
-        const { data: messages, error } = await supabase
-            .from('messages')
-            .select('id')
-            .eq('conversation_id', conversationId)
-            .eq('user_id', userId);
-
-        if (error) {
-            throw error;
-        }
-
-        console.log(`Found ${messages?.length || 0} messages in conversation`);
-
-        await generateConversationSummary(conversationId, userId, undefined, req, res);
-
-    } catch (error: any) {
-        console.error('Force generate summary error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-};
-
 
 /**
  * Generate a text completion with enhanced prompting
@@ -463,7 +69,7 @@ export const generateCompletion = async (req: Request, res: Response): Promise<v
             useDatabase = false
         } = req.body;
 
-         const authUserId = req?.user?.id;
+        const authUserId = req?.user?.id;
         const userId = parseInt(authUserId as string);
         if (!userId) {
             res.status(400).json({
@@ -601,11 +207,10 @@ export const getConversation = async (req: Request, res: Response): Promise<void
 };
 
 
-
 /**
- * Get conversation messages by conversation ID
+ * Get conversation summary messages and messages by conversation ID
  */
-export const getConversationMessages = async (req: Request, res: Response): Promise<void> => {
+export const getSummaryMessages = async (req: Request, res: Response): Promise<void> => {
     try {
         const { conversationId, page = 1, limit = 50 } = req.query;
         const authUserId = req?.user?.id;
@@ -675,54 +280,70 @@ export const getConversationMessages = async (req: Request, res: Response): Prom
 
 
 /**
- * Delete conversation endpoint
+ * Delete conversation summary and related messages
  */
-export const deleteConversation = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { conversationId } = req.body;
-        const authUserId = req?.user?.id;
-        const userId = parseInt(authUserId as string);
+export const deleteConversationSummary = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { conversationId } = req.query;
+    const authUserId = req?.user?.id;
+    const userId = parseInt(authUserId as string);
 
-        if (!conversationId || !userId) {
-            res.status(400).json({
-                success: false,
-                error: 'conversationId and userId are required'
-            });
-            return;
-        }
-
-        if (!isValidUUID(conversationId)) {
-            res.status(400).json({
-                success: false,
-                error: 'Invalid conversationId format. Must be a valid UUID.'
-            });
-            return;
-        }
-
-        const { error } = await supabase
-            .from('messages')
-            .delete()
-            .eq('conversation_id', conversationId)
-            .eq('user_id', userId);
-
-        if (error) {
-            throw new Error(`Failed to delete conversation: ${error.message}`);
-        }
-
-        res.json({
-            success: true,
-            message: 'Conversation deleted successfully',
-            conversationId,
-            timestamp: new Date().toISOString()
-        });
-    } catch (error: any) {
-        console.error('Delete conversation error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to delete conversation'
-        });
+    if (!conversationId || !userId) {
+      res.status(400).json({
+        success: false,
+        error: 'conversationId (query) and userId are required',
+      });
+      return;
     }
+
+    const conversationIdStr = conversationId.toString();
+
+    if (!isValidUUID(conversationIdStr)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid conversationId format. Must be a valid UUID.',
+      });
+      return;
+    }
+
+    // Step 1: Delete related messages
+    const { error: messageError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', conversationIdStr)
+      .eq('user_id', userId);
+
+    if (messageError) {
+      throw new Error(`Failed to delete related messages: ${messageError.message}`);
+    }
+
+    // Step 2: Delete the conversation summary
+    const { error: summaryError } = await supabase
+      .from('ai_conversation_summaries')
+      .delete()
+      .eq('conversation_id', conversationIdStr)
+      .eq('user_id', userId);
+
+    if (summaryError) {
+      throw new Error(`Failed to delete conversation summary: ${summaryError.message}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'Conversation and related messages deleted successfully',
+      conversationId: conversationIdStr,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Delete conversation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete conversation and messages',
+    });
+  }
 };
+
+
 
 /**
  * Get available Gemini models

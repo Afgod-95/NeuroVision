@@ -18,6 +18,7 @@ import { Colors } from '@/src/constants/Colors';
 import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { router } from 'expo-router';
 import { useDebounce } from 'use-debounce';
+import { MotiView } from 'moti';
 
 
 const { width, height } = Dimensions.get('window');
@@ -99,14 +100,13 @@ const ShimmerPlaceholder: React.FC<{ width: number; height: number; style?: any 
     );
 };
 
-// Shimmer Message Item Component - Fixed to match actual message structure
+// Shimmer Message Item Component
 const ShimmerMessageItem: React.FC = () => {
     return (
         <View style={styles.messageItemContainer}>
             <View style={styles.messageItem}>
                 <View style={styles.messageContent}>
                     <View style={styles.messageTextContainer}>
-                        {/* Single line shimmer for title only, matching actual message */}
                         <ShimmerPlaceholder width={180} height={16} />
                     </View>
                     <View style={styles.messageActions}>
@@ -114,15 +114,6 @@ const ShimmerMessageItem: React.FC = () => {
                     </View>
                 </View>
             </View>
-        </View>
-    );
-};
-
-// Shimmer Header Component
-const ShimmerHeader: React.FC = () => {
-    return (
-        <View style={styles.sectionHeader}>
-            <ShimmerPlaceholder width={60} height={12} />
         </View>
     );
 };
@@ -146,11 +137,7 @@ const ShimmerLoading: React.FC = () => {
             <View style={styles.listContainer}>
                 {shimmerItems.map((item) => (
                     <View key={item.id}>
-                        {item.type === 'header' ? (
-                            <ShimmerHeader />
-                        ) : (
-                            <ShimmerMessageItem />
-                        )}
+                        <ShimmerMessageItem />
                     </View>
                 ))}
             </View>
@@ -175,6 +162,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
     const [pressedMessage, setPressedMessage] = useState<string | null>(null);
 
     const [debouncedSearch] = useDebounce(search, 500)
+    
     // Modal actions
     const modalActions: ModalAction[] = [
         {
@@ -265,15 +253,6 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
         const grouped: GroupedMessage[] = [];
 
-        // Add single "Recents" header
-        if (sortedMessages.length > 0) {
-            grouped.push({
-                type: 'header',
-                id: 'header-recents',
-                title: 'Recents',
-            });
-        }
-
         // Add all messages without date grouping
         sortedMessages.forEach((message) => {
             grouped.push({
@@ -312,14 +291,6 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
     };
 
     const renderItem: ListRenderItem<GroupedMessage> = ({ item }) => {
-        if (item.type === 'header') {
-            return (
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionHeaderText}>{item.title}</Text>
-                </View>
-            );
-        }
-
         const message = item.message!;
         const isPressed = pressedMessage === message.conversation_id;
         const isActive = activeConversationId === message.conversation_id;
@@ -329,15 +300,25 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                 <Pressable
                     style={[
                         styles.messageItem,
-                        (isPressed || isActive) && styles.messageItemActive
+                        isActive && styles.messageItemActive,
+                        isPressed && styles.messageItemPressed
                     ]}
                     onPress={() => handleMessagePress(message.conversation_id)}
                     onLongPress={() => handleLongPress(message.conversation_id)}
                     delayLongPress={500}
                 >
+                    {/* Active Indicator Bar */}
+                    {isActive && <View style={styles.activeIndicator} />}
+                    
                     <View style={styles.messageContent}>
                         <View style={styles.messageTextContainer}>
-                            <Text style={styles.messageText} numberOfLines={1}>
+                            <Text 
+                                style={[
+                                    styles.messageText,
+                                    isActive && styles.messageTextActive
+                                ]} 
+                                numberOfLines={1}
+                            >
                                 {message.title}
                             </Text>
                         </View>
@@ -347,7 +328,11 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                                 onPress={() => handleLongPress(message.conversation_id)}
                                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             >
-                                <Feather name="more-horizontal" size={16} color="#6b7280" />
+                                <Feather 
+                                    name="more-horizontal" 
+                                    size={16} 
+                                    color={isActive ? Colors.dark.txtPrimary : "#6b7280"} 
+                                />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -357,7 +342,12 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
     };
 
     const renderEmptyState = () => (
-        <View style={styles.emptyState}>
+        <MotiView
+            from={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", damping: 12 }}
+            style={styles.emptyState}
+        >
             <View style={styles.emptyStateIcon}>
                 <Feather name="message-circle" size={48} color="#374151" />
             </View>
@@ -365,8 +355,36 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             <Text style={styles.emptyStateSubtext}>
                 Start chatting to see your conversation history here
             </Text>
-        </View>
+        </MotiView>
     );
+
+
+     const renderEmptySearchState = () => (
+        <MotiView
+            from={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", damping: 12 }}
+            style={styles.emptyState}
+        >
+            <View style={styles.emptyStateIcon}>
+            <Feather name="message-circle" size={48} color="#374151" />
+            </View>
+            <Text style={styles.emptyStateText}>No results found</Text>
+            <Text style={styles.emptyStateSubtext}>
+            We couldn’t find any matches for your search. Try adjusting your keywords or check for typos.
+            </Text>
+        </MotiView>
+    );
+
+    const renderUIState = useMemo(() => {
+        if (debouncedSearch && groupedMessages.length === 0) {
+            return renderEmptySearchState();
+        }
+        else {
+            return renderEmptyState();
+        }
+    }, [debouncedSearch, groupedMessages]);
+    
 
     const keyExtractor = (item: GroupedMessage) => item.id;
 
@@ -389,23 +407,15 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         return <ShimmerLoading />;
     }
 
-    // Add this to your JSX if you want a subtle background loading indicator
-    {
-        isFetching && (
-            <View style={{ position: 'absolute', top: 10, right: 10 }}>
-                <ActivityIndicator size="small" color={Colors.dark.txtSecondary} />
-            </View>
-        )
-    }
-
     return (
         <View style={styles.container}>
+                        
             <FlatList
                 data={groupedMessages}
                 renderItem={renderItem}
                 keyExtractor={keyExtractor}
                 showsVerticalScrollIndicator={false}
-                ListEmptyComponent={renderEmptyState}
+                ListEmptyComponent={renderUIState}
                 contentContainerStyle={groupedMessages.length === 0 ? styles.emptyListContainer : styles.listContainer}
                 initialNumToRender={15}
                 maxToRenderPerBatch={15}
@@ -471,19 +481,11 @@ const styles = StyleSheet.create({
     listContainer: {
         paddingTop: 8,
     },
-    sectionHeader: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.dark.borderColor,
-        marginBottom: 4,
-    },
-    sectionHeaderText: {
-        color: '#6b7280',
-        fontSize: 12,
-        fontFamily: 'Manrope-SemiBold',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+    fetchingIndicator: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 10,
     },
     messageItemContainer: {
         paddingHorizontal: 12,
@@ -492,10 +494,26 @@ const styles = StyleSheet.create({
     messageItem: {
         borderRadius: 8,
         backgroundColor: 'transparent',
+        position: 'relative',
+        overflow: 'hidden',
     },
     messageItemActive: {
-        backgroundColor: Colors.dark.bgSecondary,
+        backgroundColor: Colors.dark.bgSecondary || '#1a1a1a',
         borderWidth: 1,
+        borderColor: Colors.dark.borderColor || '#2a2a2a',
+    },
+    messageItemPressed: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    activeIndicator: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 3,
+        backgroundColor: '#3b82f6',
+        borderTopRightRadius: 2,
+        borderBottomRightRadius: 2,
     },
     messageContent: {
         flexDirection: 'row',
@@ -509,10 +527,14 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     messageText: {
-        color: Colors.dark.txtPrimary,
+        color: Colors.dark.txtSecondary,
         fontSize: 14,
         fontFamily: 'Manrope-Medium',
         lineHeight: 20,
+    },
+    messageTextActive: {
+        color: Colors.dark.txtPrimary,
+        fontFamily: 'Manrope-SemiBold',
     },
     messageActions: {
         flexDirection: 'row',

@@ -15,11 +15,17 @@ interface ConversationSummary {
 }
 
 interface MessageContent {
-    type: 'text' | 'audio' | 'mixed';
-    text?: string;
-    audioUrl?: string;
-    audioName?: string;
-    audioDuration?: number;
+  type: 'text' | 'audio' | 'files' | 'mixed';
+  text?: string;
+  audioUrl?: string;
+  audioName?: string;
+  audioDuration?: number;
+  files?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+  }>;
 }
 
 interface UploadedAudioFile {
@@ -28,6 +34,15 @@ interface UploadedAudioFile {
     uploadResult?: {
         signedUrl: string;
     };
+}
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  uri?: string;
+  base64?: string;
 }
 
 interface RootState {
@@ -58,18 +73,17 @@ interface RealtimeChatProps {
 
 
 interface Message {
-    id: string;
-    conversation_id?: string;
-    user_id?: string;
-    sender: 'user' | 'assistant' | 'system';
-    text: string;
-    created_at: string;
-    timestamp: string;
-    user: boolean;
-    content?: MessageContent;
-    isLoading?: boolean;
-    isTyping?: boolean,
-    metadata?: any; 
+  id: string;
+  conversation_id?: string;
+  user_id?: string;
+  sender: 'user' | 'assistant' | 'system';
+  text: string;
+  created_at: string;
+  timestamp: string;
+  user: boolean;
+  isLoading?: boolean;
+  isTyping?: boolean;
+  content?: MessageContent;
 }
 
 // API Message interface to match backend response
@@ -126,6 +140,7 @@ export {
     SupabaseMessage,
     MessageContent,
     UploadedAudioFile,
+    UploadedFile,
     RealtimeChatProps,
     RootState
 }

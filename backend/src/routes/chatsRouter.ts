@@ -1,15 +1,22 @@
 import express, { Request, RequestHandler, Response } from 'express';
-import { generateCompletion, getConversation, getConversationMessages, getModels, sendChatMessage } from '../controller/conversation/conversations.controller';
+import { deleteConversationSummary, generateCompletion, getConversation, getSummaryMessages, getModels } from '../controller/conversation/conversations.controller';
+import { sendChatMessage } from '../controller/conversation/send_message_controller';
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
-import { getMessages } from '../controller/messages/messages';
+import { get_conversation_from_ids } from '../controller/messages/messages';
 import { bulkGenerateSummaries, getUserConversationSummaries } from '../controller/conversation/conversation.summaries';
 import { tts } from '../controller/tts/textToSpeech.controller';
 import { verifyAccessToken } from '../middlewares/auth.middleware';
+import { uploadMiddleware } from '../middlewares/upload.middleware';
+
 
 
 const chatsRouter = express.Router()
 // Chat endpoints
-chatsRouter.post('/send-message', verifyAccessToken as RequestHandler, sendChatMessage);
+chatsRouter.post('/send-message', 
+    verifyAccessToken as RequestHandler, 
+    uploadMiddleware, 
+    sendChatMessage
+);
 
 // Completion endpoint
 chatsRouter.post('/completion',verifyAccessToken as RequestHandler, generateCompletion);
@@ -32,21 +39,16 @@ chatsRouter.post('/transcribe-audio', verifyAccessToken as RequestHandler, async
 /**
  * get messages endpoint
  */
-chatsRouter.get('/messages',verifyAccessToken as RequestHandler, getConversationMessages);
+chatsRouter.get('/summary/messages',verifyAccessToken as RequestHandler, getSummaryMessages);
 
-//get conversation history
+//get conversation history by ids
 chatsRouter.get(
-    '/conversations/:conversationId',
+    '/:conversationId',
     verifyAccessToken as RequestHandler,
     (req: Request, res: Response, next) => {
-        Promise.resolve(getMessages(req, res)).catch(next);
+        Promise.resolve(get_conversation_from_ids(req, res)).catch(next);
     }
 )
-
-
-
-//chatsRouter.put('/conversations/summary', updateConversationSummary);
-chatsRouter.post('/summaries/bulk-generate',verifyAccessToken as RequestHandler, bulkGenerateSummaries);
 
 
 /**
@@ -54,10 +56,18 @@ chatsRouter.post('/summaries/bulk-generate',verifyAccessToken as RequestHandler,
 */
 chatsRouter.get('/user/summaries/',verifyAccessToken as RequestHandler, getUserConversationSummaries);
 
-/**
- * TEXT TO SPEECH ENDPOINT
- */
+//chatsRouter.put('/conversations/summary', updateConversationSummary);
+chatsRouter.post('/summaries/bulk-generate',verifyAccessToken as RequestHandler, bulkGenerateSummaries);
+
+//TEXT TO SPEECH ENDPOINT
 chatsRouter.post('/text-to-speech',verifyAccessToken as RequestHandler, tts as RequestHandler);
+
+//GET CONVERSATION SUMMARIES FOR A SPECIFIC USER
+chatsRouter.get('/user/summary/message',verifyAccessToken as RequestHandler, getUserConversationSummaries);
+
+//delete conversation summary
+chatsRouter.delete('/user/summary/messages',verifyAccessToken as RequestHandler, deleteConversationSummary);
+
 
 
 export default chatsRouter;

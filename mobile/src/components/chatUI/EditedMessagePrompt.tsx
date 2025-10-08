@@ -27,7 +27,7 @@ interface EditedMessagePromptProps {
 type ClearMessage = () => void;
 
 export const EditedMessagePrompt: React.FC<EditedMessagePromptProps & { clearMessage: ClearMessage }> = (
-  { message, setMessage, showEditedMessagePopup, setShowEditedMessagePopup, clearMessage }
+  { showEditedMessagePopup, setShowEditedMessagePopup, clearMessage }
 ) => {
   const handleClose = () => {
     clearMessage();
@@ -49,16 +49,16 @@ export const EditedMessagePrompt: React.FC<EditedMessagePromptProps & { clearMes
             <Text style={styles.text}>Editing Message</Text>
           </View>
 
-          {message.length > 0 && (
-            <Animated.View entering={FadeIn} exiting={FadeOut}>
-              <TouchableOpacity
-                onPress={handleClose} // Close + clear
-                style={[styles.searchIcon, { marginLeft: 10, marginRight: 0 }]}
-              >
-                <AntDesign name="closecircle" size={20} color={Colors.dark.txtSecondary} />
-              </TouchableOpacity>
-            </Animated.View>
-          )}
+        
+          <Animated.View entering={FadeIn} exiting={FadeOut}>
+            <TouchableOpacity
+              onPress={handleClose} // Close + clear
+              style={[styles.searchIcon, { marginLeft: 10, marginRight: 0 }]}
+            >
+              <AntDesign name="closecircle" size={20} color={Colors.dark.txtSecondary} />
+            </TouchableOpacity>
+          </Animated.View>
+       
         </Animated.View>
       )}
     </>

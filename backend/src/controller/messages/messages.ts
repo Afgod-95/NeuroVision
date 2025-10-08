@@ -30,7 +30,7 @@ const getUserIdFromAuth = async (authUserId: string): Promise<number | null> => 
   return data.id;
 };
 
-const getMessages = async (req: Request, res: Response) => {
+const get_conversation_from_ids = async (req: Request, res: Response) => {
   try {
     const { conversationId } = req.params;
     const authUserId = req.user?.id; 
@@ -128,4 +128,4 @@ const createMessagesView = async () => {
   // Then you can query from 'messages_with_users' instead
 };
 
-export { getMessages, createMessage, getUserIdFromAuth };
+export { get_conversation_from_ids, createMessage, getUserIdFromAuth };

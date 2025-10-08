@@ -14,6 +14,7 @@ import { Colors } from "../constants/Colors";
 import BiometricAuthGate from "../components/biometricAuthGate/BiometricGateAuth";
 import axios from "axios";
 import Constants from "expo-constants";
+import CustomSplashScreen from "../components/splash-screen/SplashScreen";
 
 axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl;
 
@@ -102,13 +103,19 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
     return unsubscribe;
   }, []);
 
+
+
   // Hide splash only when BOTH fonts + redux are ready
   useEffect(() => {
     if (fontsLoaded && rehydrated) {
-      console.log('Hiding splash screen');
-      SplashScreen.hideAsync();
+      const timeout = setTimeout(() => {
+        console.log("Hiding splash screen");
+        SplashScreen.hideAsync();
+      }, 1500); // waits 1.5s to finish animation
+      return () => clearTimeout(timeout);
     }
   }, [fontsLoaded, rehydrated]);
+
 
   // Navigation logic - only run once after rehydration
   useEffect(() => {
@@ -123,14 +130,11 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
         console.log('Redirecting to home');
         router.replace("/(home)");
       }
-    } 
+    }
     // Case 2: User is authenticated but registration is NOT complete -> redirect to onboarding
-    else if (user?.isAuthenticated && !user?.isRegistrationComplete) {
-      if (!currentPath.includes("/onboarding")) {
-        console.log('Redirecting to onboarding');
-        router.replace("/"); // Adjust this path to your onboarding route
-      }
-    } 
+    else if (user?.isAuthenticated && !user?.isRegistrationComplete) { 
+      router.replace("/(auth)/signup");
+    }
     // Case 3: User is NOT authenticated -> redirect to login
     else if (!user?.isAuthenticated) {
       if (!currentPath.includes("/(auth)/")) {
@@ -143,6 +147,7 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, [
     rehydrated,
     fontsLoaded,
+    user,
     user?.isAuthenticated,
     user?.isRegistrationComplete,
     currentPathname,
@@ -152,16 +157,7 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
   // Show loading screen while waiting for redux + fonts
   if (!fontsLoaded || !rehydrated) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: Colors.dark.bgPrimary,
-        }}
-      >
-        <Text style={{ color: "white", fontSize: 16 }}>Loading...</Text>
-      </View>
+      <CustomSplashScreen />
     );
   }
 

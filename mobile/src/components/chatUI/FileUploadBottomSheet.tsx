@@ -6,26 +6,15 @@ import {
   Pressable,
   Dimensions,
   Alert,
-  Linking,
 } from 'react-native';
-import { X, ImagePlus, FileText, Mic, Camera, FolderOpen, Link } from 'lucide-react-native';
+import { X, ImagePlus, Camera, FolderOpen, Sparkles } from 'lucide-react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
 } from '@gorhom/bottom-sheet';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as MediaLibrary from 'expo-media-library';
-import {
-  useAudioRecorder,
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-  useAudioRecorderState,
-} from 'expo-audio';
-import * as FileSystem from 'expo-file-system';
 import { Colors } from '../../constants/Colors';
-import { useRealtimeChatState } from '../../hooks/chat/states/useRealtimeChatStates';
 import { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 
 const { width } = Dimensions.get('window');
@@ -33,15 +22,19 @@ const { width } = Dimensions.get('window');
 type BottomSheetModalProps = {
   bottomSheetRef: React.RefObject<BottomSheetMethods | null>;
   onFileSelected?: (file: any) => void;
-  onFilesSelected?: (files: any[]) => void; // New prop for multiple files
+  onFilesSelected?: (files: any[]) => void;
+  onCreateImage?: () => void; // New prop for create image action
 };
 
-const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: BottomSheetModalProps) => {
-  const recordingRef = React.useRef<Audio.Recording | null>(null);
-  const [isRecording, setIsRecording] = React.useState(false);
+const BottomSheetModal = ({ 
+  bottomSheetRef, 
+  onFileSelected, 
+  onFilesSelected,
+  onCreateImage 
+}: BottomSheetModalProps) => {
+  
   // variables
   const snapPoints = useMemo(() => ["50%"], []);
-
 
   const handleSheetChanges = useCallback((index: number) => {
     console.log('Sheet index:', index);
@@ -50,7 +43,6 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
   const handleClose = () => {
     bottomSheetRef.current?.close();
   };
-
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -67,7 +59,6 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
   // Camera function
   const handleTakePhoto = async () => {
     try {
-      // Request camera permissions
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Camera permission is required to take photos');
@@ -91,11 +82,9 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
     }
   };
 
-
   // Upload multiple images from library
   const handleUploadMultipleImages = async () => {
     try {
-      // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Photo library access is required');
@@ -113,11 +102,9 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
       if (!result.canceled && result.assets.length > 0) {
         console.log('Multiple images selected:', result.assets);
 
-        // If callback for multiple files exists, use it
         if (onFilesSelected) {
           onFilesSelected(result.assets);
         } else {
-          // Fallback: call onFileSelected for each file
           result.assets.forEach((asset, index) => {
             setTimeout(() => {
               onFileSelected?.(asset);
@@ -137,19 +124,17 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         copyToCacheDirectory: true,
-        multiple: true, // Enable multiple file selection
+        multiple: true,
       });
 
       if (!result.canceled) {
         console.log('Files selected:', result.assets);
 
-        // If callback for multiple files exists, use it
         if (onFilesSelected && result.assets.length > 1) {
           onFilesSelected(result.assets);
         } else if (result.assets.length === 1) {
           onFileSelected?.(result.assets[0]);
         } else {
-          // Multiple files but no multiple callback - handle individually
           result.assets.forEach((asset, index) => {
             setTimeout(() => {
               onFileSelected?.(asset);
@@ -163,48 +148,11 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
     }
   };
 
-  // Record audio
-  const handleRecordAudio = async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Microphone access is required to record audio');
-        return;
-      }
-
-      if (!isRecording) {
-        // Start recording
-        console.log('Starting audio recording...');
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        await recording.startAsync();
-        recordingRef.current = recording;
-        setIsRecording(true);
-      } else {
-        // Stop recording
-        console.log('Stopping audio recording...');
-        const recording = recordingRef.current;
-        if (!recording) return;
-
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-        console.log('Recording saved at', uri);
-
-        setIsRecording(false);
-        recordingRef.current = null;
-
-        // Send the file to callback
-        onFileSelected?.({
-          uri,
-          name: `recording-${Date.now()}.m4a`,
-          type: 'audio/m4a',
-        });
-      }
-    } catch (error) {
-      console.error('Error handling audio recording:', error);
-      Alert.alert('Error', 'Failed to handle audio recording');
-    }
-  }
+  // Handle create image
+  const handleCreateImage = () => {
+    console.log('Create image action triggered');
+    onCreateImage?.();
+  };
 
   const actions = [
     {
@@ -229,11 +177,11 @@ const BottomSheetModal = ({ bottomSheetRef, onFileSelected, onFilesSelected }: B
       onPress: handleBrowseFiles,
     },
     {
-      icon: Mic,
-      label: isRecording ? 'Stop Recording' : 'Record Audio',
-      subtitle: isRecording ? 'Tap to finish' : 'Voice message',
-      color: '#FF3B30',
-      onPress: handleRecordAudio,
+      icon: Sparkles,
+      label: 'Create Image',
+      subtitle: 'Generate with AI',
+      color: '#AF52DE',
+      onPress: handleCreateImage,
     }
   ];
 
