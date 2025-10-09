@@ -107,7 +107,7 @@ const SettingsScreen: React.FC = () => {
 
     // Fixed logout handler using custom alert
     const handleLogout = useCallback(() => {
-        showInfo(
+        showWarning(
             'Sign Out',
             'Are you sure you want to sign out?',
             {

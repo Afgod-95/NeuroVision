@@ -155,7 +155,7 @@ const CustomAlert = ({
           iconColor: '#FF9500',
           backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
-          primaryButtonColor: '#FF9500',
+           primaryButtonColor: '#FF3B30',
         };
       case 'info':
         return {

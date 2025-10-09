@@ -1,3 +1,4 @@
+// services/GeminiAI.ts
 import OpenAI from "openai";
 import { GeminiAIConfig, GeminiMessage } from "../interfaces/typescriptInterfaces";
 
@@ -30,8 +31,8 @@ class GeminiAIService {
             baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
         });
 
-        this.model = config.model || "gemini-2.5-flash"; // Consider gemini-pro-vision for more explicit image handling
-        this.maxTokens = config.maxTokens || 1048576; // Max tokens for the response, not input context
+        this.model = config.model || "gemini-2.5-flash";
+        this.maxTokens = config.maxTokens || 1048576;
         this.temperature = config.temperature || 0.7;
         this.topP = config.topP || 0.9;
         this.topK = config.topK || 40;
@@ -71,7 +72,7 @@ class GeminiAIService {
             messages.push(...conversationHistory);
 
             // Prepare current message with files if provided
-            const currentMessage = await this.prepareMessageWithFiles(message, options?.files); // Await here
+            const currentMessage = this.prepareMessageWithFiles(message, options?.files);
             messages.push(currentMessage);
 
             const response = await this.openai.chat.completions.create({
@@ -95,9 +96,8 @@ class GeminiAIService {
 
     /**
      * Prepare message content with optional file attachments
-     * This method is now async to allow for preprocessing files.
      */
-    private async prepareMessageWithFiles( // Make this method async
+    private prepareMessageWithFiles(
         message: string,
         files?: Array<{
             name: string;
@@ -106,7 +106,7 @@ class GeminiAIService {
             base64?: string;
             uri?: string;
         }>
-    ): Promise<ExtendedGeminiMessage> {
+    ): ExtendedGeminiMessage {
         // If no files, return simple text message
         if (!files || files.length === 0) {
             return {
@@ -130,12 +130,14 @@ class GeminiAIService {
             });
         }
 
-        // Process files
+        // Add files (images only for now, as Gemini primarily supports images)
         for (const file of files) {
             if (this.isImageFile(file.type)) {
-                const imageUrl = file.base64
+                // Use base64 if available, otherwise use URI
+                const imageUrl = file.base64 
                     ? `data:${file.type};base64,${file.base64}`
                     : file.uri || '';
+
                 if (imageUrl) {
                     contentParts.push({
                         type: 'image_url',
@@ -144,50 +146,8 @@ class GeminiAIService {
                         }
                     });
                 }
-            } else if (this.isDocumentFile(file.type)) {
-                // Handle document files: extract text or convert to image
-                const documentContent = await this.processDocumentFile(file);
-                if (documentContent) {
-                    // Assuming processDocumentFile returns text for now
-                    contentParts.push({
-                        type: 'text',
-                        text: `Document: ${file.name}\n${documentContent}`
-                    });
-                } else {
-                    contentParts.push({
-                        type: 'text',
-                        text: `[Could not process document: ${file.name} (${file.type}, ${this.formatFileSize(file.size)})]`
-                    });
-                }
-            } else if (this.isVideoFile(file.type)) {
-                // Handle video files: extract keyframes or transcribe audio
-                const videoProcessedContent = await this.processVideoFile(file);
-                if (typeof videoProcessedContent === 'string') {
-                     // If it's a transcription or summary
-                    contentParts.push({
-                        type: 'text',
-                        text: `Video: ${file.name}\n${videoProcessedContent}`
-                    });
-                } else if (Array.isArray(videoProcessedContent)) {
-                    // If it's an array of image URLs (keyframes)
-                    videoProcessedContent.forEach(imageUrl => {
-                        if (imageUrl) {
-                            contentParts.push({
-                                type: 'image_url',
-                                image_url: {
-                                    url: imageUrl
-                                }
-                            });
-                        }
-                    });
-                } else {
-                    contentParts.push({
-                        type: 'text',
-                        text: `[Could not process video: ${file.name} (${file.type}, ${this.formatFileSize(file.size)})]`
-                    });
-                }
             } else {
-                // Fallback for other unhandled file types
+                // For non-image files, add text description
                 contentParts.push({
                     type: 'text',
                     text: `[Attached file: ${file.name} (${file.type}, ${this.formatFileSize(file.size)})]`
@@ -207,79 +167,6 @@ class GeminiAIService {
     private isImageFile(mimeType: string): boolean {
         return mimeType.startsWith('image/');
     }
-
-    /**
-     * Check if file type is a document (e.g., PDF, DOCX, TXT)
-     */
-    private isDocumentFile(mimeType: string): boolean {
-        // You'll need to expand this based on the document types you want to support
-        return mimeType.startsWith('application/pdf') ||
-               mimeType.startsWith('application/msword') || // .doc
-               mimeType.startsWith('application/vnd.openxmlformats-officedocument.wordprocessingml.document') || // .docx
-               mimeType.startsWith('text/plain');
-    }
-
-    /**
-     * Check if file type is a video
-     */
-    private isVideoFile(mimeType: string): boolean {
-        return mimeType.startsWith('video/');
-    }
-
-    /**
-     * Placeholder for processing document files.
-     * In a real application, you'd integrate libraries like:
-     * - `pdf-parse` for PDFs
-     * - `mammoth.js` for DOCX
-     * - Simple text extraction for TXT
-     *
-     * Returns text content from the document. For more complex docs,
-     * you might return an array of image_urls if you convert pages to images.
-     */
-    private async processDocumentFile(file: { name: string; type: string; size: number; base64?: string; uri?: string }): Promise<string | null> {
-        console.warn(`Processing document file: ${file.name} (${file.type}). This is a placeholder.`);
-        // Example: If base64 is available and it's a text file
-        if (file.type === 'text/plain' && file.base64) {
-            return Buffer.from(file.base64, 'base64').toString('utf8');
-        }
-        // For PDFs, DOCX, etc., you'd need actual parsing logic here.
-        // E.g., using a library to extract text or convert to image.
-        // For demonstration, we'll just return a placeholder message.
-        return `Content of ${file.name} (actual content extraction requires specific libraries based on file type).`;
-    }
-
-    /**
-     * Placeholder for processing video files.
-     * In a real application, you'd integrate libraries or services for:
-     * - Extracting keyframes (e.g., using FFmpeg on a server or a client-side library like `ffmpeg.wasm`)
-     * - Transcribing audio (e.g., using a speech-to-text API or client-side libraries)
-     *
-     * Returns an array of image URLs (keyframes) or a string (transcription/summary).
-     */
-    private async processVideoFile(file: { name: string; type: string; size: number; base64?: string; uri?: string }): Promise<string | string[] | null> {
-        console.warn(`Processing video file: ${file.name} (${file.type}). This is a placeholder.`);
-        // For demonstration, we'll assume we can extract a single keyframe as an image URL
-        // or provide a simple text summary.
-
-        // Option 1: Provide a text summary/transcription placeholder
-        // return `Video ${file.name} summary: (Actual video processing like keyframe extraction or audio transcription would happen here).`;
-
-        // Option 2: Simulate keyframe extraction (you'd need actual logic for this)
-        // Let's assume you have a way to generate a thumbnail/keyframe URL.
-        // For base64 videos, this is complex on the client-side. For `uri` it's easier
-        // if the URI points to a publicly accessible video where you can generate thumbnails.
-        if (file.uri) {
-            // This is a hypothetical URL to a generated thumbnail.
-            // In a real scenario, you'd likely have a backend service
-            // that takes the video URI and returns keyframe images.
-            console.log("Generating a placeholder image for video...");
-            return `https://example.com/generated-keyframe-for-${encodeURIComponent(file.name)}.png`;
-        }
-
-        // If no URI, just return a text placeholder
-        return `Video ${file.name} (actual video processing like keyframe extraction or audio transcription would happen here).`;
-    }
-
 
     /**
      * Format file size for display
@@ -310,7 +197,7 @@ class GeminiAIService {
         try {
             const messages: ExtendedGeminiMessage[] = [
                 ...conversationHistory,
-                await this.prepareMessageWithFiles(message, options?.files) // Await here
+                this.prepareMessageWithFiles(message, options?.files)
             ];
 
             const stream = await this.openai.chat.completions.create({
