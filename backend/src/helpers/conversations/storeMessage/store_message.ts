@@ -1,5 +1,5 @@
-import supabase from "../../lib/supabase";
-import { isValidUUID } from "../isValidUUID";
+import supabase from "../../../lib/supabase";
+import { isValidUUID } from "../../isValidUUID";
 
 /**
  * Store message in Supabase with enhanced error handling, retry logic, and optional file support

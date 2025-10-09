@@ -78,7 +78,7 @@ export const useMessageMutation = ({
           };
           finalMessage = messageText.trim() || 'Voice message';
         } 
-        // Handle regular files
+        // Handle regular files - STORE FULL FILE DATA
         else if (files && files.length > 0) {
           messageContent = {
             type: messageText.trim() ? 'mixed' : 'files',
@@ -88,6 +88,8 @@ export const useMessageMutation = ({
               name: f.name,
               type: f.type,
               size: f.size,
+              uri: f.uri,        // ✅ Store URI for regeneration
+              base64: f.base64,  // ✅ Store base64 for regeneration
             })),
           };
           
@@ -109,8 +111,9 @@ export const useMessageMutation = ({
           fileNames: files?.map(f => f.name)
         });
 
-        // ===== USE FORMDATA FOR FILE UPLOADS =====
+        // ===== ALWAYS USE THE SAME ENDPOINT =====
         const hasFiles = files && files.length > 0;
+        const endpoint = "/api/conversations/send-message";
         
         let response;
         
@@ -136,7 +139,7 @@ export const useMessageMutation = ({
           }));
           formData.append('conversationHistory', JSON.stringify(conversationHistory));
 
-          // Add files
+          // Add files - CRITICAL FIX HERE
           for (const file of files) {
             if (file.uri) {
               // For React Native files with URI
@@ -145,19 +148,19 @@ export const useMessageMutation = ({
                 type: file.type || 'application/octet-stream',
                 name: file.name || `file_${Date.now()}`,
               };
-              formData.append('files', fileData);
+              formData.append('files', fileData); // ✅ Field name matches backend
             } else if (file.base64) {
               // For base64 files, convert to blob
               const blob = base64ToBlob(file.base64, file.type);
-              formData.append('files', blob, file.name);
+              formData.append('files', blob, file.name); // ✅ Field name matches backend
             }
           }
 
-          console.log("📤 Sending FormData request with files");
+          console.log("📤 Sending FormData request with files to:", endpoint);
 
-          // Use axios directly for FormData
-          response = await axios.post(
-            `${process.env.EXPO_PUBLIC_API_URL}/api/conversations/chat/send`,
+          // Use axios directly for FormData with full URL
+          response = await api.post(
+            `${endpoint}`,
             formData,
             {
               signal: controller.signal,
@@ -165,7 +168,7 @@ export const useMessageMutation = ({
                 'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'multipart/form-data',
               },
-              timeout: 60000,
+              timeout: 120000, 
             }
           );
         } else {
@@ -181,9 +184,9 @@ export const useMessageMutation = ({
             useDatabase: true,
           };
 
-          console.log("📤 Sending JSON request (no files)");
+          console.log("📤 Sending JSON request (no files) to:", endpoint);
 
-          response = await api.post("/api/conversations/send-message", payload, {
+          response = await api.post(endpoint, payload, {
             signal: controller.signal,
             headers: { Authorization: `Bearer ${accessToken}` },
             timeout: 30000,
@@ -194,7 +197,11 @@ export const useMessageMutation = ({
           throw new Error("No response data received from AI service");
         }
 
-        console.log(`✅ Response received:`, response.data);
+        console.log(`✅ Response received:`, {
+          success: response.data.success,
+          hasResponse: !!response.data.response,
+          conversationId: response.data.conversationId
+        });
 
         return {
           userMessage: finalMessage,
@@ -342,6 +349,9 @@ export const useMessageMutation = ({
         }
        
         clearAIResponding();
+        setTimeout(() => {
+          scrollToBottom()
+        }, 100);
       }
     },
 

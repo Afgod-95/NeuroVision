@@ -536,7 +536,7 @@ export const shouldUpdateSummary = async (
             console.log(`No existing summary found. Should update: ${messageCount >= 8}`);
             return messageCount >= 8;
         } else {
-            const shouldUpdate = messageCount % 10 === 0 && messageCount >= 15;
+            const shouldUpdate = messageCount % 10 === 0 && messageCount >= 5;
             console.log(`Existing summary found with ${existingSummary.message_count} messages. Current: ${messageCount}. Should update: ${shouldUpdate}`);
             return shouldUpdate;
         }

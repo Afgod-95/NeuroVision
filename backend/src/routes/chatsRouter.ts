@@ -1,5 +1,7 @@
 import express, { Request, RequestHandler, Response } from 'express';
-import { deleteConversationSummary, generateCompletion, getConversation, getSummaryMessages, getModels } from '../controller/conversation/conversations.controller';
+import { generateCompletion, getConversation, getModels } from '../controller/conversation/conversations.controller';
+import { deleteConversationSummary } from '../controller/conversation/delete_conversation_summary';
+import { getSummaryMessages } from '../controller/conversation/get_conversation_summaries';
 import { sendChatMessage } from '../controller/conversation/send_message_controller';
 import { transcribeAudio } from '../controller/assembly_ai/transcribeAudio';
 import { get_conversation_from_ids } from '../controller/messages/messages';
@@ -36,10 +38,6 @@ chatsRouter.post('/transcribe-audio', verifyAccessToken as RequestHandler, async
 });
 
 
-/**
- * get messages endpoint
- */
-chatsRouter.get('/summary/messages',verifyAccessToken as RequestHandler, getSummaryMessages);
 
 //get conversation history by ids
 chatsRouter.get(
@@ -55,11 +53,19 @@ chatsRouter.get(
 //chatsRouter.put('/conversations/summary', updateConversationSummary);
 chatsRouter.post('/summaries/bulk-generate',verifyAccessToken as RequestHandler, bulkGenerateSummaries);
 
+
+
+
 //TEXT TO SPEECH ENDPOINT
 chatsRouter.post('/text-to-speech',verifyAccessToken as RequestHandler, tts as RequestHandler);
 
 //GET CONVERSATION SUMMARIES FOR A SPECIFIC USER
 chatsRouter.get('/user/summary/message',verifyAccessToken as RequestHandler, getUserConversationSummaries);
+
+/**
+ * get messages endpoint
+ */
+chatsRouter.get('/summary/messages',verifyAccessToken as RequestHandler, getSummaryMessages);
 
 //delete conversation summary
 chatsRouter.delete('/user/summary/messages',verifyAccessToken as RequestHandler, deleteConversationSummary);

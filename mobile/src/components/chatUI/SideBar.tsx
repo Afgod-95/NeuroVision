@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -9,6 +9,7 @@ import {
     TouchableOpacity,
     PanResponder,
 } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
 import { Colors } from '@/src/constants/Colors';
 import SearchBar from './SearchBar';
@@ -16,15 +17,15 @@ import RecentMessages from '../chatUI/RecentMessages';
 import { useSelector, useDispatch } from 'react-redux';
 import { AppDispatch, RootState } from '@/src/redux/store';
 import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
-import { router } from 'expo-router';
-import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
 import api from '@/src/services/axiosClient';
 import { Edit, Images, Library } from 'lucide-react-native';
 import { setSearch } from '@/src/redux/slices/searchSlice';
-import { setConversationId } from '@/src/redux/slices/chatSlice';
+import { setConversationId, setMessages, setLoading } from '@/src/redux/slices/chatSlice';
 import useAuthHeaders from '@/src/constants/RequestHeader';
+import { ApiMessage, Message, ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
+import { useRealtimeChat } from '@/src/hooks/chat/realtime/useRealtimeChats';
 
 
 
@@ -34,6 +35,7 @@ const SIDEBAR_WIDTH = width * 0.75;
 const SWIPE_THRESHOLD = SIDEBAR_WIDTH / 3;
 
 type CustomSideBarProps = {
+    conversationId: string,
     isVisible: boolean;
     onClose: () => void;
     onOpen: () => void;
@@ -41,12 +43,13 @@ type CustomSideBarProps = {
     onLibraryPress?: () => void;
 };
 
-const CustomSideBar: React.FC<CustomSideBarProps> = ({ 
-    isVisible, 
-    onClose, 
-    onOpen, 
+const CustomSideBar: React.FC<CustomSideBarProps> = ({
+    isVisible,
+    conversationId,
+    onClose,
+    onOpen,
     startNewConversation,
-    onLibraryPress 
+    onLibraryPress
 }) => {
 
     //states
@@ -55,28 +58,40 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
     const [shouldRender, setShouldRender] = useState(isVisible);
     const [isDragging, setIsDragging] = useState(false);
     const [searchbarVisible, setSearchbarVisible] = useState(false);
+    const prefetchCalledRef = useRef<boolean>(false);
+    const [initialLoading, setIsInitialLoading] = useState(false);
+
+    const queryClient = useQueryClient();
 
     const { userDetails } = useRealtimeChatState();
     const { accessToken } = useSelector((state: RootState) => state.auth);
 
     const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
-    const { conversationId: activeConversationId } = useSelector((state: RootState) => state.chat);
 
     //search function
     const { search: searchQuery } = useSelector((state: RootState) => state.search);
     const dispatch = useDispatch<AppDispatch>();
     const { authHeader } = useAuthHeaders();
+    const { scrollToBottom } = useRealtimeChat({});
+
+        const { conversation_id } = useLocalSearchParams();
+        
+          // Get the actual conversation ID - memoize to prevent re-renders
+          const actualConversationId = useMemo(() =>
+        Array.isArray(conversation_id) ? conversation_id[0] : conversation_id,
+        [conversation_id]
+      );
 
     const {
         data,
-        isLoading, 
+        isLoading,
         isFetching,
         error,
     } = useQuery({
         queryKey: ['conversationSummaries', userDetails?.id],
         queryFn: async () => {
-            const res = await api.get('/api/conversations/user/summaries', authHeader);
-            console.log(res.data);
+            const res = await api.get('/api/conversations/user/summary/message', authHeader);
+            setConversationId(res.data.conversation_id || '');
             return res.data;
         },
         enabled: !!userDetails?.id && !!accessToken,
@@ -86,6 +101,77 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         refetchIntervalInBackground: true,
         staleTime: 5000,
     });
+
+
+
+    // Function to transform API messages to internal Message format
+    const transformApiMessages = useCallback((apiMessages: ApiMessage[]): Message[] => {
+        return apiMessages.map((apiMsg) => ({
+            id: apiMsg.id,
+            conversation_id: apiMsg.conversation_id,
+            user_id: apiMsg.user_id ? String(apiMsg.user_id) : undefined,
+            sender: apiMsg.sender === 'ai' ? 'assistant' : apiMsg.sender,
+            text: apiMsg.content,
+            created_at: apiMsg.created_at,
+            timestamp: apiMsg.created_at,
+            user: apiMsg.sender === 'user',
+            isLoading: false,
+            content: {
+                type: 'text',
+                data: apiMsg.content
+            }
+        }));
+    }, []);
+
+
+   
+
+
+    // Prefetch messages for specific conversation id
+    const prefetchMessages = useCallback(async (conversationId: string, userId: string) => {
+        if (!conversationId || !userId || prefetchCalledRef.current) {
+            console.log('Skipping prefetch - already called or missing params');
+            return;
+        }
+
+        prefetchCalledRef.current = true;
+
+        try {
+            setIsInitialLoading(true);
+            console.log(`Prefetching messages for conversation: ${conversationId}`);
+
+            const data = await queryClient.fetchQuery({
+                queryKey: ['conversationMessages', conversationId],
+                queryFn: async () => {
+                    const response = await api.get(`/api/conversations/summary/messages?conversationId=${conversationId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    });
+                    return response.data;
+                },
+                staleTime: 1000 * 60 * 5,
+                gcTime: 1000 * 60 * 10,
+            });
+
+            if (data && data.messages) {
+                console.log(`Fetched ${data.messages?.length} messages`);
+                const transformedMessages = transformApiMessages(data.messages);
+                dispatch(setMessages(transformedMessages));
+                dispatch(setLoading(false));
+
+                // Small delay to ensure state is updated before scrolling
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 100);
+            }
+        } catch (error) {
+            console.error('Error prefetching messages:', error);
+        } finally {
+            setIsInitialLoading(false);
+        }
+    }, [queryClient, dispatch, transformApiMessages, accessToken, scrollToBottom]);
+
 
     const deleteSummary = async (conversationId: string) => {
         try {
@@ -98,17 +184,14 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         }
     }
 
-
-
-    useEffect(() => {
-        if (error) {
-            if ((error as any)?.message) {
-                console.log("Error fetching conversation summary", (error as any).message);
-            } else {
-                console.log("Error fetching conversation summary", error);
-            }
+    
+     useEffect(() => {
+        //reset flag when conversation changes 
+        prefetchCalledRef.current = false;
+        if (conversationId) {
+            prefetchMessages(conversationId, '');
         }
-    }, [error]);
+    },[conversationId, prefetchMessages]);
 
     //Effect to update local state when data changes
     useEffect(() => {
@@ -125,7 +208,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
     //getting username from redux state
     const username = userDetails?.username
     const userInitials = getUsernameInitials({ fullname: userDetails?.username ?? '' });
-    
+
     //onChange function for searchbar
     const onSearch = (query: string) => {
         dispatch(setSearch(query));
@@ -254,8 +337,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                     />
 
                     {/* New chat Section */}
-                    <TouchableOpacity 
-                        style={[styles.libraryContainer, { marginBottom: 2}]}
+                    <TouchableOpacity
+                        style={[styles.libraryContainer, { marginBottom: 2 }]}
                         onPress={() => {
                             setSearchbarVisible(false);
                             startNewConversation?.();
@@ -263,17 +346,17 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                         activeOpacity={0.7}
                     >
                         <View style={styles.libraryContent}>
-                            <Feather 
-                                size={20} 
-                                name = "edit"
-                                color={Colors.dark.txtSecondary} 
-                             />
+                            <Feather
+                                size={20}
+                                name="edit"
+                                color={Colors.dark.txtSecondary}
+                            />
                             <Text style={styles.libraryText}>New Chat</Text>
                         </View>
                     </TouchableOpacity>
 
                     {/* Library Section */}
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={[styles.libraryContainer, { marginBottom: 2, marginTop: 0 }]}
                         onPress={handleLibraryPress}
                         activeOpacity={0.7}
@@ -295,7 +378,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                     isLoading={isLoading}
                     messages={summaryTitle}
                     search={searchQuery}
-                    activeConversationId={activeConversationId}
+                    activeConversationId={conversationId}
                     onArchiveChat={() => console.log}
                     onDeleteChat={(id) => deleteSummary(id)}
                     onRenameChat={() => console.log}

@@ -229,7 +229,7 @@ const ChatInput = ({
           setShowEditedMessagePopup={setShowEditedPopup}
           clearMessage={clearMessage}
         />
-
+          
         {/* Uploaded files component */}
         {uploadedFiles && uploadedFiles.length > 0 && (
           <UploadedFiles

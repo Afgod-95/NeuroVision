@@ -2,7 +2,7 @@
 import { Request, Response } from "express";
 import GeminiAIService from "../../services/GeminiAI";
 import supabase from "../../lib/supabase";
-import { getConversationHistory } from "./conversations.controller";
+import { getConversationHistory } from "../../helpers/conversations/get_conversation_history";
 import geminiService from "../../services/GeminiInitiation";
 import { generateConversationSummary } from "../../helpers/chatSummary/AISummary";
 
@@ -38,7 +38,7 @@ const autoGenerateSummary = async (conversationId: string, userId: number): Prom
         // 1. No existing summary and conversation has 8+ messages, OR
         // 2. Conversation has grown significantly since last summary
         const shouldGenerateSummary =
-            (!existingSummary && conversationInfo.message_count >= 8) ||
+            (!existingSummary && conversationInfo.message_count >= 1) ||
             (existingSummary && conversationInfo.message_count >= 15);
 
         if (shouldGenerateSummary) {
@@ -59,7 +59,7 @@ ${conversationText}
 SUMMARY:`;
 
             const summary = await geminiService.generateCompletion(summaryPrompt, {
-                temperature: 0.3,
+                temperature: 0.4,
                 maxTokens: 512
             });
 

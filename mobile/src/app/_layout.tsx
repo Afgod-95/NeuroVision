@@ -15,8 +15,19 @@ import BiometricAuthGate from "../components/biometricAuthGate/BiometricGateAuth
 import axios from "axios";
 import Constants from "expo-constants";
 import CustomSplashScreen from "../components/splash-screen/SplashScreen";
+import {
+  configureReanimatedLogger,
+  ReanimatedLogLevel,
+} from 'react-native-reanimated';
+
 
 axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl;
+
+
+configureReanimatedLogger({
+  level: ReanimatedLogLevel.warn,
+  strict: false, // Reanimated runs in strict mode by default
+});
 
 global.Buffer = global.Buffer || Buffer;
 SplashScreen.preventAutoHideAsync();

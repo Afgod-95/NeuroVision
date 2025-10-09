@@ -36,6 +36,7 @@ import Welcome from '@/src/components/chatUI/welcome-screen/Welcome';
 import api from '@/src/services/axiosClient';
 import { useDispatch, useSelector } from 'react-redux';
 import { setOpenBottomSheet, setSidebarVisible, setMessage, setMessages, setLoading, setAttachments } from '@/src/redux/slices/chatSlice';
+import { convertToUploadedFile } from '@/src/utils/helpers/convert_to_uploaded_file';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = UploadedFile & {
@@ -77,6 +78,7 @@ const Index = () => {
   // Use Redux as single source of truth for messages
   const reduxMessages = useSelector((state: RootState) => state.chat.messages);
   const { loading, isAIResponding, isTyping, isAborted } = useSelector((state: RootState) => state.chat);
+  const attachments = useSelector((state: RootState) => state.chat.attachments);
 
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
@@ -86,8 +88,6 @@ const Index = () => {
   const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState<boolean>(false);
 
-  // Get status bar height for proper header spacing
-  const statusBarHeight = StatusBar.currentHeight || 0;
 
   const { conversation_id } = useLocalSearchParams();
   const { accessToken } = useSelector((state: RootState) => state.auth);
@@ -102,7 +102,6 @@ const Index = () => {
   // Initialize the realtime chat hook with stable callbacks
   const stableOnMessagesChange = useCallback((messages: Message[]) => {
     console.log('Messages updated from hook:', messages?.length);
-    // Don't dispatch here to avoid conflicts - Redux is source of truth
   }, []);
 
   const stableOnLoadingChange = useCallback((loading: boolean) => {
@@ -121,7 +120,7 @@ const Index = () => {
     enableSampleMessages: true,
   });
 
-  
+
 
   // Stop message handler
   const handleStopMessage = useCallback(() => {
@@ -166,7 +165,7 @@ const Index = () => {
       const data = await queryClient.fetchQuery({
         queryKey: ['conversationMessages', conversationId],
         queryFn: async () => {
-          const response = await api.get(`/api/conversations/summary/message?conversationId=${conversationId}`, {
+          const response = await api.get(`/api/conversations/summary/messages?conversationId=${conversationId}`, {
             headers: {
               'Authorization': `Bearer ${accessToken}`
             }
@@ -226,18 +225,6 @@ const Index = () => {
     setShowScrollButton(!isAtBottom && offsetY > 50);
   }, []);
 
-  // Sidebar handlers
-  const handleToggleSidebar = useCallback(() => {
-    dispatch(setSidebarVisible(true));
-  }, [dispatch]);
-
-  const handleCloseSidebar = useCallback(() => {
-    dispatch(setSidebarVisible(false));
-  }, [dispatch]);
-
-  const handleOpenSidebar = useCallback(() => {
-    realtimeActions.setIsSidebarVisible(!isSidebarVisible);
-  }, [realtimeActions, isSidebarVisible]);
 
   // State for bottom sheet
   const state = useRealtimeChatState();
@@ -250,39 +237,135 @@ const Index = () => {
 
   // File upload handlers
   const handleFileSelected = useCallback((file: UploadedFile) => {
-    const newAttachments = [...state.attachments, file];
-    state.setAttachments(newAttachments);
-  }, [state]);
+    console.log('=== handleFileSelected START ===');
+    console.log('File selected in Index:', {
+      id: file.id,
+      name: file.name,
+      type: file.type,
+      hasUri: !!file.uri,
+      size: file.size
+    });
+    console.log('Raw file received:', file);
+
+    // Convert the file to proper format
+    const uploadedFile = convertToUploadedFile(file);
+    console.log('Converted file:', uploadedFile);
+
+    // ✅ Update Redux state
+    const newAttachments = [...(attachments || []), uploadedFile];
+    console.log('Previous attachments:', attachments?.length || 0);
+    console.log('New attachments count:', newAttachments.length);
+    
+    dispatch(setAttachments(newAttachments));
+    console.log('=== handleFileSelected END ===');
+  }, [attachments, dispatch]);
+
+  //files uploadhandlers
+  const handleFilesSelected = useCallback((files: any[]) => {
+    console.log('=== handleFilesSelected START ===');
+    console.log('Raw files received:', files?.length);
+
+    if (!Array.isArray(files) || files.length === 0) {
+      console.log('No valid files to process');
+      return;
+    }
+
+    // Convert all files to proper format
+    const uploadedFiles = files.map(file => convertToUploadedFile(file));
+    console.log('Converted files count:', uploadedFiles.length);
+    console.log('Converted files:', uploadedFiles.map(f => ({
+      id: f.id,
+      name: f.name,
+      type: f.type,
+      hasUri: !!f.uri,
+      hasBase64: !!f.base64,
+      size: f.size
+    })));
+
+    // ✅ Update Redux state
+    const newAttachments = [...(attachments || []), ...uploadedFiles];
+    console.log('Previous attachments:', attachments?.length || 0);
+    console.log('New attachments count:', newAttachments.length);
+    
+    dispatch(setAttachments(newAttachments));
+    console.log('=== handleFilesSelected END ===');
+  }, [attachments, dispatch]);
 
   const handleRemoveFile = useCallback((fileId: string) => {
-    const filteredAttachments = state.attachments.filter((item: any) => item?.id !== fileId);
-    state.setAttachments(filteredAttachments);
-  }, [state]);
+    console.log('=== handleRemoveFile START ===');
+    console.log('Removing file with ID:', fileId);
+
+    // ✅ Filter from Redux state
+    const updatedAttachments = (attachments || []).filter(
+      (file: any) => file.id !== fileId
+    );
+
+    dispatch(setAttachments(updatedAttachments));
+    console.log('Remaining files:', updatedAttachments.length);
+    console.log('=== handleRemoveFile END ===');
+  }, [attachments, dispatch]);
+
+
+
+  // Debug effect to monitor attachments
+  useEffect(() => {
+    console.log('📎 Attachments changed:', {
+      count: attachments?.length || 0,
+      files: attachments?.map((f: any) => ({
+        id: f?.id,
+        name: f?.name,
+        type: f?.type,
+        hasUri: !!f?.uri,
+        hasBase64: !!f?.base64,
+        size: f?.size,
+      }))
+    });
+  }, [attachments]);
 
   //handle send messages with text, files etc
   const onSendMessage = useCallback((message: string) => {
-  console.log('onSendMessage called:', {
-    message: message.substring(0, 50),
-    attachmentsCount: state.attachments.length,
-    conversationId: actualConversationId
-  });
+    console.log('🚀 onSendMessage called:', {
+      message: message.substring(0, 50),
+      attachmentsCount: attachments?.length || 0,
+      conversationId: actualConversationId
+    });
 
-  // Log attachments for debugging
-  if (state.attachments.length > 0) {
-    console.log('Attachments:', state.attachments.map(f => ({
-      name: f.name,
-      type: f.type,
-      size: f.size
-    })));
-  }
+    // Log attachments for debugging
+    if (attachments && attachments.length > 0) {
+      console.log('📎 Sending with attachments:', attachments.map((f: any) => ({
+        name: f.name,
+        type: f.type,
+        size: f.size,
+        hasUri: !!f.uri,
+        hasBase64: !!f.base64,
+      })));
+    }
 
-  // Send message with text and uploaded files
-  realtimeActions.handleSendMessage(
-    message,
-    undefined,
-    state.attachments
-  );
-}, [realtimeActions, state.attachments, actualConversationId]);
+    // Send message with text and uploaded files
+    realtimeActions.handleSendMessage(
+      message,
+      undefined, // audioFile
+      attachments // ✅ Use Redux attachments
+    );
+
+    // ✅ CRITICAL: Clear attachments after sending
+    dispatch(setAttachments([]));
+    console.log('✅ Attachments cleared after sending');
+  }, [realtimeActions, attachments, actualConversationId, dispatch]);
+
+
+  useEffect(() => {
+    console.log('Current attachments state:', {
+      count: state.attachments?.length || 0,
+      attachments: state.attachments?.map(f => ({
+        id: f?.id,
+        name: f?.name,
+        type: f?.type,
+        hasUri: !!f?.uri,
+        hasBase64: !!f?.base64,
+      }))
+    });
+  }, [state.attachments]);
 
 
   // Enhanced keyboard handling for Android
@@ -367,9 +450,9 @@ const Index = () => {
       onPromptSelect={(prompt) => dispatch(setMessage(prompt))}
       handleSendMessage={(prompt) => realtimeActions.handleSendMessage(prompt)}
     />
-  ), [ dispatch, realtimeActions]);
+  ), [dispatch, realtimeActions]);
 
-  
+
 
 
   const loadingContent = useMemo(() => (
@@ -449,25 +532,6 @@ const Index = () => {
           {Platform.OS === 'android' ? (
             <View style={[styles.keyboardContainer, { paddingBottom: isKeyboardVisible ? keyboardHeight : 0 }]}>
               <SafeAreaView style={styles.safeAreaContainer}>
-                <View style={[
-                  styles.header,
-                  (Platform.OS as any) === 'android' ? { paddingTop: statusBarHeight + 10 } : {}
-                ]}>
-                  <TouchableOpacity onPress={handleToggleSidebar}>
-                    <Image
-                      source={require('@/src/assets/images/menu.png')}
-                      style={styles.menuIcon}
-                    />
-                  </TouchableOpacity>
-
-                  <Text style={styles.headerTitle}>NeuroVision</Text>
-                  {reduxMessages?.length !== 0 ? (
-                    <TouchableOpacity onPress={realtimeActions.startNewConversation}>
-                      <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
-                    </TouchableOpacity>
-                  ) : (<View />)}
-                </View>
-
                 {/* Content Area */}
                 {mainContent}
               </SafeAreaView>
@@ -480,10 +544,10 @@ const Index = () => {
                 editMessage={realtimeActions.handleEditMessageCallback}
               />
 
-              {/* Chat input */}
+              {/* Chat input - ✅ Use Redux attachments */}
               <ChatInput
                 onRemoveFile={handleRemoveFile}
-                uploadedFiles={state.attachments}
+                uploadedFiles={attachments}
                 openBottomSheet={HandleOpenBottomSheet}
                 onSendMessage={onSendMessage}
                 onStopMessage={handleStopMessage}
@@ -497,25 +561,6 @@ const Index = () => {
               keyboardVerticalOffset={0}
             >
               <SafeAreaView style={styles.safeAreaContainer}>
-                <View style={[
-                  styles.header,
-                  Platform.OS as any === 'android' ? { paddingTop: statusBarHeight + 10 } : {}
-                ]}>
-                  <TouchableOpacity onPress={handleToggleSidebar}>
-                    <Image
-                      source={require('@/src/assets/images/menu.png')}
-                      style={styles.menuIcon}
-                    />
-                  </TouchableOpacity>
-
-                  <Text style={styles.headerTitle}>NeuroVision</Text>
-                  {reduxMessages?.length !== 0 ? (
-                    <TouchableOpacity onPress={realtimeActions.startNewConversation}>
-                      <FontAwesome6 name="edit" size={20} color={Colors.dark.txtPrimary} />
-                    </TouchableOpacity>
-                  ) : (<View />)}
-                </View>
-
                 {/* Content Area */}
                 {mainContent}
               </SafeAreaView>
@@ -528,12 +573,12 @@ const Index = () => {
                 editMessage={realtimeActions.handleEditMessageCallback}
               />
 
-              {/* Chat input */}
+              {/* Chat input - ✅ Use Redux attachments */}
               <ChatInput
                 onRemoveFile={handleRemoveFile}
-                uploadedFiles={state.attachments}
+                uploadedFiles={attachments} // ✅ From Redux
                 openBottomSheet={HandleOpenBottomSheet}
-                onSendMessage={realtimeActions.handleSendMessage}
+                onSendMessage={onSendMessage}
                 onStopMessage={handleStopMessage}
                 isSending={isSending || isTyping}
               />
@@ -542,19 +587,11 @@ const Index = () => {
         </View>
       </TouchableWithoutFeedback>
 
-      {/* Sidebar */}
-      <CustomSideBar
-        isVisible={realtimeActions.isSidebarVisible}
-        onClose={handleCloseSidebar}
-        onOpen={handleOpenSidebar}
-        startNewConversation={realtimeActions.startNewConversation}
-      />
-
       <BottomSheetModal
         onFileSelected={handleFileSelected}
+        onFilesSelected={handleFilesSelected}
         bottomSheetRef={state.bottomSheetRef}
       />
-
     </>
   );
 };

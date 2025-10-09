@@ -102,6 +102,12 @@ const chatSlice = createSlice({
     },
     clearMessages: (state) => {
       state.messages = [];
+      state.message = '';
+      state.loading = false;
+      state.isAIResponding = false;
+      state.isTyping = false;
+      state.isAborted = false;
+      state.attachments = [];
     },
   },
 });

@@ -1,5 +1,3 @@
-// TypeScript Interfaces
-
 /**
  * Conversations and Messages interface
  */
@@ -14,18 +12,28 @@ interface ConversationSummary {
     updated_at: string;
 }
 
+// ✅ UPDATED: FileAttachment now stores full file data for regeneration
+interface FileAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  uri?: string;        // For React Native files
+  base64?: string;     // ✅ NEW: Store base64 for regeneration
+  thumbnail?: string;
+}
+
 interface MessageContent {
-  type: 'text' | 'audio' | 'files' | 'mixed';
+  type: 'text' | 'audio' | 'image' | 'files' | 'mixed';  // ✅ Added 'files' type
   text?: string;
   audioUrl?: string;
   audioName?: string;
   audioDuration?: number;
-  files?: Array<{
-    id: string;
-    name: string;
-    type: string;
-    size: number;
-  }>;
+  imageUrl?: string;
+  imageName?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  files?: FileAttachment[];  // ✅ Now includes full file data
 }
 
 interface UploadedAudioFile {
@@ -60,7 +68,7 @@ interface RootState {
 
 // Component Props
 interface RealtimeChatProps {
-    uniqueConvId: string;
+    uniqueConvId?: string;
     systemPrompt?: string;
     temperature?: number;
     maxTokens?: number;
@@ -69,8 +77,6 @@ interface RealtimeChatProps {
     initialMessages?: Message[];
     enableSampleMessages?: boolean;
 }
-
-
 
 interface Message {
   id: string;
@@ -113,7 +119,6 @@ interface SupabaseMessage {
     created_at: string;
 }
 
-
 interface ConversationListResponse extends ApiResponse {
     conversations: ConversationSummary[];
     totalCount: number;
@@ -129,7 +134,6 @@ interface ConversationMessagesResponse {
     messageCount: number;
 }
 
-
 export {
     ConversationListResponse,
     ConversationMessagesResponse,
@@ -139,6 +143,7 @@ export {
     ApiMessage,
     SupabaseMessage,
     MessageContent,
+    FileAttachment,
     UploadedAudioFile,
     UploadedFile,
     RealtimeChatProps,

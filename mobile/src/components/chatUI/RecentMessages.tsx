@@ -297,7 +297,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
         return (
             <View style={styles.messageItemContainer}>
-                <Pressable
+                <TouchableOpacity
                     style={[
                         styles.messageItem,
                         isActive && styles.messageItemActive,
@@ -336,7 +336,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                             </TouchableOpacity>
                         </View>
                     </View>
-                </Pressable>
+                </TouchableOpacity>
             </View>
         );
     };

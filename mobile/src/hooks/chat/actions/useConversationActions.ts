@@ -12,12 +12,14 @@ import {
   setIsAIResponding,
   setNewChat,
   addMessage,
+  updateMessage,
 } from "@/src/redux/slices/chatSlice";
 
 import { Message, UploadedAudioFile, UploadedFile } from "@/src/utils/interfaces/TypescriptInterfaces";
 import { useConversationMutation } from "../mutations/useConversationMutation";
 import { uniqueConvId as startNewConversationId } from "@/src/constants/generateConversationId";
 import api from "@/src/services/axiosClient";
+import axios from "axios";
 import { QueryClient, UseMutationResult } from "@tanstack/react-query";
 
 type UseConversationActionsProps = {
@@ -176,7 +178,7 @@ export const useConversationActions = ({
     }
   }, [userDetails?.id, dispatch, loadConversationHistoryMutation]);
 
-  // ===================== HANDLE REGENERATE =====================
+  // ===================== HANDLE REGENERATE WITH FILE SUPPORT =====================
   const handleRegenerate = useCallback(async (messageId: string) => {
     if (isProcessingResponseRef.current) {
       console.log('⚠️ Already processing a response, ignoring regenerate request');
@@ -217,28 +219,86 @@ export const useConversationActions = ({
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      const payload = {
-        message: previousUserMessage.text,
-        messageContent: previousUserMessage.content,
-        systemPrompt: systemPrompt,
-        temperature: temperature,
-        maxTokens: maxTokens,
-        conversationId: conversationId,
-        userDetails: userDetails,
-        useDatabase: true,
-        // Include files if they exist in the original message
-        files: previousUserMessage.content?.files
-      };
+      // ✅ Check if the original message has files with full data
+      const hasFilesWithData = previousUserMessage.content?.files && 
+        previousUserMessage.content.files.some((f: any) => f.base64 || f.uri);
 
-      console.log("📨 Regenerating with payload:", payload);
+      let response;
 
-      const response = await api.post('/api/conversations/send-message', payload, {
-        signal: controller.signal,
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        timeout: 60000, // Increased timeout for files
-      });
+      if (hasFilesWithData) {
+        // ✅ USE FORMDATA FOR MESSAGES WITH FILES
+        console.log("📎 Regenerating message with files");
+        
+        const formData = new FormData();
+        formData.append('message', previousUserMessage.text);
+        formData.append('useDatabase', 'true');
+        formData.append('temperature', temperature.toString());
+        formData.append('maxTokens', maxTokens.toString());
+        formData.append('systemPrompt', systemPrompt);
+        
+        if (conversationId) {
+          formData.append('conversationId', conversationId);
+        }
+
+        // Add conversation history
+        const conversationHistory = messages.slice(-10).map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text
+        }));
+        formData.append('conversationHistory', JSON.stringify(conversationHistory));
+
+        // Add files with their full data
+        for (const file of previousUserMessage.content!.files!) {
+          if ((file as any).uri) {
+            const fileData: any = {
+              uri: (file as any).uri,
+              type: file.type || 'application/octet-stream',
+              name: file.name || `file_${Date.now()}`,
+            };
+            formData.append('files', fileData);
+          } else if ((file as any).base64) {
+            const blob = base64ToBlob((file as any).base64, file.type);
+            formData.append('files', blob, file.name);
+          }
+        }
+
+        // Use axios with FormData
+        response = await api.post(
+          `/api/conversations/send-message`,
+          formData,
+          {
+            signal: controller.signal,
+            headers: { 
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'multipart/form-data',
+            },
+            timeout: 120000,
+          }
+        );
+
+      } else {
+        // ✅ USE JSON FOR TEXT-ONLY MESSAGES
+        console.log("📝 Regenerating text-only message");
+        
+        const payload = {
+          message: previousUserMessage.text,
+          messageContent: previousUserMessage.content,
+          systemPrompt: systemPrompt,
+          temperature: temperature,
+          maxTokens: maxTokens,
+          conversationId: conversationId,
+          userDetails: userDetails,
+          useDatabase: true,
+        };
+
+        response = await api.post('/api/conversations/send-message', payload, {
+          signal: controller.signal,
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          timeout: 60000,
+        });
+      }
 
       abortControllerRef.current = null;
       isProcessingResponseRef.current = false;
@@ -252,26 +312,14 @@ export const useConversationActions = ({
       console.log("✅ Regenerated response received");
 
       if (currentLoadingIdRef.current === loadingMessageId) {
-        // Remove loading message and add typing message
-        dispatch(setMessages(messages.filter(msg => msg.id !== loadingMessageId)));
-
-        const typingMessage: Message = {
-          id: `regen-${Date.now()}`,
-          text: '',
-          user: false,
-          created_at: new Date().toISOString(),
-          timestamp: new Date().toISOString(),
-          sender: 'assistant',
-          isTyping: true
-        };
-
-        dispatch(addMessage(typingMessage));
-        
-        // Update currentLoadingIdRef to the new typing message
-        currentLoadingIdRef.current = typingMessage.id;
+        // Update loading message to typing
+        dispatch(updateMessage({
+          id: loadingMessageId,
+          updates: { isLoading: false, isTyping: true, text: '' }
+        }));
 
         setTimeout(() => {
-          startTypingAnimation(aiResponseText, typingMessage.id);
+          startTypingAnimation(aiResponseText, loadingMessageId);
         }, 100);
       }
 
@@ -315,18 +363,15 @@ export const useConversationActions = ({
         errorText = `Error: ${error.message}`;
       }
 
-      // Remove loading message and show error
-      dispatch(setMessages(messages.filter(msg => msg.id !== loadingMessageId)));
-
-      const errorMessage: Message = {
-        id: `error-${Date.now()}`,
-        text: errorText,
-        user: false,
-        created_at: new Date().toISOString(),
-        timestamp: new Date().toISOString(),
-        sender: 'assistant'
-      };
-      dispatch(addMessage(errorMessage));
+      // Update loading message with error
+      dispatch(updateMessage({
+        id: loadingMessageId,
+        updates: {
+          isLoading: false,
+          isTyping: false,
+          text: errorText
+        }
+      }));
 
       clearAIResponding();
     }
@@ -408,4 +453,25 @@ export const useConversationActions = ({
     handleRegenerate,
     abortMessage,
   };
+};
+
+// Helper function to convert base64 to blob
+const base64ToBlob = (base64: string, mimeType: string = 'application/octet-stream'): Blob => {
+  const base64Data = base64.replace(/^data:[^;]+;base64,/, '');
+  const byteCharacters = atob(base64Data);
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+
+  return new Blob(byteArrays, { type: mimeType });
 };

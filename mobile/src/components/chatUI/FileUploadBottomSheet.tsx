@@ -16,14 +16,15 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Colors } from '../../constants/Colors';
 import { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { UploadedFile } from './upload-files/UploadFiles';
 
 const { width } = Dimensions.get('window');
 
 type BottomSheetModalProps = {
   bottomSheetRef: React.RefObject<BottomSheetMethods | null>;
-  onFileSelected?: (file: any) => void;
-  onFilesSelected?: (files: any[]) => void;
-  onCreateImage?: () => void; // New prop for create image action
+  onFileSelected?: (file: UploadedFile) => void;
+  onFilesSelected?: (files: UploadedFile[]) => void;
+  onCreateImage?: () => void;
 };
 
 const BottomSheetModal = ({ 
@@ -33,7 +34,6 @@ const BottomSheetModal = ({
   onCreateImage 
 }: BottomSheetModalProps) => {
   
-  // variables
   const snapPoints = useMemo(() => ["50%"], []);
 
   const handleSheetChanges = useCallback((index: number) => {
@@ -56,6 +56,46 @@ const BottomSheetModal = ({
     []
   );
 
+  // Helper function to transform ImagePicker asset to UploadedFile
+  const transformImageAsset = useCallback((asset: ImagePicker.ImagePickerAsset, index: number = 0): UploadedFile => {
+    console.log('Transforming image asset:', {
+      uri: asset.uri,
+      fileName: asset.fileName,
+      type: asset.type,
+      fileSize: asset.fileSize
+    });
+
+    return {
+      id: `image-${Date.now()}-${index}`,
+      name: asset.fileName || `image-${index}.jpg`,
+      type: asset.mimeType || asset.type || 'image/jpeg',
+      uri: asset.uri,
+      size: asset.fileSize || 0,
+      isUploading: false,
+      uploadProgress: 0,
+    };
+  }, []);
+
+  // Helper function to transform DocumentPicker asset to UploadedFile
+  const transformDocumentAsset = useCallback((asset: any, index: number = 0): UploadedFile => {
+    console.log('Transforming document asset:', {
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType,
+      size: asset.size
+    });
+
+    return {
+      id: `doc-${Date.now()}-${index}`,
+      name: asset.name,
+      type: asset.mimeType || 'application/octet-stream',
+      uri: asset.uri,
+      size: asset.size || 0,
+      isUploading: false,
+      uploadProgress: 0,
+    };
+  }, []);
+
   // Camera function
   const handleTakePhoto = async () => {
     try {
@@ -72,9 +112,11 @@ const BottomSheetModal = ({
         quality: 0.8,
       });
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets.length > 0) {
         console.log('Photo taken:', result.assets[0]);
-        onFileSelected?.(result.assets[0]);
+        const transformedFile = transformImageAsset(result.assets[0], 0);
+        console.log('Transformed file:', transformedFile);
+        onFileSelected?.(transformedFile);
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -92,22 +134,35 @@ const BottomSheetModal = ({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: [],
+        mediaTypes: ['images'],
         allowsEditing: false, 
         quality: 0.8,
         allowsMultipleSelection: true,
-        selectionLimit: 3, 
+        selectionLimit: 10, 
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        console.log('Multiple images selected:', result.assets);
+        console.log('Multiple images selected:', result.assets.length);
 
+        // Transform all assets to UploadedFile format
+        const transformedFiles = result.assets.map((asset, index) => 
+          transformImageAsset(asset, index)
+        );
+
+        console.log('Transformed files:', transformedFiles.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          hasUri: !!f.uri
+        })));
+
+        // Use onFilesSelected if available, otherwise send one by one
         if (onFilesSelected) {
-          onFilesSelected(result.assets);
+          onFilesSelected(transformedFiles);
         } else {
-          result.assets.forEach((asset, index) => {
+          transformedFiles.forEach((file, index) => {
             setTimeout(() => {
-              onFileSelected?.(asset);
+              onFileSelected?.(file);
             }, index * 100); 
           });
         }
@@ -127,17 +182,30 @@ const BottomSheetModal = ({
         multiple: true,
       });
 
-      if (!result.canceled) {
-        console.log('Files selected:', result.assets);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        console.log('Files selected:', result.assets.length);
 
-        if (onFilesSelected && result.assets.length > 1) {
-          onFilesSelected(result.assets);
-        } else if (result.assets.length === 1) {
-          onFileSelected?.(result.assets[0]);
+        // Transform all assets to UploadedFile format
+        const transformedFiles = result.assets.map((asset, index) => 
+          transformDocumentAsset(asset, index)
+        );
+
+        console.log('Transformed files:', transformedFiles.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          hasUri: !!f.uri
+        })));
+
+        // Use onFilesSelected for multiple files
+        if (onFilesSelected && transformedFiles.length > 1) {
+          onFilesSelected(transformedFiles);
+        } else if (transformedFiles.length === 1) {
+          onFileSelected?.(transformedFiles[0]);
         } else {
-          result.assets.forEach((asset, index) => {
+          transformedFiles.forEach((file, index) => {
             setTimeout(() => {
-              onFileSelected?.(asset);
+              onFileSelected?.(file);
             }, index * 100);
           });
         }
