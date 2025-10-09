@@ -6,7 +6,6 @@ import { DEFAULT_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from "../../utils/AIProm
 import { storeMessage } from "../../helpers/conversations/storeMessage/store_message";
 import { getConversationHistory } from "../../helpers/conversations/get_conversation_history";
 import { getOrCreateConversationId } from "../../helpers/conversations/get_or_generate_conversation_id";
-import { uploadToSupabase } from "../../helpers/conversations/uploads/uploadToSupabase";
 
 /**
  * Chat message handler with better error handling and response formatting
@@ -15,7 +14,7 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
     try {
         // Extract files from multer
         const uploadedFiles = req.files as Express.Multer.File[];
-
+        
         // Parse the message and other fields from form data
         const {
             message,
@@ -31,14 +30,23 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
         let conversationHistory = [];
         if (rawConversationHistory) {
             try {
-                conversationHistory = typeof rawConversationHistory === 'string'
-                    ? JSON.parse(rawConversationHistory)
+                conversationHistory = typeof rawConversationHistory === 'string' 
+                    ? JSON.parse(rawConversationHistory) 
                     : rawConversationHistory;
             } catch (e) {
                 console.error('Failed to parse conversationHistory:', e);
             }
         }
 
+        // Process uploaded files into the format expected by the rest of the code
+        const files = uploadedFiles?.map(file => ({
+            id: `${Date.now()}-${file.originalname}`,
+            name: file.originalname,
+            type: file.mimetype,
+            size: file.size,
+            base64: file.buffer.toString('base64'),
+            buffer: file.buffer
+        })) || [];
 
         const authUserId = req?.user?.id;
         const userId = parseInt(authUserId as string);
@@ -46,9 +54,6 @@ export const sendChatMessage = async (req: Request, res: Response): Promise<void
             res.status(401).json({ success: false, error: 'Unauthorized' });
             return;
         }
-
-        const files = uploadedFiles ? await uploadToSupabase(userId, uploadedFiles) : [];
-
 
         console.log('Request received:', {
             message: message ? `${message.substring(0, 100)}...` : 'No message',

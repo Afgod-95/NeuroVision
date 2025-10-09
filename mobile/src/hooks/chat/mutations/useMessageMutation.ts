@@ -88,8 +88,8 @@ export const useMessageMutation = ({
               name: f.name,
               type: f.type,
               size: f.size,
-              uri: f.uri,        // ✅ Store URI for regeneration
-              base64: f.base64,  // ✅ Store base64 for regeneration
+              uri: f.uri,        // Store URI for regeneration
+              base64: f.base64,  // Store base64 for regeneration
             })),
           };
           
@@ -148,15 +148,15 @@ export const useMessageMutation = ({
                 type: file.type || 'application/octet-stream',
                 name: file.name || `file_${Date.now()}`,
               };
-              formData.append('files', fileData); // ✅ Field name matches backend
+              formData.append('files', fileData); // Field name matches backend
             } else if (file.base64) {
               // For base64 files, convert to blob
               const blob = base64ToBlob(file.base64, file.type);
-              formData.append('files', blob, file.name); // ✅ Field name matches backend
+              formData.append('files', blob, file.name); // Field name matches backend
             }
           }
 
-          console.log("📤 Sending FormData request with files to:", endpoint);
+          console.log("Sending FormData request with files to:", endpoint);
 
           // Use axios directly for FormData with full URL
           response = await api.post(
@@ -217,7 +217,7 @@ export const useMessageMutation = ({
     },
 
     onMutate: ({ messageText, audioFile, files }) => {
-      // Don't abort here - just check if already processing
+      // check if already processing
       if (isProcessingResponseRef.current) {
         console.log("⚠️ Already processing a request");
         throw new Error("Already processing a request");
@@ -361,7 +361,7 @@ export const useMessageMutation = ({
 
       // Handle canceled requests
       if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
-        console.log("⚠️ Request was canceled");
+        console.log("Request was canceled");
         clearAIResponding();
         pendingUserMessageRef.current = null;
         currentLoadingIdRef.current = null;
