@@ -2,20 +2,25 @@ import React from 'react';
 import {
   Platform,
   StyleSheet,
-  Image,
   KeyboardAvoidingView,
   Keyboard,
   View
 } from 'react-native';
+import { Image } from 'expo-image'
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/Colors';
 import Animated from 'react-native-reanimated';
 
+
+
 interface AuthWrapperProps {
   children: React.ReactNode;
   safeArea?: boolean;
 }
+
+const blurhash =
+  '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
 
 const ScreenWrapper = ({ children, safeArea = true }: AuthWrapperProps) => {
   const Container = safeArea ? SafeAreaView : View;
@@ -36,6 +41,8 @@ const ScreenWrapper = ({ children, safeArea = true }: AuthWrapperProps) => {
         </Animated.ScrollView>
         
         <Image
+          blurRadius={100}
+          placeholder={blurhash}
           source={require('../../assets/images/CircularGradient.png')}
           style={styles.image}
         />

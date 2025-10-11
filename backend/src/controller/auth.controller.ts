@@ -36,8 +36,8 @@ const sendError = (
   code: string,
   message: string,
   details?: any
-): Response => {
-  return res.status(statusCode).json({
+): void => {
+  res.status(statusCode).json({
     success: false,
     error: {
       code,
@@ -53,8 +53,8 @@ const sendSuccess = <T = any>(
   statusCode: number,
   message: string,
   data?: T
-): Response => {
-  return res.status(statusCode).json({
+): void => {
+  res.status(statusCode).json({
     success: true,
     message,
     ...(data && { data })
@@ -62,22 +62,25 @@ const sendSuccess = <T = any>(
 };
 
 //register user endpoint
-export const registerUser = async (req: Request, res: Response) => {
+export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { username, email, password } = req.body;
 
     // Validate fields
     if (!username || !email || !password) {
-      return sendError(res, 400, 'VALIDATION_ERROR', 'Username, email, and password are required');
+      sendError(res, 400, 'VALIDATION_ERROR', 'Username, email, and password are required');
+      return;
     }
 
     if (password.length < 8) {
-      return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 8 characters long');
+      sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 8 characters long');
+      return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid email format');
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid email format');
+      return;
     }
 
     // Check if user exists
@@ -88,7 +91,8 @@ export const registerUser = async (req: Request, res: Response) => {
       .single();
 
     if (existingUser) {
-      return sendError(res, 409, 'USER_EXISTS', 'User with this email already exists');
+      sendError(res, 409, 'USER_EXISTS', 'User with this email already exists');
+      return;
     }
 
     // Create user
@@ -106,7 +110,8 @@ export const registerUser = async (req: Request, res: Response) => {
 
     if (createError || !newUser) {
       console.error('User creation error:', createError);
-      return sendError(res, 500, 'USER_CREATION_FAILED', 'Failed to create user account');
+      sendError(res, 500, 'USER_CREATION_FAILED', 'Failed to create user account');
+      return;
     }
 
     // Send OTP
@@ -115,10 +120,11 @@ export const registerUser = async (req: Request, res: Response) => {
     if (otpResult.error) {
       console.error('OTP sending error:', otpResult.error);
       // User was created but OTP failed - still return success but warn about OTP
-      return sendSuccess(res, 201, 'User created but failed to send verification email. Please request a new OTP.', {
+      sendSuccess(res, 201, 'User created but failed to send verification email. Please request a new OTP.', {
         userId: newUser.id,
         email: newUser.email
       });
+      return;
     }
 
     const { data: otp_verifications } = await supabase
@@ -127,7 +133,7 @@ export const registerUser = async (req: Request, res: Response) => {
       .eq('user_id', newUser.id)
       .single();
 
-    return sendSuccess(res, 201, 'User created successfully. A 6-digit OTP has been sent to your email.', {
+    sendSuccess(res, 201, 'User created successfully. A 6-digit OTP has been sent to your email.', {
       userId: newUser.id,
       email: newUser.email,
       otpExpires: otp_verifications?.expires_at
@@ -135,17 +141,18 @@ export const registerUser = async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('Registration error:', error);
-    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred during registration');
+    sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred during registration');
   }
 };
 
 //resend otp 
-export const resendOtp = async (req: Request, res: Response) => {
+export const resendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
     
     if (!email) {
-      return sendError(res, 400, 'VALIDATION_ERROR', 'Email is required');
+      sendError(res, 400, 'VALIDATION_ERROR', 'Email is required');
+      return;
     }
 
     // Fetch user
@@ -156,11 +163,13 @@ export const resendOtp = async (req: Request, res: Response) => {
       .single();
 
     if (userError || !user) {
-      return sendError(res, 404, 'USER_NOT_FOUND', 'No account found with this email address');
+      sendError(res, 404, 'USER_NOT_FOUND', 'No account found with this email address');
+      return;
     }
 
     if (user.is_email_verified) {
-      return sendError(res, 400, 'ALREADY_VERIFIED', 'Email is already verified');
+      sendError(res, 400, 'ALREADY_VERIFIED', 'Email is already verified');
+      return;
     }
 
     // Send new OTP
@@ -168,7 +177,8 @@ export const resendOtp = async (req: Request, res: Response) => {
 
     if (otpResult.error) {
       console.error('OTP resend error:', otpResult.error);
-      return sendError(res, 500, 'OTP_SEND_FAILED', 'Failed to send verification code. Please try again.');
+      sendError(res, 500, 'OTP_SEND_FAILED', 'Failed to send verification code. Please try again.');
+      return;
     }
 
     const { data: otp_verifications } = await supabase
@@ -177,13 +187,13 @@ export const resendOtp = async (req: Request, res: Response) => {
       .eq('user_id', user.id)
       .single();
 
-    return sendSuccess(res, 200, 'A new 6-digit OTP has been sent to your email.', {
+    sendSuccess(res, 200, 'A new 6-digit OTP has been sent to your email.', {
       otpExpires: otp_verifications?.expires_at
     });
 
   } catch (error) {
     console.error('Resend OTP error:', error);
-    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while resending OTP');
+    sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while resending OTP');
   }
 };
 
@@ -322,6 +332,9 @@ export const loginUser = async (req: Request, res: Response) => {
   }
 };
 
+
+
+
 // UPDATE USER PROFILE
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
@@ -366,11 +379,10 @@ export const updateUserProfile = async (req: Request, res: Response) => {
   }
 };
 
-
-
-
 const activeRequests = new Map<string, boolean>();
 
+
+//reset password request
 export const resetPasswordRequest = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -423,6 +435,8 @@ export const resetPasswordRequest = async (req: Request, res: Response) => {
   }
 };
 
+
+//update user password
 export const updatePassword = async (req: Request, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -482,6 +496,8 @@ export const updatePassword = async (req: Request, res: Response) => {
   }
 };
 
+
+//refresh token endpoint 
 export const refreshToken = async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
@@ -505,6 +521,9 @@ export const refreshToken = async (req: Request, res: Response) => {
   }
 };
 
+
+
+//logout endpoint 
 export const logout = async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
@@ -527,6 +546,8 @@ export const logout = async (req: Request, res: Response) => {
   }
 };
 
+
+//logout on all devices
 export const logoutAll = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
@@ -552,6 +573,8 @@ export const logoutAll = async (req: Request, res: Response) => {
   }
 };
 
+
+//get user profile
 export const getProfile = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
@@ -576,6 +599,9 @@ export const getProfile = async (req: Request, res: Response) => {
   }
 };
 
+
+
+//delete user account and logout on all devices
 export const deleteUserAccount = async (req: Request, res: Response) => {
   try {
     const { id, authUserId } = req.params;

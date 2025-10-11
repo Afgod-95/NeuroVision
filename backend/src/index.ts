@@ -6,6 +6,8 @@ import authRouter from './routes/authRouter';
 import cron from 'node-cron';
 import { cleanupExpiredTokens } from './middlewares/auth.middleware';
 
+
+
 // Create an Express app
 const app = express();
 
@@ -19,6 +21,11 @@ app.use(express.urlencoded({
     extended: true,
     parameterLimit: 50000 
 }));
+
+console.log('Loading environment...');
+console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Loaded ✅' : 'Missing ❌');
+
 
 
 // Static files

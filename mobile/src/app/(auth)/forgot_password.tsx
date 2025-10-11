@@ -79,17 +79,7 @@ const ForgotPassword = () => {
   return (
     <ScreenWrapper>
       <Animated.View style={styles.innerContainer}>
-        {/* Back Button */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={Colors.dark.txtPrimary}
-          />
-        </TouchableOpacity>
+       
 
         <Logo />
 

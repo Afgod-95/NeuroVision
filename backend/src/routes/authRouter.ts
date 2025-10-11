@@ -12,7 +12,8 @@ authRouter.post('/verify-email', authController.verifyEmailOtp as RequestHandler
 authRouter.post('/resend-verification-otp', authController.resendOtp as RequestHandler);
 authRouter.post('/resend-password-reset-otp', authController.resendOtp as RequestHandler);
 authRouter.post('/login', authController.loginUser as RequestHandler);
-authRouter.post('/logout', authController.logout as RequestHandler);
+authRouter.post('/logout', verifyAccessToken as RequestHandler, authController.logout as RequestHandler);
+authRouter.post('/logout-all', verifyAccessToken as RequestHandler, authController.logoutAll as RequestHandler);
 authRouter.post('/reset-password-request', authController.resetPasswordRequest as RequestHandler);
 authRouter.post('/refresh-token', verifyRefreshToken as RequestHandler, authController.refreshToken as RequestHandler)
 authRouter.put('/update-password', verifyAccessToken as RequestHandler, authController.updatePassword as RequestHandler);
