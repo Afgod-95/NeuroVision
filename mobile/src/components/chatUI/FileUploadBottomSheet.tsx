@@ -7,7 +7,8 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
-import { X, ImagePlus, Camera, FolderOpen, Sparkles } from 'lucide-react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -16,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Colors } from '../../constants/Colors';
 import { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
-import { UploadedFile } from './upload-files/UploadFiles';
+import { UploadedFile } from './uploaded-files-input/UploadFiles';
 
 const { width } = Dimensions.get('window');
 
@@ -224,28 +225,32 @@ const BottomSheetModal = ({
 
   const actions = [
     {
-      icon: Camera,
+      iconName: 'camera',
+      iconFamily: 'Ionicons' as const,
       label: 'Take Photo',
       subtitle: 'Capture with camera',
       color: '#007AFF',
       onPress: handleTakePhoto,
     },
     {
-      icon: ImagePlus,
+      iconName: 'image',
+      iconFamily: 'Ionicons' as const,
       label: 'Upload Images',
       subtitle: 'Select multiple from library',
       color: '#34C759',
       onPress: handleUploadMultipleImages,
     },
     {
-      icon: FolderOpen,
+      iconName: 'folder-open',
+      iconFamily: 'Ionicons' as const,
       label: 'Add Files',
       subtitle: 'Select from device',
       color: '#FF9500',
       onPress: handleBrowseFiles,
     },
     {
-      icon: Sparkles,
+      iconName: 'auto-fix-high',
+      iconFamily: 'MaterialIcons' as const,
       label: 'Create Image',
       subtitle: 'Generate with AI',
       color: '#AF52DE',
@@ -272,7 +277,7 @@ const BottomSheetModal = ({
             <Text style={styles.subtitle}>Choose what you&apos;d like to add</Text>
           </View>
           <Pressable style={styles.closeButton} onPress={handleClose}>
-            <X size={20} color={Colors.dark.txtPrimary} />
+            <Ionicons name="close" size={20} color={Colors.dark.txtPrimary} />
           </Pressable>
         </View>
 
@@ -281,7 +286,8 @@ const BottomSheetModal = ({
           {actions.map((action, index) => (
             <ActionCard
               key={index}
-              icon={action.icon}
+              iconName={action.iconName}
+              iconFamily={action.iconFamily}
               label={action.label}
               subtitle={action.subtitle}
               color={action.color}
@@ -299,13 +305,15 @@ const BottomSheetModal = ({
 
 // Action Card Component
 const ActionCard = ({
-  icon: Icon,
+  iconName,
+  iconFamily,
   label,
   subtitle,
   color,
   onPress,
 }: {
-  icon: React.ElementType;
+  iconName: string;
+  iconFamily: 'Ionicons' | 'MaterialIcons';
   label: string;
   subtitle: string;
   color: string;
@@ -319,7 +327,11 @@ const ActionCard = ({
     onPress={onPress}
   >
     <View style={[styles.iconContainer, { backgroundColor: color }]}>
-      <Icon size={22} color="white" />
+      {iconFamily === 'Ionicons' ? (
+        <Ionicons name={iconName as any} size={22} color="white" />
+      ) : (
+        <MaterialIcons name={iconName as any} size={22} color="white" />
+      )}
     </View>
     <Text style={styles.actionLabel}>{label}</Text>
     <Text style={styles.actionSubtitle}>{subtitle}</Text>

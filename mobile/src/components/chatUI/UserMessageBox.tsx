@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
   Modal,
   Alert,
+  FlatList,
 } from 'react-native';
 import { Colors } from '@/src/constants/Colors';
 import Animated, {
@@ -43,9 +44,9 @@ const isImageFile = (fileName: string, fileType: string): boolean => {
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'];
   const lowerFileName = fileName?.toLowerCase() || '';
   const lowerFileType = fileType?.toLowerCase() || '';
-  
-  return lowerFileType.includes('image') || 
-         imageExtensions.some(ext => lowerFileName.endsWith(ext));
+
+  return lowerFileType.includes('image') ||
+    imageExtensions.some(ext => lowerFileName.endsWith(ext));
 };
 
 // Helper function to get file icon
@@ -97,12 +98,13 @@ const getImageUri = (file: FileAttachment): string => {
   return '';
 };
 
-// Image Grid Component (for multiple images)
+// ✅ FIXED: Image Grid Component with Gallery Support
 const ImageGrid = ({ images }: { images: FileAttachment[] }) => {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const flatListRef = React.useRef<FlatList>(null);
+
   const imageCount = images.length;
-  
+
   const getGridStyle = () => {
     if (imageCount === 1) return styles.singleImage;
     if (imageCount === 2) return styles.doubleImage;
@@ -117,21 +119,36 @@ const ImageGrid = ({ images }: { images: FileAttachment[] }) => {
     }))
   });
 
+  // Close gallery handler
+  const closeGallery = useCallback(() => {
+
+    setSelectedImageIndex(null);
+  }, []);
+
+  // Navigate to specific image
+  const navigateToImage = (newIndex: number) => {
+    setSelectedImageIndex(newIndex);
+    flatListRef.current?.scrollToIndex({
+      index: newIndex,
+      animated: true,
+    });
+  };
+
   return (
     <>
       <View style={[styles.imageGrid, imageCount === 2 && styles.imageGridDouble]}>
         {images.slice(0, 4).map((img, index) => {
           const imageUri = getImageUri(img);
-          
+
           if (!imageUri) {
-            console.warn('⚠️ Skipping image with no URI:', img.name);
+            console.warn('Skipping image with no URI:', img.name);
             return null;
           }
 
           return (
             <TouchableOpacity
               key={img.id}
-              onPress={() => setSelectedImage(imageUri)}
+              onPress={() => setSelectedImageIndex(index)} // Open gallery at this index
               style={[getGridStyle(), index === 3 && imageCount > 4 && styles.lastImageOverlay]}
             >
               <Image
@@ -139,7 +156,7 @@ const ImageGrid = ({ images }: { images: FileAttachment[] }) => {
                 style={styles.gridImageContent}
                 resizeMode="cover"
                 onError={(error) => {
-                  console.error('❌ Image failed to load:', img.name, error.nativeEvent.error);
+                  console.error(' Image failed to load:', img.name, error.nativeEvent.error);
                 }}
                 onLoad={() => {
                   console.log('✅ Image loaded successfully:', img.name);
@@ -155,33 +172,103 @@ const ImageGrid = ({ images }: { images: FileAttachment[] }) => {
         })}
       </View>
 
-      {/* Full Screen Image Modal */}
-      <Modal
-        visible={selectedImage !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setSelectedImage(null)}
-      >
-        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setSelectedImage(null)}
-          />
-          <View style={styles.modalContainer}>
-            <Image
-              source={{ uri: selectedImage || '' }}
-              style={styles.fullScreenImage}
-              resizeMode="contain"
-            />
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setSelectedImage(null)}
-            >
-              <Feather name="x" size={24} color={Colors.dark.txtPrimary} />
-            </TouchableOpacity>
-          </View>
-        </BlurView>
-      </Modal>
+      {/* Full Screen Gallery Modal with Swipeable Images */}
+      {selectedImageIndex !== null && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={closeGallery}
+        >
+          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeGallery} />
+            <View style={styles.modalContainer}>
+              {/* Image Counter */}
+              <View style={styles.imageCounter}>
+                <Text style={styles.imageCounterText}>
+                  {(selectedImageIndex ?? 0) + 1} / {imageCount}
+                </Text>
+              </View>
+
+              {/* Swipeable Image Gallery */}
+              <FlatList
+                ref={flatListRef} // ✅ Add ref
+                data={images}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={selectedImageIndex ?? 0}
+                getItemLayout={(data, index) => ({
+                  length: SCREEN_WIDTH,
+                  offset: SCREEN_WIDTH * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(event) => {
+                  if (selectedImageIndex === null) return; // ✅ prevent reopen
+                  const newIndex = Math.round(
+                    event.nativeEvent.contentOffset.x / SCREEN_WIDTH
+                  );
+                  setSelectedImageIndex(newIndex);
+                }}
+
+                onScrollToIndexFailed={(info) => {
+                  // ✅ Handle scroll failures gracefully
+                  console.warn('Scroll to index failed:', info);
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({
+                      index: info.index,
+                      animated: false,
+                    });
+                  }, 100);
+                }}
+                renderItem={({ item }) => {
+                  const imageUri = getImageUri(item);
+                  return (
+                    <View style={styles.imageSlide}>
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={styles.fullScreenImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  );
+                }}
+                keyExtractor={(item) => item.id}
+              />
+
+              {/* Close Button */}
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={closeGallery}
+              >
+                <Feather name="x" size={24} color={Colors.dark.txtPrimary} />
+              </TouchableOpacity>
+
+              {/* Navigation Arrows (optional) */}
+              {imageCount > 1 && (
+                <>
+                  {(selectedImageIndex ?? 0) > 0 && (
+                    <TouchableOpacity
+                      style={styles.prevButton}
+                      onPress={() => navigateToImage((selectedImageIndex ?? 1) - 1)} // ✅ Use navigateToImage
+                    >
+                      <Feather name="chevron-left" size={32} color={Colors.dark.txtPrimary} />
+                    </TouchableOpacity>
+                  )}
+                  {(selectedImageIndex ?? 0) < imageCount - 1 && (
+                    <TouchableOpacity
+                      style={styles.nextButton}
+                      onPress={() => navigateToImage((selectedImageIndex ?? 0) + 1)} // ✅ Use navigateToImage
+                    >
+                      <Feather name="chevron-right" size={32} color={Colors.dark.txtPrimary} />
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          </BlurView>
+        </Modal>
+      )}
     </>
   );
 };
@@ -505,6 +592,7 @@ const styles = StyleSheet.create({
   },
   singleImage: {
     width: '100%',
+    alignSelf: 'flex-end',
     height: 200,
     borderRadius: 12,
     overflow: 'hidden',
@@ -581,16 +669,37 @@ const styles = StyleSheet.create({
     padding: 8,
   },
 
-  // Modal Styles
+  // ✅ FIXED: Modal Styles with Border Radius
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
+  imageSlide: {
+    width: SCREEN_WIDTH,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   fullScreenImage: {
     width: SCREEN_WIDTH - 40,
-    height: SCREEN_HEIGHT - 100,
+    height: SCREEN_HEIGHT - 200,
+    borderRadius: 20, // ✅ Added border radius
+  },
+  imageCounter: {
+    position: 'absolute',
+    top: 60,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 10,
+  },
+  imageCounterText: {
+    color: Colors.dark.txtPrimary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   closeButton: {
     position: 'absolute',
@@ -599,9 +708,34 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
+  },
+  prevButton: {
+    position: 'absolute',
+    left: 20,
+    top: '50%',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  nextButton: {
+    position: 'absolute',
+    right: 20,
+    top: '50%',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
 
   // Message Preview Styles

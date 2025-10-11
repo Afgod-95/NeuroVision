@@ -6,12 +6,14 @@ import { Colors } from '@/src/constants/Colors';
 import { emailRegex } from '@/src/constants/Regex';
 import { router } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Image, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useDispatch, useSelector } from 'react-redux';
-import { loginUser, resetState } from '@/src/redux/slices/authSlice';
+import { loginUser, clearError } from '@/src/redux/slices/authSlice';
 import type { RootState, AppDispatch } from '@/src/redux/store';
 import { useCustomAlert } from '@/src/components/alert/CustomAlert';
+import Logo from '@/src/components/logo/Logo';
+import { getLoginErrorDetails } from '@/src/utils/errorHandler';
 
 const { width } = Dimensions.get('screen');
 
@@ -21,13 +23,15 @@ interface UserProps {
 }
 
 const Index = () => {
-  const [user, setUser] = useState<UserProps>({ email: 'afgod98@gmail.com', password: 'expo1234' });
+  const [user, setUser] = useState<UserProps>({ 
+    email: '', 
+    password: '' 
+  });
   const [isDisabled, setIsDisabled] = useState<boolean>(true);
 
   const dispatch = useDispatch<AppDispatch>();
-  const { loading } = useSelector((state: RootState) => state.auth);
+  const { loading, error, errorCode } = useSelector((state: RootState) => state.auth);
 
-  // Initialize custom alert hook
   const {
     AlertComponent,
     showSuccess,
@@ -39,19 +43,13 @@ const Index = () => {
     setUser((prev) => ({ ...prev, [name]: value }));
   };
 
-  /*
-  useEffect(() => {
-    dispatch(resetState())
-  },[dispatch])
-  */
-
   useEffect(() => {
     const isFilled = user.email.trim() !== '' && user.password.trim() !== '';
     setIsDisabled(!isFilled);
   }, [user]);
 
   const signIn = async () => {
-    // Validation with custom alerts
+    // Frontend validation
     if (!emailRegex.test(user.email)) {
       showError(
         'Invalid Email',
@@ -64,7 +62,7 @@ const Index = () => {
     }
 
     if (user.password.length < 6) {
-      showWarning(
+      showError(
         'Password Too Short',
         'Password must be at least 6 characters long',
         {
@@ -74,55 +72,99 @@ const Index = () => {
       return;
     }
 
-    // Dispatch redux thunk
-    dispatch(loginUser({ email: user.email, password: user.password }))
-      .unwrap()
-      .then((res) => {
-        console.log('Login success response:', res);
-        showSuccess(
-          'Welcome Back!',
-          'You have successfully logged in',
-          {
-            autoClose: true,
-            autoCloseDelay: 3000, 
-            primaryButtonText: 'Redirecting...',
-          }
-        );
+    try {
+      // Clear any previous errors
+      dispatch(clearError());
 
-        // Navigate after alert auto-closes
-        setTimeout(() => {
-          router.replace('/(home)');
-        }, 3000);
-      })
-      .catch((err) => {
-        console.log('Login error:', err);
+      // Dispatch login action
+      const result = await dispatch(
+        loginUser({ 
+          email: user.email.trim().toLowerCase(), 
+          password: user.password 
+        })
+      ).unwrap();
 
-        let errorTitle = 'Login Failed';
-        let errorMessage = typeof err === 'string' ? err : 'Something went wrong. Please try again.';
+      console.log('Login success:', result);
 
-        if (errorMessage.toLowerCase().includes('invalid')) {
-          errorTitle = 'Invalid Credentials';
-        } else if (errorMessage.toLowerCase().includes('network')) {
-          errorTitle = 'Network Error';
-        } else if (errorMessage.toLowerCase().includes('not found')) {
-          errorTitle = 'Account Not Found';
+      // Success feedback
+      showSuccess(
+        'Welcome Back!',
+        `Hi ${result.user.username}, you have successfully logged in`,
+        {
+          autoClose: true,
+          autoCloseDelay: 2000,
+          primaryButtonText: 'Continue',
         }
+      );
 
-        showError(
-          errorTitle,
-          errorMessage,
-          {
-            primaryButtonText: 'Try Again',
-            secondaryButtonText: 'Forgot Password?',
-            onSecondaryPress: () => router.push('/(auth)/forgot_password'),
-          }
-        );
+      // Navigate after success
+      setTimeout(() => {
+        router.replace('/(home)');
+      }, 2000);
+
+    } catch (err: any) {
+      // Enhanced error handling using error codes
+      console.error('Login error caught:', err);
+      
+      // Extract error code and message from the error object
+      const code = err?.code || errorCode || null;
+      const message = err?.message || error || 'An unexpected error occurred';
+      
+      // Get user-friendly error details based on error code
+      const errorDetails = getLoginErrorDetails(code, message, {
+        email: user.email,
+        onRetry: () => signIn(),
+        onForgotPassword: () => router.push('/(auth)/forgot_password'),
+        onResendVerification: () => router.push(`/(auth)/verify/${user.email}`),
+        onSignUp: () => router.push('/(auth)/signup')
       });
+
+      // Show error with appropriate action button
+      showError(
+        errorDetails.title,
+        errorDetails.message,
+        {
+          showCloseButton: true,
+          primaryButtonText: errorDetails.actionText,
+          onPrimaryPress: errorDetails.action,
+        }
+      );
+    }
   };
+
+  // Optional: Show error from Redux state if it exists
+  // This handles errors that might come from other parts of the app
+  useEffect(() => {
+    if (error && !loading) {
+      console.log('Redux error detected:', { error, errorCode });
+      
+      const errorDetails = getLoginErrorDetails(errorCode, error, {
+        email: user.email,
+        onRetry: () => signIn(),
+        onForgotPassword: () => router.push('/(auth)/forgot_password'),
+        onResendVerification: () => router.push(`/(auth)/verify/${user.email}`),
+        onSignUp: () => router.push('/(auth)/signup')
+      });
+      
+      showError(
+        errorDetails.title,
+        errorDetails.message,
+        {
+          showCloseButton: true,
+          primaryButtonText: errorDetails.actionText,
+          onPrimaryPress: errorDetails.action,
+        }
+      );
+
+      // Clear error after showing
+      dispatch(clearError());
+    }
+  }, [error, errorCode, loading]);
 
   return (
     <ScreenWrapper>
       <Animated.View style={styles.innerContainer}>
+        <Logo />
         <Animated.Text
           style={[styles.textHeader, { color: Colors.dark.txtPrimary }]}
           entering={FadeInUp.duration(600).springify()}
@@ -160,7 +202,7 @@ const Index = () => {
 
         <Button
           title="Login"
-          disabled={isDisabled}
+          disabled={isDisabled || loading}
           loading={loading}
           onPress={signIn}
         />
@@ -180,7 +222,6 @@ const Index = () => {
         <ContinueWithGoogle />
       </Animated.View>
 
-      {/* Add the Custom Alert Component */}
       <AlertComponent />
     </ScreenWrapper>
   );

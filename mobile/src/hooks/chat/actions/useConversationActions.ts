@@ -13,14 +13,15 @@ import {
   setNewChat,
   addMessage,
   updateMessage,
+  removeMessage,
 } from "@/src/redux/slices/chatSlice";
 
 import { Message, UploadedAudioFile, UploadedFile } from "@/src/utils/interfaces/TypescriptInterfaces";
 import { useConversationMutation } from "../mutations/useConversationMutation";
 import { uniqueConvId as startNewConversationId } from "@/src/constants/generateConversationId";
 import api from "@/src/services/axiosClient";
-import axios from "axios";
 import { QueryClient, UseMutationResult } from "@tanstack/react-query";
+import { base64ToBlob } from "@/src/utils/helpers/base64ToBlob";
 
 type UseConversationActionsProps = {
   userDetails: any;
@@ -180,218 +181,263 @@ export const useConversationActions = ({
 
   // ===================== HANDLE REGENERATE WITH FILE SUPPORT =====================
   const handleRegenerate = useCallback(async (messageId: string) => {
-    if (isProcessingResponseRef.current) {
-      console.log('⚠️ Already processing a response, ignoring regenerate request');
-      return;
-    }
+  if (isProcessingResponseRef.current) {
+    console.log('⚠️ Already processing a response, ignoring regenerate request');
+    return;
+  }
 
-    console.log("🔄 Regenerating message:", messageId);
-    dispatch(setIsAborted(false));
+  console.log("🔄 Regenerating message:", messageId);
+  dispatch(setIsAborted(false));
 
-    const currentIndex = messages.findIndex(msg => msg.id === messageId);
-    const previousUserMessage = messages.slice(0, currentIndex).reverse().find(msg => msg.user);
+  // Find the message being regenerated and the previous user message
+  const currentIndex = messages.findIndex(msg => msg.id === messageId);
+  if (currentIndex === -1) {
+    console.log("❌ Message not found:", messageId);
+    return;
+  }
 
-    if (!previousUserMessage) {
-      console.log("❌ No previous user message found");
-      return;
-    }
+  const previousUserMessage = messages.slice(0, currentIndex).reverse().find(msg => msg.user);
 
-    isProcessingResponseRef.current = true;
+  if (!previousUserMessage) {
+    console.log("❌ No previous user message found");
+    return;
+  }
 
-    const loadingMessageId = `loading-regenerate-${Date.now()}`;
-    const loadingMessage: Message = {
-      id: loadingMessageId,
-      text: '',
-      user: false,
-      created_at: new Date().toISOString(),
-      timestamp: new Date().toISOString(),
-      sender: 'assistant',
-      isLoading: true
-    };
+  isProcessingResponseRef.current = true;
 
-    currentLoadingIdRef.current = loadingMessageId;
-    dispatch(addMessage(loadingMessage));
-    dispatch(setIsAIResponding(true));
-    scrollToBottom();
+  // ✅ REMOVE THE OLD AI MESSAGE FIRST
+  console.log("🗑️ Removing old AI message:", messageId);
+  dispatch(removeMessage(messageId));
 
-    try {
-      // Create abort controller for regenerate request
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+  // Create loading message
+  const loadingMessageId = `loading-regenerate-${Date.now()}`;
+  const loadingMessage: Message = {
+    id: loadingMessageId,
+    text: '',
+    user: false,
+    created_at: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
+    sender: 'assistant',
+    isLoading: true
+  };
 
-      // ✅ Check if the original message has files with full data
-      const hasFilesWithData = previousUserMessage.content?.files && 
-        previousUserMessage.content.files.some((f: any) => f.base64 || f.uri);
+  currentLoadingIdRef.current = loadingMessageId;
+  dispatch(addMessage(loadingMessage));
+  dispatch(setIsAIResponding(true));
+  
+  setTimeout(scrollToBottom, 50);
 
-      let response;
+  try {
+    // Create abort controller for regenerate request
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-      if (hasFilesWithData) {
-        // ✅ USE FORMDATA FOR MESSAGES WITH FILES
-        console.log("📎 Regenerating message with files");
-        
-        const formData = new FormData();
-        formData.append('message', previousUserMessage.text);
-        formData.append('useDatabase', 'true');
-        formData.append('temperature', temperature.toString());
-        formData.append('maxTokens', maxTokens.toString());
-        formData.append('systemPrompt', systemPrompt);
-        
-        if (conversationId) {
-          formData.append('conversationId', conversationId);
-        }
+    // ✅ Check if the original message has files with full data
+    const hasFilesWithData = previousUserMessage.content?.files && 
+      previousUserMessage.content.files.length > 0 &&
+      previousUserMessage.content.files.some((f: any) => f.base64 || f.uri);
 
-        // Add conversation history
-        const conversationHistory = messages.slice(-10).map(msg => ({
+    let response;
+
+    if (hasFilesWithData) {
+      // ✅ USE FORMDATA FOR MESSAGES WITH FILES
+      console.log("📎 Regenerating message with files:", previousUserMessage?.content?.files?.length);
+      
+      const formData = new FormData();
+      formData.append('message', previousUserMessage.text);
+      formData.append('useDatabase', 'true');
+      formData.append('temperature', temperature.toString());
+      formData.append('maxTokens', maxTokens.toString());
+      formData.append('systemPrompt', systemPrompt);
+      
+      if (conversationId) {
+        formData.append('conversationId', conversationId);
+      }
+
+      // Add conversation history (exclude the message being regenerated)
+      const conversationHistory = messages
+        .filter(msg => msg.id !== messageId) // Exclude the old AI response
+        .slice(-10)
+        .map(msg => ({
           role: msg.sender === 'user' ? 'user' : 'assistant',
           content: msg.text
         }));
-        formData.append('conversationHistory', JSON.stringify(conversationHistory));
+      formData.append('conversationHistory', JSON.stringify(conversationHistory));
 
-        // Add files with their full data
-        for (const file of previousUserMessage.content!.files!) {
-          if ((file as any).uri) {
-            const fileData: any = {
-              uri: (file as any).uri,
-              type: file.type || 'application/octet-stream',
-              name: file.name || `file_${Date.now()}`,
-            };
-            formData.append('files', fileData);
-          } else if ((file as any).base64) {
-            const blob = base64ToBlob((file as any).base64, file.type);
-            formData.append('files', blob, file.name);
-          }
+      // ✅ FIXED: Add files with their full data
+      const files = previousUserMessage.content!.files!;
+      for (const file of files) {
+        if ((file as any).base64) {
+          // Convert base64 to blob
+          const blob = base64ToBlob((file as any).base64, file.type || 'application/octet-stream');
+          formData.append('files', blob, file.name || `file_${Date.now()}`);
+        } else if ((file as any).uri) {
+          // For URIs, we need to fetch the file first (if it's a local file)
+          // or send the URI directly if the backend supports it
+          const fileData: any = {
+            uri: (file as any).uri,
+            type: file.type || 'application/octet-stream',
+            name: file.name || `file_${Date.now()}`,
+          };
+          // Note: This assumes your backend can handle URI objects
+          // If not, you'll need to fetch and convert to blob first
+          formData.append('files', JSON.stringify(fileData));
         }
+      }
 
-        // Use axios with FormData
-        response = await api.post(
-          `/api/conversations/send-message`,
-          formData,
-          {
-            signal: controller.signal,
-            headers: { 
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'multipart/form-data',
-            },
-            timeout: 120000,
-          }
-        );
-
-      } else {
-        // ✅ USE JSON FOR TEXT-ONLY MESSAGES
-        console.log("📝 Regenerating text-only message");
-        
-        const payload = {
-          message: previousUserMessage.text,
-          messageContent: previousUserMessage.content,
-          systemPrompt: systemPrompt,
-          temperature: temperature,
-          maxTokens: maxTokens,
-          conversationId: conversationId,
-          userDetails: userDetails,
-          useDatabase: true,
-        };
-
-        response = await api.post('/api/conversations/send-message', payload, {
+      response = await api.post(
+        '/api/conversations/send-message',
+        formData,
+        {
           signal: controller.signal,
-          headers: {
+          headers: { 
             'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'multipart/form-data',
           },
-          timeout: 60000,
-        });
-      }
-
-      abortControllerRef.current = null;
-      isProcessingResponseRef.current = false;
-
-      const aiResponseText = extractAIResponseText(response.data);
-
-      if (!aiResponseText || aiResponseText.trim() === '') {
-        throw new Error('AI response is empty or invalid');
-      }
-
-      console.log("✅ Regenerated response received");
-
-      if (currentLoadingIdRef.current === loadingMessageId) {
-        // Update loading message to typing
-        dispatch(updateMessage({
-          id: loadingMessageId,
-          updates: { isLoading: false, isTyping: true, text: '' }
-        }));
-
-        setTimeout(() => {
-          startTypingAnimation(aiResponseText, loadingMessageId);
-        }, 100);
-      }
-
-    } catch (error: any) {
-      console.error('❌ Failed to regenerate message:', error);
-
-      abortControllerRef.current = null;
-      isProcessingResponseRef.current = false;
-
-      // Don't show error for canceled requests
-      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
-        console.log("⚠️ Regeneration was canceled");
-        clearAIResponding();
-        return;
-      }
-
-      let errorText = 'Failed to regenerate response. Please try again.';
-
-      if (error.response) {
-        const status = error.response.status;
-        if (status === 401) {
-          errorText = 'You are not authorized. Please log in again.';
-        } else if (status === 403) {
-          errorText = 'Access denied.';
-        } else if (status === 404) {
-          errorText = 'Resource not found.';
-        } else if (status === 413) {
-          errorText = 'Files are too large to regenerate.';
-        } else if (status === 429) {
-          errorText = 'Too many requests. Please wait a moment.';
-        } else if (status >= 500) {
-          errorText = 'Server error. Please try again later.';
-        } else {
-          errorText = `Unexpected error (${status}).`;
+          timeout: 120000,
         }
-      } else if (error.request) {
-        errorText = 'No response from server. Check your connection.';
-      } else if (error.message && error.message.includes('timeout')) {
-        errorText = 'Request timed out. Please try again.';
-      } else if (error.message) {
-        errorText = `Error: ${error.message}`;
-      }
+      );
 
-      // Update loading message with error
-      dispatch(updateMessage({
-        id: loadingMessageId,
-        updates: {
-          isLoading: false,
-          isTyping: false,
-          text: errorText
-        }
-      }));
+    } else {
+      // ✅ USE JSON FOR TEXT-ONLY MESSAGES
+      console.log("📝 Regenerating text-only message");
+      
+      const payload = {
+        message: previousUserMessage.text,
+        messageContent: previousUserMessage.content,
+        systemPrompt: systemPrompt,
+        temperature: temperature,
+        maxTokens: maxTokens,
+        conversationId: conversationId,
+        userDetails: userDetails,
+        useDatabase: true,
+      };
 
-      clearAIResponding();
+      response = await api.post('/api/conversations/send-message', payload, {
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        timeout: 60000,
+      });
     }
-  }, [
-    messages, 
-    dispatch, 
-    currentLoadingIdRef, 
-    systemPrompt,
-    isProcessingResponseRef,
-    startTypingAnimation, 
-    temperature, 
-    maxTokens,
-    conversationId, 
-    clearAIResponding, 
-    extractAIResponseText,
-    scrollToBottom,
-    accessToken,
-    abortControllerRef,
-    userDetails,
-  ]);
+
+    abortControllerRef.current = null;
+    isProcessingResponseRef.current = false;
+
+    const aiResponseText = extractAIResponseText(response.data);
+
+    if (!aiResponseText || aiResponseText.trim() === '') {
+      throw new Error('AI response is empty or invalid');
+    }
+
+    console.log("✅ Regenerated response received");
+
+    // ✅ Remove loading message and add typing message
+    if (currentLoadingIdRef.current === loadingMessageId) {
+      dispatch(removeMessage(loadingMessageId));
+      
+      // Small delay to ensure removal completes
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Create new typing message
+      const typingMessageId = `typing-regenerate-${Date.now()}`;
+      const typingMessage: Message = {
+        id: typingMessageId,
+        text: '',
+        user: false,
+        created_at: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
+        sender: 'assistant',
+        isTyping: true,
+      };
+      
+      dispatch(addMessage(typingMessage));
+      currentLoadingIdRef.current = typingMessageId;
+
+      setTimeout(() => {
+        startTypingAnimation(aiResponseText, typingMessageId);
+      }, 100);
+    }
+
+  } catch (error: any) {
+    
+    abortControllerRef.current = null;
+    isProcessingResponseRef.current = false;
+
+    // Don't show error for canceled requests
+    if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+      console.log("⚠️ Regeneration was canceled");
+      
+      // Remove loading message on cancel
+      if (currentLoadingIdRef.current) {
+        dispatch(removeMessage(currentLoadingIdRef.current));
+      }
+      
+      clearAIResponding();
+      currentLoadingIdRef.current = null;
+      return;
+    }
+
+    let errorText = 'Failed to regenerate response. Please try again.';
+
+    if (error.response) {
+      const status = error.response.status;
+      if (status === 401) {
+        errorText = 'You are not authorized. Please log in again.';
+      } else if (status === 403) {
+        errorText = 'Access denied.';
+      } else if (status === 404) {
+        errorText = 'Resource not found.';
+      } else if (status === 413) {
+        errorText = 'Files are too large to regenerate.';
+      } else if (status === 429) {
+        errorText = 'Too many requests. Please wait a moment.';
+      } else if (status >= 500) {
+        errorText = 'Server error. Please try again later.';
+      } else if (error.response.data?.error) {
+        errorText = error.response.data.error;
+      } else {
+        errorText = `Unexpected error (${status}).`;
+      }
+    } else if (error.request) {
+      errorText = 'No response from server. Check your connection.';
+    } else if (error.message && error.message.includes('timeout')) {
+      errorText = 'Request timed out. Please try again.';
+    } else if (error.message) {
+      errorText = `Error: ${error.message}`;
+    }
+
+    // Update loading message with error
+    dispatch(updateMessage({
+      id: loadingMessageId,
+      updates: {
+        isLoading: false,
+        isTyping: false,
+        text: errorText
+      }
+    }));
+
+    clearAIResponding();
+    currentLoadingIdRef.current = null;
+  }
+}, [
+  messages, 
+  dispatch, 
+  currentLoadingIdRef, 
+  systemPrompt,
+  isProcessingResponseRef,
+  startTypingAnimation, 
+  temperature, 
+  maxTokens,
+  conversationId, 
+  clearAIResponding, 
+  extractAIResponseText,
+  scrollToBottom,
+  accessToken,
+  abortControllerRef,
+  userDetails,
+]);
 
   // ===================== ABORT MESSAGE =====================
   const abortMessage = useCallback(() => {
@@ -453,25 +499,4 @@ export const useConversationActions = ({
     handleRegenerate,
     abortMessage,
   };
-};
-
-// Helper function to convert base64 to blob
-const base64ToBlob = (base64: string, mimeType: string = 'application/octet-stream'): Blob => {
-  const base64Data = base64.replace(/^data:[^;]+;base64,/, '');
-  const byteCharacters = atob(base64Data);
-  const byteArrays = [];
-
-  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-    const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
-    
-    for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
-    }
-    
-    const byteArray = new Uint8Array(byteNumbers);
-    byteArrays.push(byteArray);
-  }
-
-  return new Blob(byteArrays, { type: mimeType });
 };

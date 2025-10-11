@@ -1,17 +1,24 @@
 {
-  "extends": "expo/tsconfig.base",
+"extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "jsx": "react-jsx",
+    "target": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-, "metro.config.js", "../backend/src/utils/AIPrompts.ts"  ]
+    "expo-env.d.ts",
+    "metro.config.js",
+    "../backend/src/utils/AIPrompts.ts"
+  ]
 }

@@ -10,8 +10,7 @@ export default {
     newArchEnabled: true,
 
     splash: {
-      image: "./src/assets/images/adaptive-icon.png",
-      imageWidth: 200,
+      image: "./src/assets/images/splash.png",
       resizeMode: "contain",
       backgroundColor: "#0D0D0D"
     },
@@ -21,8 +20,10 @@ export default {
       bundleIdentifier: "com.afgod-95.Neurovision",
       deploymentTarget: "16.0", 
       "infoPlist": {
-        "NSFaceIDUsageDescription": "This app uses Face ID to quickly authenticate your login."
-      }
+        "NSFaceIDUsageDescription": "This app uses Face ID to quickly authenticate your login.",
+         "UIDesignRequiresCompatibility": true
+      },
+      
     },
     android: {
       adaptiveIcon: {

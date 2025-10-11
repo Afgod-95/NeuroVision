@@ -1,4 +1,4 @@
-import { UploadedFile } from "@/src/components/chatUI/upload-files/UploadFiles";
+import { UploadedFile } from "@/src/components/chatUI/uploaded-files-input/UploadFiles";
 
 // Helper function to convert file to UploadedFile format
 export const convertToUploadedFile = (file: any): UploadedFile => {

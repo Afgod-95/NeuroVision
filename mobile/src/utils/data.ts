@@ -1,4 +1,4 @@
-import { UploadedFile } from "../components/chatUI/upload-files/UploadFiles";
+import { UploadedFile } from "../components/chatUI/uploaded-files-input/UploadFiles";
 
 export const sampleUploadedFile: UploadedFile[] = [
     {

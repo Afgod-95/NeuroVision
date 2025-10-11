@@ -13,105 +13,179 @@ import { generateTokenPair, revokeAllUserTokens, revokeRefreshToken } from '../m
 import bcrypt from 'bcrypt';
 import { deleteAuthUser } from '../lib/supabase';
 
+// Standardized error response format
+interface ApiError {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+interface ApiSuccess<T = any> {
+  success: true;
+  message: string;
+  data?: T;
+}
+
+// Helper function to send consistent error responses
+const sendError = (
+  res: Response,
+  statusCode: number,
+  code: string,
+  message: string,
+  details?: any
+): Response => {
+  return res.status(statusCode).json({
+    success: false,
+    error: {
+      code,
+      message,
+      ...(details && { details })
+    }
+  });
+};
+
+// Helper function to send consistent success responses
+const sendSuccess = <T = any>(
+  res: Response,
+  statusCode: number,
+  message: string,
+  data?: T
+): Response => {
+  return res.status(statusCode).json({
+    success: true,
+    message,
+    ...(data && { data })
+  });
+};
+
 //register user endpoint
 export const registerUser = async (req: Request, res: Response) => {
   try {
     const { username, email, password } = req.body;
 
-    if (!validateRegisterFields(username, email, password, res)) return;
+    // Validate fields
+    if (!username || !email || !password) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Username, email, and password are required');
+    }
 
-    const userExistsResult = await checkUserExists(email, res);
-    if (userExistsResult.error || userExistsResult.exists) return;
+    if (password.length < 8) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Password must be at least 8 characters long');
+    }
 
-    const newUser = await createUser(username, email, password, res);
-    if (!newUser) {
-      return res.status(500).json({ error: 'Failed to create user' });
-    };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid email format');
+    }
 
+    // Check if user exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      return sendError(res, 409, 'USER_EXISTS', 'User with this email already exists');
+    }
+
+    // Create user
+    const hashedPassword = await hashPassword(password);
+    const { data: newUser, error: createError } = await supabase
+      .from('users')
+      .insert([{
+        username,
+        email,
+        password: hashedPassword,
+        is_email_verified: false
+      }])
+      .select()
+      .single();
+
+    if (createError || !newUser) {
+      console.error('User creation error:', createError);
+      return sendError(res, 500, 'USER_CREATION_FAILED', 'Failed to create user account');
+    }
+
+    // Send OTP
     const otpResult = await sendOtp(newUser);
-    const { data: otp_verifications, error: error } = await supabase
+    
+    if (otpResult.error) {
+      console.error('OTP sending error:', otpResult.error);
+      // User was created but OTP failed - still return success but warn about OTP
+      return sendSuccess(res, 201, 'User created but failed to send verification email. Please request a new OTP.', {
+        userId: newUser.id,
+        email: newUser.email
+      });
+    }
+
+    const { data: otp_verifications } = await supabase
       .from('otps')
       .select('expires_at')
       .eq('user_id', newUser.id)
       .single();
 
-    if (otpResult.error) {
-      console.log(otpResult)
-      return res.status(500).json({ error: 'Failed to send OTP', details: otpResult.error });
-    }
-
-    if (otpResult.success) {
-      return res.status(201).json({
-        message: `User created successfully. \n
-        A 6 digit otp has been sent to your mail. Please check and verify.
-      `,
-        otp: otpResult,
-        userId: newUser.id,
-        email: newUser.email,
-        otpExpires: otp_verifications?.expires_at,
-      });
-    }
+    return sendSuccess(res, 201, 'User created successfully. A 6-digit OTP has been sent to your email.', {
+      userId: newUser.id,
+      email: newUser.email,
+      otpExpires: otp_verifications?.expires_at
+    });
 
   } catch (error) {
-    console.error('Error registering user:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Registration error:', error);
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred during registration');
   }
 };
-
-
 
 //resend otp 
 export const resendOtp = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
+    
     if (!email) {
-      return res.status(500).json({
-        error: "Email not found"
-      })
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Email is required');
     }
 
-    // Fetch the full user object by email
-    const { data: user, error } = await supabase
+    // Fetch user
+    const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .single();
 
-    const { data: otp_verifications, error: otpError } = await supabase
-      .from('otp_verifications')
+    if (userError || !user) {
+      return sendError(res, 404, 'USER_NOT_FOUND', 'No account found with this email address');
+    }
+
+    if (user.is_email_verified) {
+      return sendError(res, 400, 'ALREADY_VERIFIED', 'Email is already verified');
+    }
+
+    // Send new OTP
+    const otpResult = await sendOtp(user);
+
+    if (otpResult.error) {
+      console.error('OTP resend error:', otpResult.error);
+      return sendError(res, 500, 'OTP_SEND_FAILED', 'Failed to send verification code. Please try again.');
+    }
+
+    const { data: otp_verifications } = await supabase
+      .from('otps')
       .select('expires_at')
       .eq('user_id', user.id)
       .single();
 
-    if (otpError || !otp_verifications) {
-      return res.status(404).json({ error: 'OTP not found' });
-    }
-
-    if (error || !user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const otpResult = await sendOtp(user);
-
-    if (otpResult.error) {
-      console.log(otpResult)
-      return res.status(500).json({ error: 'Failed to send OTP', details: otpResult.error });
-    }
-
-    if (otpResult.success) {
-      return res.status(201).json({
-        message: `A 6 digit otp has been sent to your mail. Please re-check and verify again.`,
-        otp: otpResult,
-        otpExpires: otp_verifications.expires_at,
-      });
-    }
+    return sendSuccess(res, 200, 'A new 6-digit OTP has been sent to your email.', {
+      otpExpires: otp_verifications?.expires_at
+    });
 
   } catch (error) {
-    console.error('Error resending otp:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Resend OTP error:', error);
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while resending OTP');
   }
-}
-
+};
 
 //verify user email
 export const verifyEmailOtp = async (req: Request, res: Response) => {
@@ -119,10 +193,10 @@ export const verifyEmailOtp = async (req: Request, res: Response) => {
     const { userId, otpCode } = req.body;
 
     if (!userId || !otpCode) {
-      return res.status(400).json({ error: 'User ID and OTP code are required' });
+      return sendError(res, 400, 'VALIDATION_ERROR', 'User ID and OTP code are required');
     }
 
-    // 1. Find OTP for the user
+    // Find OTP for the user
     const { data: otpRecord, error: fetchError } = await supabase
       .from('otp_verifications')
       .select('*')
@@ -133,82 +207,85 @@ export const verifyEmailOtp = async (req: Request, res: Response) => {
       .single();
 
     if (fetchError || !otpRecord) {
-      return res.status(400).json({ error: 'Invalid or expired OTP' });
+      // Check if OTP exists but is expired
+      const { data: expiredOtp } = await supabase
+        .from('otp_verifications')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('otp_code', otpCode)
+        .single();
+
+      if (expiredOtp) {
+        return sendError(res, 400, 'OTP_EXPIRED', 'This verification code has expired. Please request a new one.');
+      }
+
+      return sendError(res, 400, 'INVALID_OTP', 'Invalid verification code. Please check and try again.');
     }
 
-    
-
-    // 2. Mark OTP as verified
+    // Mark OTP as verified
     const { error: updateError } = await supabase
       .from('otp_verifications')
-      .update({
-        is_verified: true,
-      })
+      .update({ is_verified: true })
       .eq('id', otpRecord.id);
 
     if (updateError) {
-      console.error(updateError);
-      return res.status(500).json({ error: 'Failed to verify OTP' });
+      console.error('OTP update error:', updateError);
+      return sendError(res, 500, 'VERIFICATION_FAILED', 'Failed to verify OTP. Please try again.');
     }
 
-    // 3. Update user's email_verified status
+    // Update user's email_verified status
     const { error: userUpdateError } = await supabase
       .from('users')
       .update({ is_email_verified: true })
       .eq('id', userId);
 
     if (userUpdateError) {
-      console.error(userUpdateError);
-      return res.status(500).json({ error: 'Failed to update user verification status' });
+      console.error('User update error:', userUpdateError);
+      return sendError(res, 500, 'VERIFICATION_FAILED', 'Failed to update verification status. Please try again.');
     }
 
-    res.status(200).json({ message: 'Email verified successfully.' });
+    return sendSuccess(res, 200, 'Email verified successfully. You can now log in.');
 
   } catch (error) {
-    console.error('Error verifying OTP:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Verify OTP error:', error);
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred during verification');
   }
 };
-
 
 // LOGIN USER
 export const loginUser = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
+    
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Email and password are required');
     }
 
-    const { data: user, error } = await supabase
+    // Fetch user
+    const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .single();
 
-    if (error || !user) {
-      return res.status(404).json({ error: 'Invalid email or password' });
+    if (userError || !user) {
+      return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid email or password');
     }
 
+    // Verify password
     const isPasswordValid = await comparePassword({ password, hashedPassword: user.password });
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid password' });
+      return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid email or password');
     }
 
-    // Temporary password check
-    if (!password) {
-      return res.status(401).json({ error: 'Invalid password' });
-    }
-
+    // Check email verification
     if (!user.is_email_verified) {
-      return res.status(403).json({ error: 'Email not verified' });
+      return sendError(res, 403, 'EMAIL_NOT_VERIFIED', 'Please verify your email before logging in');
     }
 
-    // Add logging to debug
-    console.log('Getting device info...');
+    // Device detection
     const getDeviceInfo = await getDevicesLocation_info(req);
-    console.log('Device info received:', getDeviceInfo);
 
-    // Check if user has any known devices
     const { data: existingDevices } = await supabase
       .from('known_devices')
       .select('id')
@@ -217,42 +294,33 @@ export const loginUser = async (req: Request, res: Response) => {
     const isFirstLogin = !existingDevices || existingDevices.length === 0;
 
     if (await isDeviceNew(user.id, getDeviceInfo)) {
-      console.log('New device detected');
-
-      // Only send email if it's NOT the first login
       if (!isFirstLogin) {
-        console.log('Sending new device email...');
         await sendNewDeviceEmail(user.email, user.username, getDeviceInfo);
-      } else {
-        console.log('First login detected - skipping email notification');
       }
-
-      // Always save the device (whether first login or not)
       await saveDevice(user.id, getDeviceInfo);
     } else {
-      console.log('Known device detected - updating last accessed time');
-      // Update last accessed time for existing device
       await updateDeviceLastAccessed(user.id, getDeviceInfo);
     }
 
-    //generate token
+    // Generate tokens
     const { accessToken, refreshToken } = await generateTokenPair(user.id);
 
-    res.status(200).json({
-      message: 'Login successful',
-      user,
-      token: {
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
+
+    return sendSuccess(res, 200, 'Login successful', {
+      user: userWithoutPassword,
+      tokens: {
         accessToken,
-        refreshToken,
+        refreshToken
       }
     });
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred during login');
   }
 };
-
 
 // UPDATE USER PROFILE
 export const updateUserProfile = async (req: Request, res: Response) => {
@@ -260,350 +328,283 @@ export const updateUserProfile = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { username, email } = req.body;
 
-    if (!username || !email) {
-      return res.status(400).json({ error: 'Username and email are required' });
+    if (!username && !email) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'At least one field (username or email) is required');
+    }
+
+    const updateData: any = {};
+    if (username) updateData.username = username;
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid email format');
+      }
+      updateData.email = email;
+      updateData.is_email_verified = false; // Require re-verification
     }
 
     const { data, error } = await supabase
       .from('users')
-      .update({ username, email })
+      .update(updateData)
       .eq('id', id)
+      .select()
       .single();
 
     if (error) {
       console.error('Update error:', error);
-      return res.status(500).json({ error: 'Error updating user profile' });
+      if (error.code === '23505') {
+        return sendError(res, 409, 'EMAIL_EXISTS', 'This email is already in use');
+      }
+      return sendError(res, 500, 'UPDATE_FAILED', 'Failed to update profile');
     }
 
-    res.status(200).json({ message: 'Profile updated', data });
+    return sendSuccess(res, 200, 'Profile updated successfully', { user: data });
+
   } catch (error) {
-    console.error('Update error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Update profile error:', error);
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while updating profile');
   }
 };
 
 
 
 
-// 1. Add request tracking to prevent duplicate calls
 const activeRequests = new Map<string, boolean>();
 
 export const resetPasswordRequest = async (req: Request, res: Response) => {
   try {
-    console.log('Reset password request received');
-    console.log('Request body:', req.body);
-    console.log('Request method:', req.method);
-    console.log('Request path:', req.path);
-
     const { email } = req.body;
 
     if (!email) {
-      console.log('No email provided in request');
-      return res.status(400).json({ error: 'Email is required' });
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Email is required');
     }
 
-    // Check if there's already an active request for this email
+    // Prevent duplicate requests
     const requestKey = `reset_${email}`;
     if (activeRequests.get(requestKey)) {
-      console.log('Duplicate request detected for email:', email);
-      return res.status(429).json({ error: 'Request already in progress' });
+      return sendError(res, 429, 'REQUEST_IN_PROGRESS', 'A password reset request is already being processed');
     }
 
-    // Mark this request as active
     activeRequests.set(requestKey, true);
 
     try {
-      console.log('Looking for user with email:', email);
-
-      const { data: user, error } = await supabase
+      const { data: user, error: userError } = await supabase
         .from('users')
-        .select('id, email, username, password, is_email_verified, created_at')
+        .select('id, email, username, is_email_verified')
         .eq('email', email)
         .single();
 
-      if (error || !user) {
-        console.log('User not found:', error);
-        return res.status(404).json({ error: 'User not found' });
+      if (userError || !user) {
+        return sendError(res, 404, 'USER_NOT_FOUND', 'No account found with this email address');
       }
 
-      if (user.is_email_verified === false) {
-        return res.status(404).json({ error: "User email is not verified" })
+      if (!user.is_email_verified) {
+        return sendError(res, 403, 'EMAIL_NOT_VERIFIED', 'Please verify your email before resetting password');
       }
 
-      console.log('User found, sending OTP...');
-
-      const otpResult = await sendOtp(user, true);
+      const otpResult = await sendOtp(user?.email, true);
+      
       if (otpResult.error) {
-        console.error('OTP error:', otpResult.error);
-        return res.status(500).json({ error: 'An error occured whilst sending password reset link' });
+        console.error('Password reset OTP error:', otpResult.error);
+        return sendError(res, 500, 'EMAIL_SEND_FAILED', 'Failed to send password reset email. Please try again.');
       }
 
-      console.log('Password reset link sent successfully');
-
-      res.status(200).json({
-        message: 'Password reset link sent successfully',
-        otpResult,
-        user: { id: user.id, email: user.email, username: user.username }
+      return sendSuccess(res, 200, 'Password reset link sent to your email', {
+        email: user.email
       });
+
     } finally {
-      // Always clear the active request flag
       activeRequests.delete(requestKey);
     }
+
   } catch (error) {
-    console.error('Reset request error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Reset password request error:', error);
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while processing password reset');
   }
 };
 
-
-
 export const updatePassword = async (req: Request, res: Response) => {
+  try {
     const { currentPassword, newPassword } = req.body;
-    try {
-        if (!req.user) {
-            return res.status(401).json({
-                error: 'UNAUTHORIZED',
-                message: 'User not authenticated'
-            });
-        }
 
-        // Get current password hash
-        const { data: user, error } = await supabase
-            .from('users')
-            .select('password')
-            .eq('id', req.user.id)
-            .single();
-
-        if (error || !user) {
-            return res.status(404).json({
-                error: 'USER_NOT_FOUND',
-                message: 'User not found'
-            });
-        }
-
-        // Verify current password
-        const isValidPassword = await bcrypt.compare(currentPassword, user.password);
-        if (!isValidPassword) {
-            return res.status(400).json({
-                error: 'INVALID_PASSWORD',
-                message: 'Current password is incorrect'
-            });
-        }
-
-        // Hash new password
-        const saltRounds = 12;
-        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
-        // Update password
-        const { error: updateError } = await supabase
-            .from('users')
-            .update({ password: hashedPassword })
-            .eq('id', req.user.id);
-
-        if (updateError) {
-            return res.status(500).json({
-                error: 'UPDATE_FAILED',
-                message: 'Failed to update password'
-            });
-        }
-
-        // Revoke all existing refresh tokens (force re-login)
-        await revokeAllUserTokens(parseInt(req.user.id));
-
-        res.json({ message: 'Password updated successfully. Please log in again.' });
-
-    } catch (error) {
-        console.error('Update password error:', error);
-        res.status(500).json({
-            error: 'INTERNAL_ERROR',
-            message: 'Internal server error'
-        });
+    if (!req.user) {
+      return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required');
     }
+
+    if (!currentPassword || !newPassword) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Current password and new password are required');
+    }
+
+    if (newPassword.length < 8) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'New password must be at least 8 characters long');
+    }
+
+    // Get current password hash
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('password')
+      .eq('id', req.user.id)
+      .single();
+
+    if (userError || !user) {
+      return sendError(res, 404, 'USER_NOT_FOUND', 'User account not found');
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!isValidPassword) {
+      return sendError(res, 400, 'INVALID_PASSWORD', 'Current password is incorrect');
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password: hashedPassword })
+      .eq('id', req.user.id);
+
+    if (updateError) {
+      console.error('Password update error:', updateError);
+      return sendError(res, 500, 'UPDATE_FAILED', 'Failed to update password');
+    }
+
+    // Revoke all tokens
+    await revokeAllUserTokens(parseInt(req.user.id));
+
+    return sendSuccess(res, 200, 'Password updated successfully. Please log in again.');
+
+  } catch (error) {
+    console.error('Update password error:', error);
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while updating password');
+  }
 };
 
-
-
-// refresh token 
 export const refreshToken = async (req: Request, res: Response) => {
-
   try {
     const { refreshToken } = req.body;
+    
     if (!refreshToken) {
-      return res.status(400).json({ error: 'Refresh token is required' });
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Refresh token is required');
     }
 
-    // The verifyRefreshToken middleware should have validated the token
-    // and set req.user, so we can generate new tokens
     if (!req?.user) {
-      return res.status(403).json({
-        error: 'INVALID_TOKEN',
-        message: 'Invalid refresh token'
-      });
+      return sendError(res, 403, 'INVALID_TOKEN', 'Invalid or expired refresh token');
     }
 
-    //revoke the old refresh token 
     await revokeRefreshToken(refreshToken);
+    const tokens = await generateTokenPair(req.user.id);
 
-    //generate new token pair
-    const tokens = await generateTokenPair(req?.user?.id);
-    res.json({
-      message: 'Tokens refreshed successfully',
-      tokens
-    });
+    return sendSuccess(res, 200, 'Tokens refreshed successfully', { tokens });
 
   } catch (error) {
     console.error('Refresh token error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while refreshing token');
   }
-}
+};
 
-// Logout user (revoke refresh token)
 export const logout = async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
-
-  if (!refreshToken) {
-    return res.status(400).json({
-      error: 'MISSING_TOKEN',
-      message: 'Refresh token is required'
-    });
-  }
-
   try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Refresh token is required');
+    }
+
     const revoked = await revokeRefreshToken(refreshToken);
 
     if (revoked) {
-      res.json({ message: 'Logged out successfully' });
+      return sendSuccess(res, 200, 'Logged out successfully');
     } else {
-      res.status(400).json({
-        error: 'LOGOUT_FAILED',
-        message: 'Failed to revoke refresh token'
-      });
+      return sendError(res, 400, 'LOGOUT_FAILED', 'Failed to log out. Token may already be invalid.');
     }
 
   } catch (error) {
     console.error('Logout error:', error);
-    res.status(500).json({
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error'
-    });
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred during logout');
   }
 };
 
-// Logout user from all devices
 export const logoutAll = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        error: 'UNAUTHORIZED',
-        message: 'User not authenticated'
-      });
+      return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required');
     }
 
-   // Check if user has any known devices
-    const { data: existingDevices, error: deleteError } = await supabase
+    await supabase
       .from('known_devices')
       .delete()
       .eq('user_id', req.user.id);
+
     const revoked = await revokeAllUserTokens(parseInt(req.user.id));
 
     if (revoked) {
-      res.json({ message: 'Logged out from all devices successfully' });
+      return sendSuccess(res, 200, 'Logged out from all devices successfully');
     } else {
-      res.status(500).json({
-        error: 'LOGOUT_ALL_FAILED',
-        message: 'Failed to revoke all tokens'
-      });
+      return sendError(res, 500, 'LOGOUT_ALL_FAILED', 'Failed to log out from all devices');
     }
 
   } catch (error) {
     console.error('Logout all error:', error);
-    res.status(500).json({
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error'
-    });
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred during logout');
   }
 };
 
-// Get current user profile
 export const getProfile = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        error: 'UNAUTHORIZED',
-        message: 'User not authenticated'
-      });
+      return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required');
     }
 
-    // Get fresh user data from database
-    const { data: user, error } = await supabase
+    const { data: user, error: userError } = await supabase
       .from('users')
       .select('id, username, email, is_email_verified, created_at')
       .eq('id', req.user.id)
       .single();
 
-    if (error || !user) {
-      return res.status(404).json({
-        error: 'USER_NOT_FOUND',
-        message: 'User not found'
-      });
+    if (userError || !user) {
+      return sendError(res, 404, 'USER_NOT_FOUND', 'User account not found');
     }
 
-    res.json({
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        is_email_verified: user.is_email_verified,
-        created_at: user.created_at
-      }
-    });
+    return sendSuccess(res, 200, 'Profile retrieved successfully', { user });
 
   } catch (error) {
     console.error('Get profile error:', error);
-    res.status(500).json({
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error'
-    });
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while retrieving profile');
   }
 };
 
-
-
-// Helper function for handling Supabase errors
-const handleSupabaseError = (res: Response, error: any, message: string) => {
-  if (error) {
-    console.error(message, error);
-    res.status(500).json({ error: message });
-    return true;
-  }
-  return false;
-};
-
-
-//delete user account
 export const deleteUserAccount = async (req: Request, res: Response) => {
   try {
     const { id, authUserId } = req.params;
 
-    //delete user from auth table
-    await deleteAuthUser(authUserId);
+    if (!id || !authUserId) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'User ID and Auth User ID are required');
+    }
 
-    //delete user data from users table which is referenced to other tables
+    // Delete from auth
+    const authDeleted = await deleteAuthUser(authUserId);
+    if (!authDeleted) {
+      return sendError(res, 500, 'DELETE_FAILED', 'Failed to delete authentication data');
+    }
+
+    // Delete from users table
     const { error } = await supabase
       .from('users')
       .delete()
       .eq('id', id);
 
+    if (error) {
+      console.error('User deletion error:', error);
+      return sendError(res, 500, 'DELETE_FAILED', 'Failed to delete user account');
+    }
 
-    if (handleSupabaseError(res, error, 'Error deleting user account')) return;
+    return sendSuccess(res, 200, 'User account deleted successfully');
 
-    res.status(200).json({ message: 'User account deleted' });
   } catch (error) {
-    console.error('Delete error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Delete account error:', error);
+    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while deleting account');
   }
 };
-
-
-
-

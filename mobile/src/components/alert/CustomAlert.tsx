@@ -10,7 +10,8 @@ import {
   StatusBar,
   Vibration,
 } from 'react-native';
-import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors } from '../../constants/Colors';
 
 const { width, height } = Dimensions.get('window');
@@ -119,14 +120,14 @@ const CustomAlert = ({
 
   const handlePrimaryPress = () => {
     onPrimaryPress?.();
-    if (!onPrimaryPress) {
+    if (onPrimaryPress) {
       handleClose();
     }
   };
 
   const handleSecondaryPress = () => {
     onSecondaryPress?.();
-    if (!onSecondaryPress) {
+    if (onSecondaryPress) {
       handleClose();
     }
   };
@@ -135,7 +136,8 @@ const CustomAlert = ({
     switch (type) {
       case 'success':
         return {
-          icon: CheckCircle,
+          iconName: 'checkmark-circle',
+          iconFamily: 'Ionicons' as const,
           iconColor: '#00C853',
           backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
@@ -143,7 +145,8 @@ const CustomAlert = ({
         };
       case 'error':
         return {
-          icon: XCircle,
+          iconName: 'close-circle',
+          iconFamily: 'Ionicons' as const,
           iconColor: '#FF3B30',
           backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
@@ -151,15 +154,17 @@ const CustomAlert = ({
         };
       case 'warning':
         return {
-          icon: AlertTriangle,
+          iconName: 'warning',
+          iconFamily: 'Ionicons' as const,
           iconColor: '#FF9500',
           backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
-           primaryButtonColor: '#FF3B30',
+          primaryButtonColor: '#FF950015',
         };
       case 'info':
         return {
-          icon: Info,
+          iconName: 'information-circle',
+          iconFamily: 'Ionicons' as const,
           iconColor: Colors.dark.button,
           backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
@@ -167,7 +172,8 @@ const CustomAlert = ({
         };
       default:
         return {
-          icon: Info,
+          iconName: 'information-circle',
+          iconFamily: 'Ionicons' as const,
           iconColor: '#007AFF',
           backgroundColor: Colors.dark.bgPrimary,
           borderColor: Colors.dark.borderColor,
@@ -177,7 +183,6 @@ const CustomAlert = ({
   };
 
   const config = getAlertConfig();
-  const IconComponent = config.icon;
 
   return (
     <Modal
@@ -214,7 +219,7 @@ const CustomAlert = ({
           {/* Close Button */}
           {showCloseButton && (
             <Pressable style={styles.closeButton} onPress={handleClose}>
-              <X size={20} color={Colors.dark.txtSecondary} />
+              <Ionicons name="close" size={20} color={Colors.dark.txtSecondary} />
             </Pressable>
           )}
 
@@ -226,7 +231,7 @@ const CustomAlert = ({
                 { backgroundColor: `${config.iconColor}15` },
               ]}
             >
-              <IconComponent size={40} color={config.iconColor} />
+              <Ionicons name={config.iconName as any} size={40} color={config.iconColor} />
             </View>
           </View>
 
@@ -505,7 +510,7 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     marginBottom: 24,
-    width: '100%', // Ensure full width
+    width: '100%',
   },
   title: {
     fontSize: 22,

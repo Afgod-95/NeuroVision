@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import OTPInput from '@/src/components/textInputs/OtpInput'
 import { Colors } from '@/src/constants/Colors'
 import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation'
 import { router, useLocalSearchParams } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import React, { useCallback } from 'react'
 import {
     Alert,
     Image,
@@ -16,6 +15,7 @@ import {
     View
 } from 'react-native'
 import { useCustomAlert } from '@/src/components/alert/CustomAlert'
+import Logo from '@/src/components/logo/Logo'
 
 const RESEND_KEY = 'otp_next_resend_time';
 const EmailVerification = () => {
@@ -156,6 +156,7 @@ const EmailVerification = () => {
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     keyboardVerticalOffset={100}
                 >
+                    <Logo />
                     <View style={{ marginHorizontal: 20, justifyContent: 'center', alignItems: 'center' }}>
                         <Text style={styles.title}>{getScreenTitle()}</Text>
                         <Text style={styles.subtitle}>

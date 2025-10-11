@@ -8,21 +8,62 @@ import { RootState } from "@/src/redux/store";
 import { resetState } from "@/src/redux/slices/authSlice";
 import { useCustomAlert } from "@/src/components/alert/CustomAlert";
 import authApi from "@/src/services/authApiClient";
+import { 
+  getRegistrationErrorDetails, 
+  getOtpErrorDetails, 
+  getPasswordResetErrorDetails 
+} from "@/src/utils/errorHandler";
 
-
-//delete user account 
+// Delete user account interface
 interface DeleteUserAccountMutationVariables {
     userId: number;
 }
 
+// Helper function to extract error details from axios error
+const extractErrorDetails = (error: any) => {
+  if (error.response?.data) {
+    const errorData = error.response.data;
+    
+    // Backend sends: { success: false, error: { code, message, details } }
+    if (errorData.error) {
+      return {
+        code: errorData.error.code || 'UNKNOWN_ERROR',
+        message: errorData.error.message || 'An unexpected error occurred',
+        details: errorData.error.details
+      };
+    }
+    
+    // Fallback for different structure
+    return {
+      code: errorData.code || 'UNKNOWN_ERROR',
+      message: errorData.message || errorData.error || 'An unexpected error occurred',
+      details: null
+    };
+  }
+  
+  // Network or request errors
+  if (error.request) {
+    return {
+      code: 'NETWORK_ERROR',
+      message: 'Network error. Please check your internet connection.',
+      details: null
+    };
+  }
+  
+  // Other errors
+  return {
+    code: 'REQUEST_ERROR',
+    message: error.message || 'An unexpected error occurred',
+    details: null
+  };
+};
 
 export const useAuthMutation = () => {
-
     const { accessToken } = useSelector((state: RootState) => state.auth);
     const dispatch = useDispatch();
-    const { showSuccess, showError } = useCustomAlert();
+    const { showSuccess, showError, showWarning } = useCustomAlert();
 
-    //sign up users endpoint 
+    // SIGNUP MUTATION - IMPROVED
     const useSignupMutation = () => {
         return useMutation({
             mutationFn: async (user: any) => {
@@ -30,157 +71,300 @@ export const useAuthMutation = () => {
                 return result.data;
             },
 
+            onSuccess: (data) => {
+                console.log("Signup successful:", data);
+                
+                // Backend returns: { success: true, message: "...", data: { userId, email, otpExpires } }
+                showSuccess(
+                    "Account Created!",
+                    data.message || "Please check your email for verification code",
+                    { 
+                        autoClose: true,
+                        autoCloseDelay: 3000 
+                    }
+                );
+            },
+
             onError: (error: any) => {
-                console.log("Error signing up", error.response?.data || error.message);
+                console.log("Error signing up:", error.response?.data || error.message);
+
+                const { code, message } = extractErrorDetails(error);
+                
+                const errorDetails = getRegistrationErrorDetails(code, message, {
+                    onRetry: undefined, // Can be passed from component
+                    onLogin: () => router.push('/(auth)/login')
+                });
 
                 showError(
-                    "Oops!!!",
-                    error.response?.data?.error || "An error occurred whilst signing up",
-                    { autoClose: true }
+                    errorDetails.title,
+                    errorDetails.message,
+                    { 
+                        autoClose: true,
+                        primaryButtonText: errorDetails.actionText,
+                        onPrimaryPress: errorDetails.action
+                    }
                 );
             },
         });
     };
 
-
-    // resend otp
+    // RESEND OTP MUTATION - IMPROVED
     const useResendOtpMutation = () => {
         return useMutation({
-            mutationFn: async ({ email, type = 'email_verification' }: { email: string; type?: 'email_verification' | 'password_reset' }) => {
+            mutationFn: async ({ 
+                email, 
+                type = 'email_verification' 
+            }: { 
+                email: string; 
+                type?: 'email_verification' | 'password_reset' 
+            }) => {
+                // Note: You might need to update backend endpoint names
                 const endpoint = type === 'password_reset'
-                    ? '/api/auth/resend-password-reset-otp'
-                    : '/api/auth/resend-verification-otp';
+                    ? '/api/auth/reset-password-request'
+                    : '/api/auth/resend-otp';
 
                 const result = await authApi.post(endpoint, { email });
                 return result.data;
             },
-            onError: (error) => {
-                console.log('Error resending OTP', error.message);
-                console.log(error);
-                showError('Oops!!!', 'An error occured whilst resending OTP', {
-                    autoClose: true
-                });
-            }
-        });
-    }
 
-    const useVerifyPasswordResetOTPMutation = () => {
-        return useMutation({
-            mutationFn: async ({ userId, otpCode }: { userId: any; otpCode: string }) => {
-                const result = await authApi.post('/api/auth/verify-password-reset-otp', {
-                    userId,
-                    otpCode
-                });
-                return result.data;
+            onSuccess: (data) => {
+                console.log("OTP resent successfully:", data);
+                
+                showSuccess(
+                    'Code Sent',
+                    data.message || 'A new verification code has been sent to your email',
+                    {
+                        autoClose: true,
+                        autoCloseDelay: 3000
+                    }
+                );
             },
-            onError: (error) => {
-                console.log('Error verifying password reset OTP', error.message);
-                console.log(error);
-                showError('Oops!!!', 'An error occured whilst signing up', {
-                    autoClose: true
+
+            onError: (error: any) => {
+                console.log('Error resending OTP:', error.response?.data || error.message);
+                
+                const { code, message } = extractErrorDetails(error);
+                
+                const errorDetails = getOtpErrorDetails(code, message, {
+                    onResend: undefined, // Avoid infinite loop
+                    onRetry: undefined
                 });
+
+                showError(
+                    errorDetails.title,
+                    errorDetails.message,
+                    {
+                        autoClose: true,
+                        primaryButtonText: errorDetails.actionText,
+                        onPrimaryPress: errorDetails.action
+                    }
+                );
             }
         });
     };
 
-
-    const useForgotPasswordMutation = () => {
-        return useMutation({
-            mutationFn: async ({ email }: { email: string }) => {
-                console.log('Sending request to reset password with email:', email);
-
-                try {
-                    const result = await authApi.post('/api/auth/reset-password-request', { email });
-                    console.log('Response received:', result.data);
-                    return result.data;
-                } catch (error) {
-                    console.error('Axios error:', error);
-                    showError('Oops!!!', 'An error occured whilst sending reset password request', {
-                        autoClose: true
-                    });
-                    throw error;
-                }
-            },
-            onSuccess: (data) => {
-                console.log('Success data:', data);
-                showSuccess('Success', data.message || 'OTP sent successfully', {
-                    autoClose: true
-                });
-            },
-            onError: (error: any) => {
-                console.error('Mutation error:', error);
-
-                if (error.response) {
-                    console.error('Error status:', error.response.status);
-                    console.error('Error data:', error.response.data);
-
-                    const errorMessage = error.response.data?.error || 'Failed to send reset code';
-                    Alert.alert('Error', errorMessage);
-                } else if (error.request) {
-                    console.error('Network error:', error.request);
-                    Alert.alert('Error', 'Network error. Please check your connection.');
-                } else {
-                    console.error('Unknown error:', error.message);
-                    Alert.alert('Error', 'An unexpected error occurred.');
-                }
-            },
-            retry: false,
-            retryDelay: 0,
-        });
-    }
-
-
-    //verify email
+    // VERIFY EMAIL MUTATION - IMPROVED
     const useVerifyEmailMutation = () => {
         return useMutation({
-            mutationFn: async ({ userId, otpCode }: { userId: any; otpCode: string }) => {
+            mutationFn: async ({ 
+                userId, 
+                otpCode 
+            }: { 
+                userId: any; 
+                otpCode: string 
+            }) => {
                 const result = await authApi.post('/api/auth/verify-email', {
                     userId,
                     otpCode
                 });
                 return result.data;
             },
-            onError: (error) => {
-                console.log('Error verifying email', error.message);
-                console.log(error);
-                showError('Oops!!!', 'An error occured whilst verifying email', {
-                    autoClose: true
+
+            onSuccess: (data) => {
+                console.log("Email verified successfully:", data);
+                
+                showSuccess(
+                    'Email Verified!',
+                    data.message || 'Your email has been verified successfully. You can now log in.',
+                    {
+                        autoClose: true,
+                        autoCloseDelay: 2000
+                    }
+                );
+            },
+
+            onError: (error: any) => {
+                console.log('Error verifying email:', error.response?.data || error.message);
+                
+                const { code, message } = extractErrorDetails(error);
+                
+                const errorDetails = getOtpErrorDetails(code, message, {
+                    onResend: undefined, // Pass from component
+                    onRetry: undefined
                 });
+
+                showError(
+                    errorDetails.title,
+                    errorDetails.message,
+                    {
+                        autoClose: true,
+                        primaryButtonText: errorDetails.actionText,
+                        onPrimaryPress: errorDetails.action
+                    }
+                );
             }
         });
-
-
     };
 
-    //delete user account
+    // FORGOT PASSWORD MUTATION - IMPROVED
+    const useForgotPasswordMutation = () => {
+        return useMutation({
+            mutationFn: async ({ email }: { email: string }) => {
+                console.log('Sending password reset request for:', email);
+
+                const result = await authApi.post('/api/auth/reset-password-request', { email });
+                console.log('Password reset response:', result.data);
+                return result.data;
+            },
+
+            onSuccess: (data) => {
+                console.log('Password reset success:', data);
+                
+                showSuccess(
+                    'Reset Link Sent',
+                    data.message || 'Password reset instructions have been sent to your email',
+                    {
+                        autoClose: true,
+                        autoCloseDelay: 3000
+                    }
+                );
+            },
+
+            onError: (error: any) => {
+                console.error('Password reset error:', error.response?.data || error.message);
+
+                const { code, message } = extractErrorDetails(error);
+                
+                const errorDetails = getPasswordResetErrorDetails(code, message, {
+                    onRetry: undefined, // Pass from component
+                    onSignUp: () => router.push('/(auth)/signup')
+                });
+
+                showError(
+                    errorDetails.title,
+                    errorDetails.message,
+                    {
+                        autoClose: true,
+                        primaryButtonText: errorDetails.actionText,
+                        onPrimaryPress: errorDetails.action
+                    }
+                );
+            },
+
+            retry: false,
+            retryDelay: 0,
+        });
+    };
+
+    // VERIFY PASSWORD RESET OTP - IMPROVED
+    const useVerifyPasswordResetOTPMutation = () => {
+        return useMutation({
+            mutationFn: async ({ 
+                userId, 
+                otpCode 
+            }: { 
+                userId: any; 
+                otpCode: string 
+            }) => {
+                const result = await authApi.post('/api/auth/verify-password-reset-otp', {
+                    userId,
+                    otpCode
+                });
+                return result.data;
+            },
+
+            onSuccess: (data) => {
+                console.log("Password reset OTP verified:", data);
+                
+                showSuccess(
+                    'Code Verified',
+                    data.message || 'Verification successful. You can now reset your password.',
+                    {
+                        autoClose: true,
+                        autoCloseDelay: 2000
+                    }
+                );
+            },
+
+            onError: (error: any) => {
+                console.log('Error verifying password reset OTP:', error.response?.data || error.message);
+                
+                const { code, message } = extractErrorDetails(error);
+                
+                const errorDetails = getOtpErrorDetails(code, message, {
+                    onResend: undefined, // Pass from component
+                    onRetry: undefined
+                });
+
+                showError(
+                    errorDetails.title,
+                    errorDetails.message,
+                    {
+                        autoClose: true,
+                        primaryButtonText: errorDetails.actionText,
+                        onPrimaryPress: errorDetails.action
+                    }
+                );
+            }
+        });
+    };
+
+    // DELETE USER ACCOUNT - IMPROVED
     const useDeleteUserAccountMutation = () => {
         return useMutation({
             mutationFn: async ({ userId }: DeleteUserAccountMutationVariables) => {
-                const response = await api.delete(`/api/auth/delete-account/${userId}`,
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`
-                        }
+                const response = await api.delete(`/api/auth/delete-account/${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
                     }
-                )
-                return response.data
+                });
+                return response.data;
             },
+
             onSuccess: (data) => {
-                router.push('/(auth)/login');
-                dispatch(resetState());
-                showSuccess('Success', 'Account deleted successfully', {
-                    autoClose: true
-                });
-                console.log(data);
+                console.log('Account deleted successfully:', data);
+                
+                showSuccess(
+                    'Account Deleted',
+                    data.message || 'Your account has been permanently deleted',
+                    {
+                        autoClose: true,
+                        autoCloseDelay: 2000
+                    }
+                );
+
+                // Navigate and reset state
+                setTimeout(() => {
+                    dispatch(resetState());
+                    router.replace('/(auth)/login');
+                }, 2000);
             },
-            onError: (error) => {
-                console.log(error);
-                showError('Oops!!!', 'An error occured whilst deleting account', {
-                    autoClose: true
-                });
+
+            onError: (error: any) => {
+                console.log('Error deleting account:', error.response?.data || error.message);
+                
+                const { code, message } = extractErrorDetails(error);
+
+                showError(
+                    'Delete Failed',
+                    message || 'Failed to delete your account. Please try again.',
+                    {
+                        autoClose: true
+                    }
+                );
             }
-        })
-    }
+        });
+    };
 
     return {
         useSignupMutation,
@@ -189,9 +373,5 @@ export const useAuthMutation = () => {
         useForgotPasswordMutation,
         useVerifyEmailMutation,
         useDeleteUserAccountMutation,
-    }
-}
-
-
-
-
+    };
+};

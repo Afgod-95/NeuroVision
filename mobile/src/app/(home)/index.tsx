@@ -4,26 +4,21 @@ import {
   Image,
   SafeAreaView,
   StyleSheet,
-  TouchableOpacity,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
   LayoutAnimation,
-  UIManager,
   Platform,
   FlatList,
-  StatusBar
 } from 'react-native';
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Colors } from '@/src/constants/Colors';
 import ChatInput from '@/src/components/chatUI/ChatInput';
-import CustomSideBar from '@/src/components/chatUI/SideBar';
 import { AppDispatch, RootState } from '@/src/redux/store';
 import { Message, ApiMessage } from '@/src/utils/interfaces/TypescriptInterfaces';
-import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import UserMessageBox, { MessagePreview } from '@/src/components/chatUI/UserMessageBox';
 import AdvancedAIResponse from '@/src/components/chatUI/AIResponse';
-import UploadedFiles, { UploadedFile } from '@/src/components/chatUI/upload-files/UploadFiles';
+import  { UploadedFile } from '@/src/components/chatUI/uploaded-files-input/UploadFiles';
 import { uniqueConvId } from '@/src/constants/generateConversationId';
 import { useRealtimeChat } from '@/src/hooks/chat/realtime/useRealtimeChats';
 import Loading from '@/src/components/Loaders/Loading';
@@ -35,21 +30,20 @@ import BottomSheetModal from '@/src/components/chatUI/FileUploadBottomSheet';
 import Welcome from '@/src/components/chatUI/welcome-screen/Welcome';
 import api from '@/src/services/axiosClient';
 import { useDispatch, useSelector } from 'react-redux';
-import { setOpenBottomSheet, setSidebarVisible, setMessage, setMessages, setLoading, setAttachments } from '@/src/redux/slices/chatSlice';
+import {
+  setOpenBottomSheet,
+  setMessage,
+  setMessages,
+  setLoading,
+  setAttachments,
+  setConversationId
+} from '@/src/redux/slices/chatSlice';
 import { convertToUploadedFile } from '@/src/utils/helpers/convert_to_uploaded_file';
 
 // Extend UploadedAudioFile to include duration
 type UploadedAudioFile = UploadedFile & {
   duration?: number;
 };
-
-// Speech Banner State Interface - Updated for local TTS
-interface SpeechBannerState {
-  visible: boolean;
-  message: string;
-  isGenerating: boolean;
-  isSpeaking: boolean;
-}
 
 // Memoized UserMessageBox with proper prop comparison
 const MemoizedUserMessageBox = React.memo(UserMessageBox, (prevProps, nextProps) => {
@@ -73,11 +67,11 @@ const Index = () => {
   // Get message options from Redux
   const { messageId, isEdited } = useSelector((state: RootState) => state.messageOptions);
   const dispatch = useDispatch<AppDispatch>();
-  const { openBottomSheet, isSidebarVisible } = useSelector((state: RootState) => state.chat);
+  const { openBottomSheet, conversationId: reduxConversationId } = useSelector((state: RootState) => state.chat);
 
   // Use Redux as single source of truth for messages
   const reduxMessages = useSelector((state: RootState) => state.chat.messages);
-  const { loading, isAIResponding, isTyping, isAborted } = useSelector((state: RootState) => state.chat);
+  const { loading, isAIResponding, isTyping } = useSelector((state: RootState) => state.chat);
   const attachments = useSelector((state: RootState) => state.chat.attachments);
 
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
@@ -88,16 +82,23 @@ const Index = () => {
   const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState<boolean>(false);
 
-
   const { conversation_id } = useLocalSearchParams();
   const { accessToken } = useSelector((state: RootState) => state.auth);
   const queryClient = useQueryClient();
 
   // Get the actual conversation ID - memoize to prevent re-renders
   const actualConversationId = useMemo(() =>
-    Array.isArray(conversation_id) ? conversation_id[0] : conversation_id,
+    Array.isArray(conversation_id) ? conversation_id[0] : (conversation_id || ''),
     [conversation_id]
   );
+
+  //CRITICAL: Sync URL conversation ID with Redux store
+  useEffect(() => {
+    if (actualConversationId && actualConversationId !== reduxConversationId) {
+      console.log('🔄 Syncing conversation ID to Redux:', actualConversationId);
+      dispatch(setConversationId(actualConversationId));
+    }
+  }, [actualConversationId, reduxConversationId, dispatch]);
 
   // Initialize the realtime chat hook with stable callbacks
   const stableOnMessagesChange = useCallback((messages: Message[]) => {
@@ -108,7 +109,7 @@ const Index = () => {
     console.log('Loading state from hook:', loading);
   }, []);
 
-  //realtime actions endpoint
+  // Realtime actions endpoint
   const realtimeActions = useRealtimeChat({
     uniqueConvId: uniqueConvId,
     systemPrompt: "You are NeuroVision, a helpful AI assistant specialized in providing comprehensive and accurate assistance across various topics.",
@@ -119,8 +120,6 @@ const Index = () => {
     initialMessages: [],
     enableSampleMessages: true,
   });
-
-
 
   // Stop message handler
   const handleStopMessage = useCallback(() => {
@@ -160,7 +159,7 @@ const Index = () => {
 
     try {
       setIsInitialLoading(true);
-      console.log(`Prefetching messages for conversation: ${conversationId}`);
+      console.log(`📥 Prefetching messages for conversation: ${conversationId}`);
 
       const data = await queryClient.fetchQuery({
         queryKey: ['conversationMessages', conversationId],
@@ -198,17 +197,18 @@ const Index = () => {
   useEffect(() => {
     if (actualConversationId && realtimeActions.userDetails?.id && !prefetchCalledRef.current) {
       const userId = String(realtimeActions.userDetails.id);
-      console.log('Triggering prefetch for:', actualConversationId);
+      console.log('🎯 Triggering prefetch for:', actualConversationId);
       prefetchMessages(actualConversationId, userId);
     }
   }, [actualConversationId, realtimeActions.userDetails?.id, prefetchMessages]);
 
   // Reset prefetch flag when conversation changes
   useEffect(() => {
+    console.log('🔄 Conversation changed, resetting prefetch flag');
     prefetchCalledRef.current = false;
   }, [actualConversationId]);
 
-  // Track sending state - use mutation status directly without effect
+  // Track sending state
   const mutationIsPending = realtimeActions.sendMessageMutation?.isPending || false;
 
   useEffect(() => {
@@ -225,7 +225,6 @@ const Index = () => {
     setShowScrollButton(!isAtBottom && offsetY > 50);
   }, []);
 
-
   // State for bottom sheet
   const state = useRealtimeChatState();
 
@@ -237,138 +236,48 @@ const Index = () => {
 
   // File upload handlers
   const handleFileSelected = useCallback((file: UploadedFile) => {
-    console.log('=== handleFileSelected START ===');
-    console.log('File selected in Index:', {
-      id: file.id,
-      name: file.name,
-      type: file.type,
-      hasUri: !!file.uri,
-      size: file.size
-    });
-    console.log('Raw file received:', file);
-
-    // Convert the file to proper format
+    console.log('📎 File selected:', file.name);
     const uploadedFile = convertToUploadedFile(file);
-    console.log('Converted file:', uploadedFile);
-
-    // ✅ Update Redux state
     const newAttachments = [...(attachments || []), uploadedFile];
-    console.log('Previous attachments:', attachments?.length || 0);
-    console.log('New attachments count:', newAttachments.length);
-    
     dispatch(setAttachments(newAttachments));
-    console.log('=== handleFileSelected END ===');
   }, [attachments, dispatch]);
 
-  //files uploadhandlers
   const handleFilesSelected = useCallback((files: any[]) => {
-    console.log('=== handleFilesSelected START ===');
-    console.log('Raw files received:', files?.length);
+    console.log('📎 Files selected:', files?.length);
+    if (!Array.isArray(files) || files.length === 0) return;
 
-    if (!Array.isArray(files) || files.length === 0) {
-      console.log('No valid files to process');
-      return;
-    }
-
-    // Convert all files to proper format
     const uploadedFiles = files.map(file => convertToUploadedFile(file));
-    console.log('Converted files count:', uploadedFiles.length);
-    console.log('Converted files:', uploadedFiles.map(f => ({
-      id: f.id,
-      name: f.name,
-      type: f.type,
-      hasUri: !!f.uri,
-      hasBase64: !!f.base64,
-      size: f.size
-    })));
-
-    // ✅ Update Redux state
     const newAttachments = [...(attachments || []), ...uploadedFiles];
-    console.log('Previous attachments:', attachments?.length || 0);
-    console.log('New attachments count:', newAttachments.length);
-    
     dispatch(setAttachments(newAttachments));
-    console.log('=== handleFilesSelected END ===');
   }, [attachments, dispatch]);
 
   const handleRemoveFile = useCallback((fileId: string) => {
-    console.log('=== handleRemoveFile START ===');
-    console.log('Removing file with ID:', fileId);
-
-    // ✅ Filter from Redux state
+    console.log('🗑️ Removing file:', fileId);
     const updatedAttachments = (attachments || []).filter(
       (file: any) => file.id !== fileId
     );
-
     dispatch(setAttachments(updatedAttachments));
-    console.log('Remaining files:', updatedAttachments.length);
-    console.log('=== handleRemoveFile END ===');
   }, [attachments, dispatch]);
 
-
-
-  // Debug effect to monitor attachments
-  useEffect(() => {
-    console.log('📎 Attachments changed:', {
-      count: attachments?.length || 0,
-      files: attachments?.map((f: any) => ({
-        id: f?.id,
-        name: f?.name,
-        type: f?.type,
-        hasUri: !!f?.uri,
-        hasBase64: !!f?.base64,
-        size: f?.size,
-      }))
-    });
-  }, [attachments]);
-
-  //handle send messages with text, files etc
+  // Handle send messages with text, files etc
   const onSendMessage = useCallback((message: string) => {
-    console.log('🚀 onSendMessage called:', {
-      message: message.substring(0, 50),
+    console.log('🚀 Sending message:', {
+      textLength: message.length,
       attachmentsCount: attachments?.length || 0,
       conversationId: actualConversationId
     });
 
-    // Log attachments for debugging
-    if (attachments && attachments.length > 0) {
-      console.log('📎 Sending with attachments:', attachments.map((f: any) => ({
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        hasUri: !!f.uri,
-        hasBase64: !!f.base64,
-      })));
-    }
-
-    // Send message with text and uploaded files
     realtimeActions.handleSendMessage(
       message,
-      undefined, // audioFile
-      attachments // ✅ Use Redux attachments
+      undefined,
+      attachments
     );
 
-    // ✅ CRITICAL: Clear attachments after sending
     dispatch(setAttachments([]));
     console.log('✅ Attachments cleared after sending');
   }, [realtimeActions, attachments, actualConversationId, dispatch]);
 
-
-  useEffect(() => {
-    console.log('Current attachments state:', {
-      count: state.attachments?.length || 0,
-      attachments: state.attachments?.map(f => ({
-        id: f?.id,
-        name: f?.name,
-        type: f?.type,
-        hasUri: !!f?.uri,
-        hasBase64: !!f?.base64,
-      }))
-    });
-  }, [state.attachments]);
-
-
-  // Enhanced keyboard handling for Android
+  // Enhanced keyboard handling
   useEffect(() => {
     let keyboardDidShowListener: any;
     let keyboardDidHideListener: any;
@@ -386,7 +295,6 @@ const Index = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       });
     } else {
-      // iOS listeners
       keyboardDidShowListener = Keyboard.addListener('keyboardWillShow', (event) => {
         setKeyboardHeight(event.endCoordinates.height);
         setIsKeyboardVisible(true);
@@ -419,16 +327,12 @@ const Index = () => {
       );
     } else {
       const isLastMessage = index === reduxMessages?.length - 1;
-
-      // Show loading only if:
-      // 1. It's explicitly marked as loading (isLoading: true)
-      // 2. OR it's the last message, AI is responding, and text is empty
       const shouldShowLoading = item.isLoading === true ||
         (isLastMessage && isAIResponding && item.text.trim() === '');
 
       return (
         <MemoizedAdvancedAIResponse
-          isTyping={item.isTyping || false}  // Pass the message's typing state
+          isTyping={item.isTyping || false}
           message={item.text}
           loading={shouldShowLoading}
           onRegenerate={() => realtimeActions.handleRegenerate(item?.id)}
@@ -442,7 +346,7 @@ const Index = () => {
     return `${item?.id}-${item?.sender}-${item.user ? 'user' : 'ai'}`;
   }, []);
 
-  // Memoized content components - stable references
+  // Memoized content components
   const welcomeContent = useMemo(() => (
     <Welcome
       username={realtimeActions?.username}
@@ -452,19 +356,16 @@ const Index = () => {
     />
   ), [dispatch, realtimeActions]);
 
-
-
-
   const loadingContent = useMemo(() => (
     <Loading />
   ), []);
 
-  // Determine what to show based on loading states - stable references
+  // Determine what to show based on loading states
   const shouldShowLoading = loading || isInitialLoading;
   const shouldShowWelcome = !shouldShowLoading && reduxMessages?.length === 0;
   const shouldShowMessages = !shouldShowLoading && reduxMessages?.length > 0;
 
-  // Main content - simplified to prevent re-render loops
+  // Main content
   const mainContent = useMemo(() => {
     if (shouldShowLoading) return loadingContent;
     if (shouldShowWelcome) return welcomeContent;
@@ -528,15 +429,12 @@ const Index = () => {
             style={styles.backgroundImage}
           />
 
-          {/* Use conditional rendering for Android vs iOS keyboard handling */}
           {Platform.OS === 'android' ? (
             <View style={[styles.keyboardContainer, { paddingBottom: isKeyboardVisible ? keyboardHeight : 0 }]}>
               <SafeAreaView style={styles.safeAreaContainer}>
-                {/* Content Area */}
                 {mainContent}
               </SafeAreaView>
 
-              {/* USER MESSAGE PREVIEW */}
               <MessagePreview
                 message={messageId ?? ''}
                 messageId={messageId ?? ''}
@@ -544,7 +442,6 @@ const Index = () => {
                 editMessage={realtimeActions.handleEditMessageCallback}
               />
 
-              {/* Chat input - ✅ Use Redux attachments */}
               <ChatInput
                 onRemoveFile={handleRemoveFile}
                 uploadedFiles={attachments}
@@ -561,11 +458,9 @@ const Index = () => {
               keyboardVerticalOffset={0}
             >
               <SafeAreaView style={styles.safeAreaContainer}>
-                {/* Content Area */}
                 {mainContent}
               </SafeAreaView>
 
-              {/* USER MESSAGE PREVIEW */}
               <MessagePreview
                 message={messageId ?? ''}
                 messageId={messageId ?? ''}
@@ -573,10 +468,9 @@ const Index = () => {
                 editMessage={realtimeActions.handleEditMessageCallback}
               />
 
-              {/* Chat input - ✅ Use Redux attachments */}
               <ChatInput
                 onRemoveFile={handleRemoveFile}
-                uploadedFiles={attachments} // ✅ From Redux
+                uploadedFiles={attachments}
                 openBottomSheet={HandleOpenBottomSheet}
                 onSendMessage={onSendMessage}
                 onStopMessage={handleStopMessage}
@@ -611,70 +505,16 @@ const styles = StyleSheet.create({
   },
   keyboardContainer: {
     flex: 1,
+    flexGrow: 1,
   },
   safeAreaContainer: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    minHeight: 60,
-    zIndex: 999,
-  },
-  headerWithBanner: {
-    marginTop: 8,
-  },
-  contentArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  welcomeContainer: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  menuIcon: {
-    width: 24,
-    height: 24,
-  },
-  headerTitle: {
-    fontFamily: 'Manrope-ExtraBold',
-    fontSize: 24,
-    color: Colors.dark.txtPrimary,
-  },
-  welcomeText: {
-    fontSize: 20,
-    color: Colors.dark.button,
-    textAlign: 'center',
-    fontFamily: 'Manrope-ExtraBold',
-  },
-  boldText: {
-    color: Colors.dark.txtPrimary,
-  },
-  subText: {
-    fontFamily: 'Manrope-Medium',
-    color: Colors.dark.txtSecondary,
-    marginTop: 10,
-    fontSize: 16,
   },
   flatListContent: {
     paddingHorizontal: 16,
   },
   flatListContentWithBanner: {
     paddingTop: 8,
-  },
-  aiRespondingIndicator: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  aiRespondingText: {
-    fontFamily: 'Manrope-Medium',
-    fontSize: 14,
-    color: Colors.dark.txtSecondary,
-    fontStyle: 'italic',
   },
 });
 

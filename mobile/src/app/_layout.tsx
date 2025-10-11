@@ -5,9 +5,9 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Provider, useSelector } from "react-redux";
+import { Provider, useSelector, useDispatch } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
-import { RootState, store, persistor } from "@/src/redux/store";
+import { RootState, store, persistor, AppDispatch } from "@/src/redux/store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Buffer } from "buffer";
 import { Colors } from "../constants/Colors";
@@ -19,6 +19,8 @@ import {
   configureReanimatedLogger,
   ReanimatedLogLevel,
 } from 'react-native-reanimated';
+import { resetState } from "../redux/slices/authSlice";
+
 
 
 axios.defaults.baseURL = Constants.expoConfig?.extra?.baseBackendUrl;
@@ -53,6 +55,7 @@ export default function RootLayout() {
     "Manrope-ExtraBold": require("../assets/fonts/Manrope-ExtraBold.ttf"),
     "Manrope-Medium": require("../assets/fonts/Manrope-Medium.ttf"),
   });
+
 
   // Log font loading errors
   useEffect(() => {

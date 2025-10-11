@@ -4,10 +4,10 @@ import { Message, MessageContent, UploadedAudioFile, UploadedFile } from "@/src/
 import api from "@/src/services/axiosClient";
 import { AppDispatch, RootState } from "@/src/redux/store";
 import {
-  addMessage, updateMessage, setIsAIResponding, setConversationId,
+  addMessage, updateMessage, setIsAIResponding, setConversationId, removeMessage
 } from "@/src/redux/slices/chatSlice";
 import { useDispatch, useSelector } from "react-redux";
-import axios from "axios";
+import { base64ToBlob } from "@/src/utils/helpers/base64ToBlob";
 
 type sendMessageMutationType = {
   systemPrompt: string,
@@ -88,8 +88,8 @@ export const useMessageMutation = ({
               name: f.name,
               type: f.type,
               size: f.size,
-              uri: f.uri,        // Store URI for regeneration
-              base64: f.base64,  // Store base64 for regeneration
+              uri: f.uri,
+              base64: f.base64,
             })),
           };
           
@@ -111,7 +111,6 @@ export const useMessageMutation = ({
           fileNames: files?.map(f => f.name)
         });
 
-        // ===== ALWAYS USE THE SAME ENDPOINT =====
         const hasFiles = files && files.length > 0;
         const endpoint = "/api/conversations/send-message";
         
@@ -139,28 +138,25 @@ export const useMessageMutation = ({
           }));
           formData.append('conversationHistory', JSON.stringify(conversationHistory));
 
-          // Add files - CRITICAL FIX HERE
+          // Add files
           for (const file of files) {
             if (file.uri) {
-              // For React Native files with URI
               const fileData: any = {
                 uri: file.uri,
                 type: file.type || 'application/octet-stream',
                 name: file.name || `file_${Date.now()}`,
               };
-              formData.append('files', fileData); // Field name matches backend
+              formData.append('files', fileData);
             } else if (file.base64) {
-              // For base64 files, convert to blob
               const blob = base64ToBlob(file.base64, file.type);
-              formData.append('files', blob, file.name); // Field name matches backend
+              formData.append('files', blob, file.name);
             }
           }
 
-          console.log("Sending FormData request with files to:", endpoint);
+          console.log("Sending FormData request with files");
 
-          // Use axios directly for FormData with full URL
           response = await api.post(
-            `${endpoint}`,
+            endpoint,
             formData,
             {
               signal: controller.signal,
@@ -184,7 +180,7 @@ export const useMessageMutation = ({
             useDatabase: true,
           };
 
-          console.log("📤 Sending JSON request (no files) to:", endpoint);
+          console.log("📤 Sending JSON request (no files)");
 
           response = await api.post(endpoint, payload, {
             signal: controller.signal,
@@ -208,6 +204,7 @@ export const useMessageMutation = ({
           aiResponse: response.data,
           originalAudioFile: audioFile,
           originalFiles: files,
+          originalMessageText: messageText,
           conversationId: response.data.conversationId,
         };
       } catch (error) {
@@ -242,7 +239,7 @@ export const useMessageMutation = ({
         };
         finalMessage = messageText.trim() || "Voice message";
       } 
-      // Handle regular files
+      // Handle regular files - STORE COMPLETE FILE DATA
       else if (files && files.length > 0) {
         messageContent = {
           type: messageText.trim() ? "mixed" : "files",
@@ -252,6 +249,8 @@ export const useMessageMutation = ({
             name: f.name,
             type: f.type,
             size: f.size,
+            uri: f.uri,        // KEEP URI
+            base64: f.base64,  // KEEP BASE64
           })),
         };
         
@@ -288,7 +287,9 @@ export const useMessageMutation = ({
       pendingUserMessageRef.current = tempUserMessageId;
       currentLoadingIdRef.current = loadingMessageId;
 
-      console.log("📝 Adding messages to Redux", {
+      console.log("📝 Adding messages:", {
+        userMsgId: tempUserMessageId,
+        loadingMsgId: loadingMessageId,
         hasFiles: !!(files && files.length > 0),
         filesCount: files?.length || 0
       });
@@ -298,11 +299,16 @@ export const useMessageMutation = ({
       dispatch(setIsAIResponding(true));
 
       setTimeout(scrollToBottom, 50);
+
+      return { tempUserMessageId, loadingMessageId };
     },
 
-    onSuccess: async (data) => {
+    onSuccess: async (data, variables, context) => {
       console.log("✅ Message sent successfully");
 
+      const loadingId = context?.loadingMessageId || currentLoadingIdRef.current;
+
+      // Reset processing flag
       isProcessingResponseRef.current = false;
       abortControllerRef.current = null;
 
@@ -319,27 +325,49 @@ export const useMessageMutation = ({
           throw new Error("AI response is empty or invalid");
         }
 
-        console.log(`📥 AI response (${aiResponseText.length} chars)`);
+        console.log(`📥 AI response received (${aiResponseText.length} chars)`);
 
-        if (currentLoadingIdRef.current) {
-          dispatch(updateMessage({
-            id: currentLoadingIdRef.current,
-            updates: { isLoading: false, isTyping: true, text: "" }
-          }));
-
+        // CRITICAL: Remove loading message first, then add typing message
+        if (loadingId) {
+          console.log("🗑️ Removing loading message:", loadingId);
+          dispatch(removeMessage(loadingId));
+          
+          // Small delay to ensure removal completes
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+          // Create new typing message
+          const typingMessageId = `typing-${Date.now()}`;
+          const typingMessage: Message = {
+            id: typingMessageId,
+            text: "",
+            user: false,
+            created_at: new Date().toISOString(),
+            timestamp: new Date().toISOString(),
+            sender: "assistant",
+            isTyping: true,
+          };
+          
+          console.log("✍️ Adding typing message:", typingMessageId);
+          dispatch(addMessage(typingMessage));
+          
+          // Update current loading ID to new typing ID
+          currentLoadingIdRef.current = typingMessageId;
+          
+          // Start typing animation
           setTimeout(() => {
-            if (currentLoadingIdRef.current) {
-              startTypingAnimation(aiResponseText, currentLoadingIdRef.current);
-            }
+            startTypingAnimation(aiResponseText, typingMessageId);
           }, 100);
         }
+
+        // Clear refs
+        pendingUserMessageRef.current = null;
 
       } catch (err) {
         console.error("⚠️ Failed to process AI response:", err);
 
-        if (currentLoadingIdRef.current) {
+        if (loadingId) {
           dispatch(updateMessage({
-            id: currentLoadingIdRef.current,
+            id: loadingId,
             updates: {
               isLoading: false,
               isTyping: false,
@@ -349,19 +377,32 @@ export const useMessageMutation = ({
         }
        
         clearAIResponding();
+        pendingUserMessageRef.current = null;
+        currentLoadingIdRef.current = null;
+        
         setTimeout(() => {
           scrollToBottom()
         }, 100);
       }
     },
 
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
+      console.log("❌ Message mutation error");
+      
       isProcessingResponseRef.current = false;
       abortControllerRef.current = null;
+
+      const loadingId = context?.loadingMessageId || currentLoadingIdRef.current;
 
       // Handle canceled requests
       if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
         console.log("Request was canceled");
+        
+        // Remove loading message
+        if (loadingId) {
+          dispatch(removeMessage(loadingId));
+        }
+        
         clearAIResponding();
         pendingUserMessageRef.current = null;
         currentLoadingIdRef.current = null;
@@ -397,9 +438,9 @@ export const useMessageMutation = ({
 
       console.log("💬 Error:", errorText);
 
-      if (currentLoadingIdRef.current) {
+      if (loadingId) {
         dispatch(updateMessage({
-          id: currentLoadingIdRef.current,
+          id: loadingId,
           updates: { isLoading: false, isTyping: false, text: errorText }
         }));
       } else {
@@ -422,23 +463,3 @@ export const useMessageMutation = ({
   return { sendMessageMutation };
 };
 
-// Helper function to convert base64 to blob
-const base64ToBlob = (base64: string, mimeType: string = 'application/octet-stream'): Blob => {
-  const base64Data = base64.replace(/^data:[^;]+;base64,/, '');
-  const byteCharacters = atob(base64Data);
-  const byteArrays = [];
-
-  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-    const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
-    
-    for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
-    }
-    
-    const byteArray = new Uint8Array(byteNumbers);
-    byteArrays.push(byteArray);
-  }
-
-  return new Blob(byteArrays, { type: mimeType });
-};

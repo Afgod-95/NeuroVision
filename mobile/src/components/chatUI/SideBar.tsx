@@ -20,22 +20,20 @@ import { getUsernameInitials } from '@/src/constants/getUsernameInitials';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRealtimeChatState } from '@/src/hooks/chat/states/useRealtimeChatStates';
 import api from '@/src/services/axiosClient';
-import { Edit, Images, Library } from 'lucide-react-native';
+import { MotiView, MotiText } from 'moti';
 import { setSearch } from '@/src/redux/slices/searchSlice';
 import { setConversationId, setMessages, setLoading } from '@/src/redux/slices/chatSlice';
 import useAuthHeaders from '@/src/constants/RequestHeader';
 import { ApiMessage, Message, ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces';
 import { useRealtimeChat } from '@/src/hooks/chat/realtime/useRealtimeChats';
-
-
-
+import { Entypo } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
 const SWIPE_THRESHOLD = SIDEBAR_WIDTH / 3;
 
 type CustomSideBarProps = {
-    conversationId: string,
+    conversationId: string;
     isVisible: boolean;
     onClose: () => void;
     onOpen: () => void;
@@ -51,36 +49,35 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
     startNewConversation,
     onLibraryPress
 }) => {
-
-    //states
+    // Animation refs
     const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
     const sidebarWidth = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
+    
+    // State
     const [shouldRender, setShouldRender] = useState(isVisible);
     const [isDragging, setIsDragging] = useState(false);
     const [searchbarVisible, setSearchbarVisible] = useState(false);
     const prefetchCalledRef = useRef<boolean>(false);
     const [initialLoading, setIsInitialLoading] = useState(false);
+    const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
+    
+    // Animation lock to prevent conflicts
+    const animationInProgress = useRef(false);
 
     const queryClient = useQueryClient();
-
     const { userDetails } = useRealtimeChatState();
     const { accessToken } = useSelector((state: RootState) => state.auth);
-
-    const [summaryTitle, setSummaryTitle] = useState<ConversationSummary[]>([]);
-
-    //search function
     const { search: searchQuery } = useSelector((state: RootState) => state.search);
     const dispatch = useDispatch<AppDispatch>();
     const { authHeader } = useAuthHeaders();
     const { scrollToBottom } = useRealtimeChat({});
+    const { conversation_id } = useLocalSearchParams();
 
-        const { conversation_id } = useLocalSearchParams();
-        
-          // Get the actual conversation ID - memoize to prevent re-renders
-          const actualConversationId = useMemo(() =>
-        Array.isArray(conversation_id) ? conversation_id[0] : conversation_id,
-        [conversation_id]
-      );
+    // Get the actual conversation ID from URL params or props
+    const actualConversationId = useMemo(() => {
+        const urlConvId = Array.isArray(conversation_id) ? conversation_id[0] : conversation_id;
+        return urlConvId || conversationId;
+    }, [conversation_id, conversationId]);
 
     const {
         data,
@@ -91,7 +88,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         queryKey: ['conversationSummaries', userDetails?.id],
         queryFn: async () => {
             const res = await api.get('/api/conversations/user/summary/message', authHeader);
-            setConversationId(res.data.conversation_id || '');
             return res.data;
         },
         enabled: !!userDetails?.id && !!accessToken,
@@ -102,9 +98,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         staleTime: 5000,
     });
 
-
-
-    // Function to transform API messages to internal Message format
     const transformApiMessages = useCallback((apiMessages: ApiMessage[]): Message[] => {
         return apiMessages.map((apiMsg) => ({
             id: apiMsg.id,
@@ -123,14 +116,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         }));
     }, []);
 
-
-   
-
-
-    // Prefetch messages for specific conversation id
     const prefetchMessages = useCallback(async (conversationId: string, userId: string) => {
-        if (!conversationId || !userId || prefetchCalledRef.current) {
-            console.log('Skipping prefetch - already called or missing params');
+        if (!conversationId || prefetchCalledRef.current) {
             return;
         }
 
@@ -138,8 +125,6 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
 
         try {
             setIsInitialLoading(true);
-            console.log(`Prefetching messages for conversation: ${conversationId}`);
-
             const data = await queryClient.fetchQuery({
                 queryKey: ['conversationMessages', conversationId],
                 queryFn: async () => {
@@ -155,12 +140,10 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
             });
 
             if (data && data.messages) {
-                console.log(`Fetched ${data.messages?.length} messages`);
                 const transformedMessages = transformApiMessages(data.messages);
                 dispatch(setMessages(transformedMessages));
                 dispatch(setLoading(false));
 
-                // Small delay to ensure state is updated before scrolling
                 setTimeout(() => {
                     scrollToBottom();
                 }, 100);
@@ -172,28 +155,24 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         }
     }, [queryClient, dispatch, transformApiMessages, accessToken, scrollToBottom]);
 
-
     const deleteSummary = async (conversationId: string) => {
         try {
-            console.log(`active conversation id: ${conversationId}`)
-            //const response = await api.delete(`/api/conversations/${activeConversationId}`, authHeader);
-            //console.log(response.data);
+            console.log(`Deleting conversation: ${conversationId}`);
+            // Add your delete API call here
+            // await api.delete(`/api/conversations/${conversationId}`, authHeader);
+            // queryClient.invalidateQueries(['conversationSummaries', userDetails?.id]);
+        } catch (error) {
+            console.log('Error deleting conversation:', error);
         }
-        catch (error) {
-            console.log(error)
-        }
-    }
+    };
 
-    
-     useEffect(() => {
-        //reset flag when conversation changes 
+    useEffect(() => {
         prefetchCalledRef.current = false;
-        if (conversationId) {
-            prefetchMessages(conversationId, '');
+        if (actualConversationId) {
+            prefetchMessages(actualConversationId, '');
         }
-    },[conversationId, prefetchMessages]);
+    }, [actualConversationId, prefetchMessages]);
 
-    //Effect to update local state when data changes
     useEffect(() => {
         if (data?.conversations) {
             const formatted = data?.conversations.map((conversation: ConversationSummary) => ({
@@ -205,115 +184,161 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         }
     }, [data]);
 
-    //getting username from redux state
-    const username = userDetails?.username
+    const username = userDetails?.username;
     const userInitials = getUsernameInitials({ fullname: userDetails?.username ?? '' });
 
-    //onChange function for searchbar
     const onSearch = (query: string) => {
         dispatch(setSearch(query));
-    }
+    };
 
-    //clear search function
     const clearSearch = () => {
         dispatch(setSearch(''));
-    }
+    };
 
-    //open settings screen
     const openSettings = () => {
         router.push('/(home)/settings');
-    }
+    };
 
-    //handle library press
     const handleLibraryPress = () => {
         console.log('Library pressed');
         onLibraryPress?.();
-    }
+    };
 
+    // Smooth sidebar width animation for search
     useEffect(() => {
+        if (animationInProgress.current) return;
+
         Animated.timing(sidebarWidth, {
             toValue: searchbarVisible ? width : SIDEBAR_WIDTH,
             duration: 300,
             useNativeDriver: false,
         }).start();
-    }, [searchbarVisible, sidebarWidth]);
+    }, [searchbarVisible]);
 
+    // PanResponder with improved logic
     const panResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => !searchbarVisible,
+            onStartShouldSetPanResponder: () => !searchbarVisible && !animationInProgress.current,
             onMoveShouldSetPanResponder: (_, gestureState) => {
-                if (searchbarVisible) return false;
+                if (searchbarVisible || animationInProgress.current) return false;
                 return Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 3);
             },
             onPanResponderGrant: () => {
                 setIsDragging(true);
             },
             onPanResponderMove: (_, gestureState) => {
-                if (isVisible && !searchbarVisible) {
+                if (animationInProgress.current || searchbarVisible) return;
+
+                if (isVisible) {
                     if (gestureState.dx < 0) {
-                        translateX.setValue(gestureState.dx);
+                        translateX.setValue(Math.max(gestureState.dx, -SIDEBAR_WIDTH));
                     }
-                } else if (!isVisible && !searchbarVisible) {
-                    translateX.setValue(-SIDEBAR_WIDTH + gestureState.dx);
+                } else {
+                    const newValue = -SIDEBAR_WIDTH + gestureState.dx;
+                    translateX.setValue(Math.min(newValue, 0));
                 }
             },
             onPanResponderRelease: (_, gestureState) => {
                 setIsDragging(false);
-                if (searchbarVisible) return;
+                if (searchbarVisible || animationInProgress.current) return;
+
+                animationInProgress.current = true;
 
                 if (isVisible) {
-                    if (gestureState.dx < -SWIPE_THRESHOLD) {
-                        onClose();
+                    if (gestureState.dx < -SWIPE_THRESHOLD || gestureState.vx < -0.5) {
+                        Animated.spring(translateX, {
+                            toValue: -SIDEBAR_WIDTH,
+                            useNativeDriver: false,
+                            tension: 65,
+                            friction: 11,
+                        }).start(() => {
+                            animationInProgress.current = false;
+                            onClose();
+                        });
                     } else {
                         Animated.spring(translateX, {
                             toValue: 0,
                             useNativeDriver: false,
-                        }).start();
+                            tension: 65,
+                            friction: 11,
+                        }).start(() => {
+                            animationInProgress.current = false;
+                        });
                     }
                 } else {
-                    if (gestureState.dx > SWIPE_THRESHOLD) {
-                        onOpen();
+                    if (gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > 0.5) {
+                        Animated.spring(translateX, {
+                            toValue: 0,
+                            useNativeDriver: false,
+                            tension: 65,
+                            friction: 11,
+                        }).start(() => {
+                            animationInProgress.current = false;
+                            onOpen();
+                        });
                     } else {
                         Animated.spring(translateX, {
                             toValue: -SIDEBAR_WIDTH,
                             useNativeDriver: false,
-                        }).start();
+                            tension: 65,
+                            friction: 11,
+                        }).start(() => {
+                            animationInProgress.current = false;
+                        });
                     }
                 }
             },
         })
     ).current;
 
+    // Main visibility animation
     useEffect(() => {
+        if (animationInProgress.current) return;
+
         if (isVisible) {
             setShouldRender(true);
-            Animated.timing(translateX, {
-                toValue: 0,
-                duration: isDragging ? 0 : 300,
-                useNativeDriver: false,
-            }).start();
+            animationInProgress.current = true;
+            
+            requestAnimationFrame(() => {
+                Animated.spring(translateX, {
+                    toValue: 0,
+                    useNativeDriver: false,
+                    tension: 65,
+                    friction: 11,
+                    velocity: isDragging ? 0 : undefined,
+                }).start(() => {
+                    animationInProgress.current = false;
+                });
+            });
         } else {
-            Animated.timing(translateX, {
+            animationInProgress.current = true;
+            
+            Animated.spring(translateX, {
                 toValue: -SIDEBAR_WIDTH,
-                duration: isDragging ? 0 : 300,
                 useNativeDriver: false,
+                tension: 65,
+                friction: 11,
+                velocity: isDragging ? 0 : undefined,
             }).start(() => {
                 setShouldRender(false);
+                animationInProgress.current = false;
             });
         }
-    }, [isVisible, translateX, isDragging]);
+    }, [isVisible]);
 
     const backdropOpacity = translateX.interpolate({
         inputRange: [-SIDEBAR_WIDTH, 0],
-        outputRange: [0, 1],
+        outputRange: [0, 0.5],
         extrapolate: 'clamp',
     });
 
-
     return shouldRender ? (
-        <View style={[StyleSheet.absoluteFillObject, styles.overlay]}>
+        <View style={[StyleSheet.absoluteFillObject, styles.overlay]} pointerEvents="box-none">
             <TouchableWithoutFeedback onPress={onClose}>
-                <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} />
+                <Animated.View 
+                    style={[styles.backdrop, { opacity: backdropOpacity }]} 
+                    pointerEvents={isVisible ? 'auto' : 'none'}
+                />
             </TouchableWithoutFeedback>
 
             <Animated.View
@@ -327,16 +352,14 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                 {...panResponder.panHandlers}
             >
                 <View style={styles.contentContainer}>
-                    {/* Search Bar */}
                     <SearchBar
                         value={searchQuery}
                         onChangeText={onSearch}
-                        onSearch={() => { /* implement search logic here if needed */ }}
+                        onSearch={() => {}}
                         onClear={clearSearch}
                         onCancel={() => setSearchbarVisible(false)}
                     />
 
-                    {/* New chat Section */}
                     <TouchableOpacity
                         style={[styles.libraryContainer, { marginBottom: 2 }]}
                         onPress={() => {
@@ -355,14 +378,13 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                         </View>
                     </TouchableOpacity>
 
-                    {/* Library Section */}
                     <TouchableOpacity
                         style={[styles.libraryContainer, { marginBottom: 2, marginTop: 0 }]}
                         onPress={handleLibraryPress}
                         activeOpacity={0.7}
                     >
                         <View style={styles.libraryContent}>
-                            <Images strokeWidth={2} color={Colors.dark.txtSecondary} />
+                            <Entypo name='images' size={22} color={Colors.dark.txtSecondary} />
                             <Text style={styles.libraryText}>Library</Text>
                         </View>
                     </TouchableOpacity>
@@ -372,25 +394,53 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                     <Text style={styles.sectionHeaderText}>Recents</Text>
                 </View>
 
-                {/* recent messages - Only show loading for initial load */}
                 <RecentMessages
                     isFetching={isFetching}
                     isLoading={isLoading}
                     messages={summaryTitle}
                     search={searchQuery}
-                    activeConversationId={conversationId}
-                    onArchiveChat={() => console.log}
+                    activeConversationId={actualConversationId}
+                    onArchiveChat={() => console.log('Archive')}
                     onDeleteChat={(id) => deleteSummary(id)}
-                    onRenameChat={() => console.log}
+                    onRenameChat={() => console.log('Rename')}
                 />
 
                 <View style={styles.bottom}>
                     <TouchableOpacity style={styles.bottomContent} onPress={openSettings}>
                         <TouchableOpacity style={styles.userCont} onPress={openSettings}>
-                            <View style={styles.userAccountButton}>
-                                <Text style={styles.userText}>{userInitials}</Text>
-                            </View>
-                            <Text style={styles.userText}>{username}</Text>
+                            {userInitials ? (
+                                <View style={styles.userAccountButton}>
+                                    <Text style={styles.userText}>{userInitials}</Text>
+                                </View>
+                            ) : (
+                                <MotiView
+                                    style={[styles.userAccountButton, { backgroundColor: '#555' }]}
+                                    from={{ opacity: 0.3 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{
+                                        loop: true,
+                                        type: 'timing',
+                                        duration: 1000,
+                                        repeatReverse: true,
+                                    }}
+                                />
+                            )}
+
+                            {username ? (
+                                <Text style={styles.userText}>{username}</Text>
+                            ) : (
+                                <MotiView
+                                    style={{ width: 80, height: 20, borderRadius: 4, backgroundColor: '#555' }}
+                                    from={{ opacity: 0.3 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{
+                                        loop: true,
+                                        type: 'timing',
+                                        duration: 1000,
+                                        repeatReverse: true,
+                                    }}
+                                />
+                            )}
                         </TouchableOpacity>
                     </TouchableOpacity>
                 </View>
@@ -406,7 +456,7 @@ const styles = StyleSheet.create({
     },
     backdrop: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,1)',
     },
     sidebar: {
         position: 'absolute',

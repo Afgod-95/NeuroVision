@@ -1,16 +1,13 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
     TouchableOpacity,
-    Modal,
     Pressable,
     StyleSheet,
     Dimensions,
-    TouchableWithoutFeedback,
     FlatList,
     ListRenderItem,
-    ActivityIndicator,
     Animated,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
@@ -19,7 +16,8 @@ import { ConversationSummary } from '@/src/utils/interfaces/TypescriptInterfaces
 import { router } from 'expo-router';
 import { useDebounce } from 'use-debounce';
 import { MotiView } from 'moti';
-
+import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
+import { BottomSheetDefaultBackdropProps } from '@gorhom/bottom-sheet/lib/typescript/components/bottomSheetBackdrop/types';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,8 +38,8 @@ type GroupedMessage = {
 type RecentMessagesProps = {
     messages: ConversationSummary[];
     search?: string;
-    isLoading: boolean,
-    isFetching: boolean,
+    isLoading: boolean;
+    isFetching: boolean;
     activeConversationId?: string;
     onShareChat?: (messageId: string) => void;
     onRenameChat?: (messageId: string) => void;
@@ -157,12 +155,13 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
     onDeleteChat,
     onMessagePress,
 }) => {
-    const [modalVisible, setModalVisible] = useState(false);
     const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
     const [pressedMessage, setPressedMessage] = useState<string | null>(null);
+    const bottomSheetRef = useRef<BottomSheet>(null);
+    const snapPoints = useMemo(() => ['40%'], []);
 
-    const [debouncedSearch] = useDebounce(search, 500)
-    
+    const [debouncedSearch] = useDebounce(search, 500);
+
     // Modal actions
     const modalActions: ModalAction[] = [
         {
@@ -171,7 +170,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             icon: 'share-2',
             onPress: (id) => {
                 onShareChat?.(id);
-                setModalVisible(false);
+                handleCloseBottomSheet();
             },
         },
         {
@@ -180,7 +179,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             icon: 'edit-2',
             onPress: (id) => {
                 onRenameChat?.(id);
-                setModalVisible(false);
+                handleCloseBottomSheet();
             },
         },
         {
@@ -189,7 +188,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             icon: 'archive',
             onPress: (id) => {
                 onArchiveChat?.(id);
-                setModalVisible(false);
+                handleCloseBottomSheet();
             },
         },
         {
@@ -198,44 +197,14 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             icon: 'trash-2',
             onPress: (id) => {
                 onDeleteChat?.(id);
-                setModalVisible(false);
+                handleCloseBottomSheet();
             },
         },
     ];
 
-    const getDateLabel = (timestamp: Date): string => {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-        const messageDate = new Date(timestamp.getFullYear(), timestamp.getMonth(), timestamp.getDate());
-
-        if (messageDate.getTime() === today.getTime()) {
-            return 'Today';
-        } else if (messageDate.getTime() === yesterday.getTime()) {
-            return 'Yesterday';
-        } else {
-            const diffInDays = Math.floor((today.getTime() - messageDate.getTime()) / (1000 * 60 * 60 * 24));
-            const diffInWeeks = Math.floor(diffInDays / 7);
-            const diffInMonths = Math.floor(diffInDays / 30);
-
-            if (diffInDays < 7) {
-                return `${diffInDays} days ago`;
-            } else if (diffInWeeks === 1) {
-                return '1 week ago';
-            } else if (diffInWeeks < 4) {
-                return `${diffInWeeks} weeks ago`;
-            } else if (diffInMonths === 1) {
-                return '1 month ago';
-            } else {
-                return `${diffInMonths} months ago`;
-            }
-        }
-    };
-
     const groupedMessages = useMemo(() => {
         if (messages.length === 0) return [];
 
-        // Filter messages based on search if provided
         const filteredMessages = (debouncedSearch
             ? messages.filter(message =>
                 message.title.toLowerCase().includes(debouncedSearch.toLowerCase())
@@ -246,14 +215,12 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             title: message.title.charAt(0).toUpperCase() + message.title.slice(1)
         }));
 
-        // Sort messages by timestamp (newest first)
         const sortedMessages = [...filteredMessages].sort(
             (a, b) => new Date(b.created_at).getTime() - new Date(a.updated_at).getTime()
         );
 
         const grouped: GroupedMessage[] = [];
 
-        // Add all messages without date grouping
         sortedMessages.forEach((message) => {
             grouped.push({
                 type: 'message',
@@ -272,9 +239,8 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         router.push({
             pathname: `/(home)`,
             params: { conversation_id: messageId },
-        })
+        });
 
-        // Reset the pressed state after a short delay
         setTimeout(() => {
             setPressedMessage(null);
         }, 150);
@@ -282,13 +248,28 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
 
     const handleLongPress = (messageId: string) => {
         setSelectedMessage(messageId);
-        setModalVisible(true);
+        bottomSheetRef.current?.expand();
     };
 
-    const closeModal = () => {
-        setModalVisible(false);
-        setSelectedMessage(null);
-    };
+    const handleCloseBottomSheet = useCallback(() => {
+        bottomSheetRef.current?.close();
+        setTimeout(() => {
+            setSelectedMessage(null);
+        }, 300);
+    }, []);
+
+    const renderBackdrop = useCallback(
+        (props: BottomSheetDefaultBackdropProps) => (
+            <BottomSheetBackdrop
+                {...props}
+                disappearsOnIndex={-1}
+                appearsOnIndex={0}
+                opacity={0.5}
+                pressBehavior="close"
+            />
+        ),
+        []
+    );
 
     const renderItem: ListRenderItem<GroupedMessage> = ({ item }) => {
         const message = item.message!;
@@ -307,16 +288,15 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                     onLongPress={() => handleLongPress(message.conversation_id)}
                     delayLongPress={500}
                 >
-                    {/* Active Indicator Bar */}
                     {isActive && <View style={styles.activeIndicator} />}
-                    
+
                     <View style={styles.messageContent}>
                         <View style={styles.messageTextContainer}>
-                            <Text 
+                            <Text
                                 style={[
                                     styles.messageText,
                                     isActive && styles.messageTextActive
-                                ]} 
+                                ]}
                                 numberOfLines={1}
                             >
                                 {message.title}
@@ -328,10 +308,10 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                                 onPress={() => handleLongPress(message.conversation_id)}
                                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             >
-                                <Feather 
-                                    name="more-horizontal" 
-                                    size={16} 
-                                    color={isActive ? Colors.dark.txtPrimary : "#6b7280"} 
+                                <Feather
+                                    name="more-horizontal"
+                                    size={16}
+                                    color={isActive ? Colors.dark.txtPrimary : "#6b7280"}
                                 />
                             </TouchableOpacity>
                         </View>
@@ -358,8 +338,7 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         </MotiView>
     );
 
-
-     const renderEmptySearchState = () => (
+    const renderEmptySearchState = () => (
         <MotiView
             from={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -367,11 +346,11 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
             style={styles.emptyState}
         >
             <View style={styles.emptyStateIcon}>
-            <Feather name="message-circle" size={48} color="#374151" />
+                <Feather name="message-circle" size={48} color="#374151" />
             </View>
             <Text style={styles.emptyStateText}>No results found</Text>
             <Text style={styles.emptyStateSubtext}>
-            We couldn’t find any matches for your search. Try adjusting your keywords or check for typos.
+                We couldn&apos;t find any matches for your search. Try adjusting your keywords or check for typos.
             </Text>
         </MotiView>
     );
@@ -380,11 +359,8 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         if (debouncedSearch && groupedMessages.length === 0) {
             return renderEmptySearchState();
         }
-        else {
-            return renderEmptyState();
-        }
+        return renderEmptyState();
     }, [debouncedSearch, groupedMessages]);
-    
 
     const keyExtractor = (item: GroupedMessage) => item.id;
 
@@ -402,14 +378,12 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
         return { length: height, offset, index };
     };
 
-    // Show shimmer loading when isLoading is true
     if (isLoading) {
         return <ShimmerLoading />;
     }
 
     return (
         <View style={styles.container}>
-                        
             <FlatList
                 data={groupedMessages}
                 renderItem={renderItem}
@@ -424,51 +398,60 @@ const RecentMessages: React.FC<RecentMessagesProps> = ({
                 getItemLayout={getItemLayout}
             />
 
-            {/* Modal */}
-            <Modal
-                animationType="fade"
-                transparent={true}
-                visible={modalVisible}
-                onRequestClose={closeModal}
+            {/* BottomSheet */}
+            <BottomSheet
+                ref={bottomSheetRef}
+                index={-1}
+                snapPoints={snapPoints}
+                enablePanDownToClose={true}
+                backdropComponent={renderBackdrop}
+                backgroundStyle={styles.bottomSheetBackground}
+                handleIndicatorStyle={styles.bottomSheetIndicator}
+                style={styles.bottomSheetContainer}
+                containerStyle={styles.bottomSheetWrapper}
+                onChange={(index) => {
+                    if (index === -1) {
+                        setSelectedMessage(null);
+                    }
+                }}
             >
-                <TouchableWithoutFeedback onPress={closeModal}>
-                    <View style={styles.modalOverlay}>
-                        <TouchableWithoutFeedback>
-                            <View style={styles.modalContent}>
-                                <View style={styles.modalHandle} />
+                <BottomSheetView style={styles.bottomSheetContent}>
+                    <Text style={styles.bottomSheetTitle}>Actions</Text>
 
-                                {modalActions.map((action) => (
-                                    <Pressable
-                                        key={action.id}
-                                        style={({ pressed }) => [
-                                            styles.modalAction,
-                                            pressed && styles.modalActionPressed,
-                                            action.id === 'delete' && styles.deleteAction,
-                                        ]}
-                                        onPress={() => selectedMessage && action.onPress(selectedMessage)}
-                                    >
-                                        <View style={styles.modalActionContent}>
-                                            <Feather
-                                                name={action.icon as any}
-                                                size={20}
-                                                color={action.id === 'delete' ? '#ef4444' : Colors.dark.txtSecondary}
-                                            />
-                                            <Text
-                                                style={[
-                                                    styles.modalActionText,
-                                                    action.id === 'delete' && styles.deleteActionText,
-                                                ]}
-                                            >
-                                                {action.label}
-                                            </Text>
-                                        </View>
-                                    </Pressable>
-                                ))}
+                    {modalActions.map((action, index) => (
+                        <Pressable
+                            key={action.id}
+                            style={({ pressed }) => [
+                                styles.modalAction,
+                                pressed && styles.modalActionPressed,
+                                action.id === 'delete' && index === modalActions.length - 1 && styles.deleteAction,
+                            ]}
+                            onPress={() => selectedMessage && action.onPress(selectedMessage)}
+                        >
+                            <View style={styles.modalActionContent}>
+                                <View style={[
+                                    styles.iconContainer,
+                                    action.id === 'delete' && styles.deleteIconContainer
+                                ]}>
+                                    <Feather
+                                        name={action.icon as any}
+                                        size={20}
+                                        color={action.id === 'delete' ? '#ef4444' : Colors.dark.txtPrimary}
+                                    />
+                                </View>
+                                <Text
+                                    style={[
+                                        styles.modalActionText,
+                                        action.id === 'delete' && styles.deleteActionText,
+                                    ]}
+                                >
+                                    {action.label}
+                                </Text>
                             </View>
-                        </TouchableWithoutFeedback>
-                    </View>
-                </TouchableWithoutFeedback>
-            </Modal>
+                        </Pressable>
+                    ))}
+                </BottomSheetView>
+            </BottomSheet>
         </View>
     );
 };
@@ -480,12 +463,6 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         paddingTop: 8,
-    },
-    fetchingIndicator: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        zIndex: 10,
     },
     messageItemContainer: {
         paddingHorizontal: 12,
@@ -582,38 +559,39 @@ const styles = StyleSheet.create({
     emptyListContainer: {
         flex: 1,
     },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'flex-end',
+    bottomSheetWrapper: {
+        zIndex: 9999,
     },
-    modalContent: {
+    bottomSheetContainer: {
+        marginHorizontal: 0,
+        borderRadius: 0,
+    },
+    bottomSheetBackground: {
         backgroundColor: Colors.dark.bgPrimary,
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        paddingBottom: 34,
-        paddingTop: 12,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: -4,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 5,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
     },
-    modalHandle: {
-        width: 36,
-        height: 4,
+    bottomSheetIndicator: {
         backgroundColor: Colors.dark.borderColor,
-        borderRadius: 2,
-        alignSelf: 'center',
-        marginBottom: 24,
+        width: 40,
+        height: 4,
+    },
+    bottomSheetContent: {
+        paddingHorizontal: 24,
+        paddingBottom: 34,
+        width: '100%',
+    },
+    bottomSheetTitle: {
+        fontSize: 16,
+        fontFamily: 'Manrope-Bold',
+        color: Colors.dark.txtPrimary,
+        marginBottom: 16,
+        paddingHorizontal: 4,
     },
     modalAction: {
-        marginHorizontal: 16,
         marginBottom: 4,
-        borderRadius: 8,
+        borderRadius: 12,
+        overflow: 'hidden',
     },
     modalActionPressed: {
         backgroundColor: Colors.dark.bgSecondary,
@@ -621,20 +599,32 @@ const styles = StyleSheet.create({
     modalActionContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingVertical: 14,
-        gap: 12,
+        gap: 16,
+    },
+    iconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: Colors.dark.bgSecondary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    deleteIconContainer: {
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
     },
     modalActionText: {
         color: Colors.dark.txtPrimary,
-        fontSize: 16,
-        fontFamily: 'Manrope-Medium',
+        fontSize: 15,
+        fontFamily: 'Manrope-SemiBold',
+        flex: 1,
     },
     deleteAction: {
+        marginTop: 8,
         borderTopWidth: 1,
         borderTopColor: Colors.dark.borderColor,
-        marginTop: 8,
-        paddingTop: 8,
+        paddingTop: 12,
     },
     deleteActionText: {
         color: '#ef4444',

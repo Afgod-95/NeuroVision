@@ -35,7 +35,7 @@ const SearchBar: React.FC<SearchbarProps> = ({
                     style={styles.searchContainer}
                     exiting={FadeOut.delay(1).duration(10)}
                 >
-                    <View style={styles.searchIcon}>
+                    <View style={[styles.searchIcon]}>
                         <Feather name="search" size={20} color={Colors.dark.txtSecondary} />
                     </View>
                     <TextInput
@@ -57,11 +57,11 @@ const SearchBar: React.FC<SearchbarProps> = ({
                                 styles.searchIcon, 
                                 { 
                                     marginLeft: 10,  
-                                    marginRight: 0
+                                    marginRight: 0,
                                 }
                             ]}
                         >
-                            <AntDesign name="closecircle" size={20} color={Colors.dark.txtSecondary} />
+                            <AntDesign name="close" size={20} color={Colors.dark.txtSecondary} />
                         </TouchableOpacity>
                         </Animated.View>
                     )}
@@ -90,7 +90,10 @@ const styles = StyleSheet.create({
         fontFamily: 'Manrope-Regular',
     },
     searchIcon: {
-        marginRight: 10,
+        marginRight: 5,
+        padding: 5,
+        borderRadius: 10,
+        backgroundColor: Colors.dark.borderColor,
     },
     cancel: {
         color: Colors.dark.txtSecondary,
