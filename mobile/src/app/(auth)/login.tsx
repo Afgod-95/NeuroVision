@@ -103,9 +103,6 @@ const Index = () => {
       }, 2000);
 
     } catch (err: any) {
-      // Enhanced error handling using error codes
-      console.error('Login error caught:', err);
-      
       // Extract error code and message from the error object
       const code = err?.code || errorCode || null;
       const message = err?.message || error || 'An unexpected error occurred';
@@ -132,7 +129,7 @@ const Index = () => {
     }
   };
 
-  // Optional: Show error from Redux state if it exists
+ 
   // This handles errors that might come from other parts of the app
   useEffect(() => {
     if (error && !loading) {

@@ -373,6 +373,25 @@ const SettingsScreen: React.FC = () => {
                 },
             ],
         },
+
+        {
+            // Account Actions: loout on all devices
+            items: [
+                {
+                    icon: 'person',
+                    title: 'Logout on all devices',
+                    onPress: handleOpenAccountDeletion,
+                    danger: true,
+                },
+                {
+                    icon: 'log-out',
+                    title: isLoggingOut ? 'Signing Out...' : 'Sign Out',
+                    onPress: handleLogout,
+                    danger: true,
+                },
+            ],
+        },
+
         {
             // Account Actions
             items: [

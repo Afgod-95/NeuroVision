@@ -283,7 +283,7 @@ export const loginUser = async (req: Request, res: Response) => {
     }
 
     // Verify password
-    const isPasswordValid = await comparePassword({ password, hashedPassword: user.password });
+    const isPasswordValid = await comparePassword(password, user.password);
     if (!isPasswordValid) {
       return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid email or password');
     }
