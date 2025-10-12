@@ -2,6 +2,7 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { Alert } from 'react-native';
 import { refreshTokenApi } from '@/src/services/tokenRefreshService';
 import authApi from '@/src/services/authApiClient';
+import api from '@/src/services/axiosClient';
 
 export interface User {
   id: number;
@@ -89,7 +90,7 @@ export const loginUser = createAsyncThunk(
       let errorCode = 'UNKNOWN_ERROR';
       
       if (error.response?.data) {
-        // ✅ FIXED: Your backend sends { success: false, error: { code, message, details } }
+        //Your backend sends { success: false, error: { code, message, details } }
         const errorData = error.response.data;
         
         if (errorData.error) {
@@ -136,7 +137,11 @@ export const logoutUser = createAsyncThunk(
 
       if (refreshToken) {
         try {
-          const response = await authApi.post('/api/auth/logout', { refreshToken });
+          const response = await api.post('/api/auth/logout', { refreshToken }, {
+            headers: {
+              'Authorization': `Bearer ${state.auth.accessToken}`,
+            },
+          });
           console.log('Logout API response:', response.data);
         } catch (error: any) {
           console.log('Logout API failed, but continuing with local logout');
@@ -156,6 +161,45 @@ export const logoutUser = createAsyncThunk(
     }
   }
 );
+
+
+export const logout_user_on_all_devices = createAsyncThunk(
+  'auth/logoutUserOnAllDevices',
+  async (_, { dispatch, getState, rejectWithValue }) => {
+    try {
+      const state = getState() as { auth: AuthState };
+      const refreshToken = state.auth.refreshToken;
+
+      console.log('Starting logout process...');
+
+      if (refreshToken) {
+        try {
+          const response = await api.post('/api/auth/logout-all', {
+            headers: {
+              'Authorization': `Bearer ${state.auth.accessToken}`,
+            },
+          });
+          console.log('Logout API response:', response.data);
+        } catch (error: any) {
+          console.log('Logout API failed, but continuing with local logout');
+          
+          // Log the error details for debugging
+          if (error.response?.data?.error) {
+            console.log('Logout error:', error.response.data.error);
+          }
+        }
+      }
+
+      console.log('Logout completed');
+      return true;
+    } catch (error: any) {
+      console.error('Logout failed:', error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+
 
 const authSlice = createSlice({
   name: 'auth',
@@ -263,6 +307,19 @@ const authSlice = createSlice({
       .addCase(logoutUser.rejected, (state) => {
         return initialState;
       })
+
+      //logout_out_all on all devices,
+      .addCase(logout_user_on_all_devices.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.errorCode = null;
+      })
+      .addCase(logout_user_on_all_devices.fulfilled, (state) => {
+        return initialState;
+      })
+      .addCase(logout_user_on_all_devices.rejected, (state => {
+        return initialState
+      }))
       
       // Refresh token cases
       .addCase(refreshAccessToken.pending, (state) => {

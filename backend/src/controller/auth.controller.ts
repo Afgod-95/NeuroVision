@@ -601,36 +601,54 @@ export const getProfile = async (req: Request, res: Response) => {
 
 
 
-//delete user account and logout on all devices
+// DELETE USER ACCOUNT + LOGOUT FROM ALL DEVICES
 export const deleteUserAccount = async (req: Request, res: Response) => {
   try {
-    const { id, authUserId } = req.params;
+    const { id } = req.params;
+    const authUserId = req.user?.id; 
 
+    // Validate IDs
     if (!id || !authUserId) {
       return sendError(res, 400, 'VALIDATION_ERROR', 'User ID and Auth User ID are required');
     }
 
-    // Delete from auth
-    const authDeleted = await deleteAuthUser(authUserId);
-    if (!authDeleted) {
-      return sendError(res, 500, 'DELETE_FAILED', 'Failed to delete authentication data');
+    // Ensure user is deleting their own account (important security check)
+    if (parseInt(id) !== parseInt(authUserId)) {
+      return sendError(res, 403, 'FORBIDDEN', 'You are not allowed to delete this account');
     }
 
-    // Delete from users table
-    const { error } = await supabase
+    // 1. Remove all known device records
+    const { error: deviceError } = await supabase
+      .from('known_devices')
+      .delete()
+      .eq('user_id', authUserId);
+
+    if (deviceError) {
+      console.warn('Device deletion warning:', deviceError.message);
+      // Not fatal, continue
+    }
+
+    // 2. Revoke all tokens for this user
+    const revoked = await revokeAllUserTokens(parseInt(id));
+    if (!revoked) {
+      return sendError(res, 500, 'FAILED_TO_REVOKE_TOKEN', 'Failed to revoke all device tokens');
+    }
+
+    // 3. Delete from users table
+    const { error: userError } = await supabase
       .from('users')
       .delete()
       .eq('id', id);
 
-    if (error) {
-      console.error('User deletion error:', error);
+    if (userError) {
+      console.error('User deletion error:', userError);
       return sendError(res, 500, 'DELETE_FAILED', 'Failed to delete user account');
     }
 
+    // 4. Return success
     return sendSuccess(res, 200, 'User account deleted successfully');
-
   } catch (error) {
     console.error('Delete account error:', error);
-    return sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected error occurred while deleting account');
+    return sendError(res, 500, 'INTERNAL_ERROR', 'Unexpected error while deleting account');
   }
 };

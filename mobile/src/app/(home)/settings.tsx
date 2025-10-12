@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback,  useRef, useState } from 'react';
 import {
     View,
     Text,
-    ScrollView,
     Platform,
     StyleSheet,
     TouchableOpacity,
@@ -22,11 +21,10 @@ import Animated, {
 import { Colors } from '@/src/constants/Colors';
 import SettingItem from '@/src/components/settings/SettingItem';
 import { useAuthMutation } from '@/src/hooks/auth/useAuthMutation';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/redux/store';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '@/src/redux/store';
-import { logoutUser, resetState, setUseBiometrics } from '@/src/redux/slices/authSlice';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '@/src/redux/store';
+
+import { logout_user_on_all_devices, logoutUser, resetState, setUseBiometrics } from '@/src/redux/slices/authSlice';
 import * as Haptics from 'expo-haptics';
 import { setEnableHepticFeedback } from '@/src/redux/slices/hepticFeedbackSlice';
 import AccountDeletionSheet from '@/src/components/settings/AccountDeletion';
@@ -95,15 +93,20 @@ const SettingsScreen: React.FC = () => {
     const handleDeleteAccount = useCallback(() => {
         deleteUserAccount.mutate({
             userId: userCredentials?.id as number
-        })
+        });
+        
+        // Reset state first
         dispatch(resetState());
         dispatch(resetChatState());
-        showSuccess(`Success`, 'You have successfully deleted your account.');
+        
+        // Show success message
+        showSuccess('Success', 'You have successfully deleted your account.');
 
+        // Navigate after showing the message
         setTimeout(() => {
-            router.push('/(auth)/login')
-        }, 2000)
-    }, [deleteUserAccount, dispatch, userCredentials?.id, showSuccess])
+            router.replace('/(auth)/login');
+        }, 2000);
+    }, [deleteUserAccount, dispatch, userCredentials?.id, showSuccess]);
 
     // Fixed logout handler using custom alert
     const handleLogout = useCallback(() => {
@@ -117,24 +120,61 @@ const SettingsScreen: React.FC = () => {
                 onPrimaryPress: () => {
                     setIsLoggingOut(true);
 
-                    // Navigate immediately to prevent flashing
-                    router.replace('/(auth)/login');
+                    // Dispatch logout action first
+                    dispatch(logoutUser());
 
-                    // Then dispatch logout action
+                    // Show success message
+                    showSuccess('Success', "You have successfully logged out", {
+                        autoClose: true
+                    });
+
+                    // Navigate after showing the alert
                     setTimeout(() => {
-                        dispatch(logoutUser());
-                        showSuccess('Success', "You have successfully logged out", {
-                            autoClose: true
-                        });
+                        router.replace('/(auth)/login');
                         setIsLoggingOut(false);
-                    }, 100);
+                    }, 2000); // Wait 2 seconds to allow user to see the success message
                 },
                 onSecondaryPress: () => {
                     // Just close the alert, no action needed
                 }
             }
         );
-    }, [dispatch, showSuccess, showInfo]);
+    }, [dispatch, showSuccess, showWarning]);
+
+
+
+    //handle logout on all devices
+    const handleLogoutAllDevices = useCallback(() => {
+        showWarning(
+            'Sign Out',
+            'Are you sure you want to sign out on all devices?',
+            {
+                primaryButtonText: 'Continue',
+                secondaryButtonText: 'Cancel',
+                showCloseButton: false,
+                onPrimaryPress: () => {
+                    setIsLoggingOut(true);
+
+                    // Dispatch logout action first
+                    dispatch(logout_user_on_all_devices());
+
+                    // Show success message
+                    showSuccess('Success', "You have successfully logged out from all devices", {
+                        autoClose: true
+                    });
+
+                    // Navigate after showing the alert
+                    setTimeout(() => {
+                        router.replace('/(auth)/login');
+                        setIsLoggingOut(false);
+                    }, 2000); // Wait 2 seconds to allow user to see the success message
+                },
+                onSecondaryPress: () => {
+                    // Just close the alert, no action needed
+                }
+            }
+        );
+    }, [dispatch, showSuccess, showWarning]);
 
     const isIos = Platform.OS === 'ios';
     const isAndroid = Platform.OS === 'android';
@@ -195,7 +235,7 @@ const SettingsScreen: React.FC = () => {
               
             }
         })
-    }, [dispatch, showSuccess, showInfo]);
+    }, [showWarning]);
 
     // Streamlined settings sections - only essentials
     const settingSections: SettingSection[] = [
@@ -375,30 +415,18 @@ const SettingsScreen: React.FC = () => {
         },
 
         {
-            // Account Actions: loout on all devices
-            items: [
-                {
-                    icon: 'person',
-                    title: 'Logout on all devices',
-                    onPress: handleOpenAccountDeletion,
-                    danger: true,
-                },
-                {
-                    icon: 'log-out',
-                    title: isLoggingOut ? 'Signing Out...' : 'Sign Out',
-                    onPress: handleLogout,
-                    danger: true,
-                },
-            ],
-        },
-
-        {
             // Account Actions
             items: [
                 {
                     icon: 'person-remove',
                     title: 'Delete Account',
                     onPress: handleOpenAccountDeletion,
+                    danger: true,
+                },
+                {
+                    icon: 'phone-portrait-outline',
+                    title: 'Sign Out on all devices',
+                    onPress: handleLogoutAllDevices,
                     danger: true,
                 },
                 {

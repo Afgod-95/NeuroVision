@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useEffect, useMemo, useCallback, memo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -68,6 +68,9 @@ const getImageSource = (file: UploadedFile) => {
   return undefined;
 };
 
+// Minimum upload animation duration (in milliseconds)
+const MIN_UPLOAD_DURATION = 1500;
+
 // Memoized FileItem component
 const FileItem = memo(({ 
   file, 
@@ -78,6 +81,40 @@ const FileItem = memo(({
 }) => {
   const imageSource = getImageSource(file);
   const isImage = isImageFile(file.name, file.type);
+  const [showUploadAnimation, setShowUploadAnimation] = useState(file.isUploading);
+  const uploadStartTimeRef = useRef<number | null>(null);
+  const uploadTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
+
+  useEffect(() => {
+    if (file.isUploading) {
+      // Mark when upload started
+      if (!uploadStartTimeRef.current) {
+        uploadStartTimeRef.current = Date.now();
+      }
+      setShowUploadAnimation(true);
+      
+      // Clear any existing timeout
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
+    } else if (uploadStartTimeRef.current && showUploadAnimation) {
+      // Calculate how long the upload has been showing
+      const elapsedTime = Date.now() - uploadStartTimeRef.current;
+      const remainingTime = Math.max(0, MIN_UPLOAD_DURATION - elapsedTime);
+      
+      // Wait for remaining time before hiding animation
+      uploadTimeoutRef.current = setTimeout(() => {
+        setShowUploadAnimation(false);
+        uploadStartTimeRef.current = null;
+      }, remainingTime);
+    }
+
+    return () => {
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
+    };
+  }, [file.isUploading, showUploadAnimation]);
 
   const handleRemove = useCallback(() => {
     onRemoveFile?.(file.id);
@@ -106,7 +143,7 @@ const FileItem = memo(({
           {file.size && file.size > 0 && (
             <Text style={styles.imageSize}>{formatSize(file.size)}</Text>
           )}
-          {file.isUploading && (
+          {showUploadAnimation && (
             <View style={styles.progressBarBackground}>
               <View
                 style={[
@@ -136,7 +173,7 @@ const FileItem = memo(({
         {file.size && file.size > 0 && (
           <Text style={styles.fileSize}> • {formatSize(file.size)}</Text>
         )}
-        {file.isUploading && (
+        {showUploadAnimation && (
           <Text style={styles.uploadingText}> • Uploading</Text>
         )}
         {onRemoveFile && (
@@ -215,16 +252,13 @@ const UploadedFiles: React.FC<UploadedFilesProps> = ({ files, onRemoveFile }) =>
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.flatListContent}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={5}
-        windowSize={3}
-        initialNumToRender={5}
-        updateCellsBatchingPeriod={50}
-        getItemLayout={(data, index) => ({
-          length: 116, // Approximate item width + margin
-          offset: 116 * index,
-          index,
-        })}
+        removeClippedSubviews={false}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        initialNumToRender={10}
+        scrollEventThrottle={16}
+        decelerationRate="normal"
+        bounces={true}
       />
     </Animated.View>
   );
@@ -259,17 +293,15 @@ export default memo(UploadedFiles, (prevProps, nextProps) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 10,
     paddingVertical: 8
   },
   flatListContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 10,
   },
   itemWrapper: {
-    marginRight: 8,
+    marginRight: 10,
   },
   filePill: {
     flexDirection: 'row',

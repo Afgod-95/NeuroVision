@@ -323,6 +323,7 @@ export const useAuthMutation = () => {
     const useDeleteUserAccountMutation = () => {
         return useMutation({
             mutationFn: async ({ userId }: DeleteUserAccountMutationVariables) => {
+                console.log(`Delete user access token: ${accessToken}`)
                 const response = await api.delete(`/api/auth/delete-account/${userId}`, {
                     headers: {
                         'Authorization': `Bearer ${accessToken}`

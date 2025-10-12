@@ -53,10 +53,17 @@ const EmailVerification = () => {
                         router.push({
                             pathname: '/(auth)/reset_password',
                             params: { userId }
-                        }); 
+                        });
                     },
-                    onError: (error) => {
-                       showError('Ooops!!!', 'An error occured whilst verifying email');
+                    onError: (error: any) => {
+                        console.log('Password reset error:', JSON.stringify(error, null, 2));
+                        console.log('Error response data:', error?.response?.data);
+
+                        const errorMessage = error?.response?.data?.error?.message ||
+                            error?.response?.data?.message ||
+                            error?.message ||
+                            'An error occurred whilst verifying password reset code';
+                        showError('Ooops!!!', errorMessage);
                     }
                 }
             );
@@ -66,7 +73,7 @@ const EmailVerification = () => {
                 { userId: userId, otpCode },
                 {
                     onSuccess: (data) => {
-                        showSuccess('Success', 'Email verified successfully!',{
+                        showSuccess('Success', 'Email verified successfully!', {
                             autoClose: true
                         });
                         console.log(data.message);
@@ -76,10 +83,13 @@ const EmailVerification = () => {
                                 params: { userId }
                             });
                         }, 2000)
-                       
+
                     },
-                    onError: (error) => {
-                       showError('Ooops!!!', error.message);
+                    onError: (error: any) => {
+                        const errorMessage = error?.response?.data?.error?.message ||
+                            error?.message ||
+                            'An error occurred whilst verifying email';
+                        showError('Ooops!!!', errorMessage);
                     }
                 }
             );
@@ -124,16 +134,36 @@ const EmailVerification = () => {
             if (type === 'password_reset') {
                 resendOtpMutation.mutate(
                     { email, type: 'password_reset' },
-                    { onSuccess: () => Alert.alert('Success', 'Password reset code sent successfully!') }
+                    {
+                        onSuccess: () => {
+                            showSuccess('Success', 'Password reset code sent successfully!');
+                        },
+                        onError: (error: any) => {
+                            const errorMessage = error?.response?.data?.error?.message ||
+                                error?.message ||
+                                'Failed to resend code';
+                            showError('Ooops!!!', errorMessage);
+                        }
+                    }
                 );
             } else {
                 resendOtpMutation.mutate(
                     { email, type: 'email_verification' },
-                    { onSuccess: () => showSuccess('Success', 'Verification code sent successfully!') }
+                    {
+                        onSuccess: () => {
+                            showSuccess('Success', 'Verification code sent successfully!');
+                        },
+                        onError: (error: any) => {
+                            const errorMessage = error?.response?.data?.error?.message ||
+                                error?.message ||
+                                'Failed to resend code';
+                            showError('Ooops!!!', errorMessage);
+                        }
+                    }
                 );
             }
         } else {
-           showError('Oooops!!!', 'No email address found to resend code.');
+            showError('Oooops!!!', 'No email address found to resend code.');
         }
     }, [email, type, resendOtpMutation, showSuccess, showError]);
 
@@ -171,14 +201,14 @@ const EmailVerification = () => {
                             isLoading={currentMutation.isPending}
                         />
                     </View>
-                     <AlertComponent />
+                    <AlertComponent />
                     <Image
                         source={require('../../../assets/images/CircularGradient.png')}
                         style={styles.image}
                     />
                 </KeyboardAvoidingView>
             </TouchableWithoutFeedback>
-           
+
         </View>
     )
 }

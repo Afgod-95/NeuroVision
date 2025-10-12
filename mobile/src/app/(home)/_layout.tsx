@@ -1,7 +1,7 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '@/src/constants/Colors';
 import { Text, View, TouchableOpacity, Image, StyleSheet, Pressable } from 'react-native';
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { setSidebarVisible, setConversationId } from '@/src/redux/slices/chatSlice';
 import { RootState } from '@/src/redux/store';
@@ -15,12 +15,24 @@ const Layout = () => {
   const { messages: reduxMessages } = useSelector((state: RootState) => state.chat);
   const { startNewConversation } = useRealtimeChat({});
   const { conversation_id } = useLocalSearchParams();
+  const isInitialMount = useRef(true);
 
   // Get the actual conversation ID from URL params
   const actualConversationId = useMemo(() => {
     const urlConvId = Array.isArray(conversation_id) ? conversation_id[0] : conversation_id;
     return urlConvId || '';
   }, [conversation_id]);
+
+  // Ensure sidebar is closed on initial mount
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      // Force close sidebar on first mount to prevent auto-open
+      if (isSidebarVisible) {
+        dispatch(setSidebarVisible(false));
+      }
+    }
+  }, []);
 
   // Sync URL conversation ID with Redux store
   useEffect(() => {

@@ -30,7 +30,7 @@ import { Entypo } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75;
-const SWIPE_THRESHOLD = SIDEBAR_WIDTH / 3;
+const SWIPE_THRESHOLD = SIDEBAR_WIDTH / 4; // Reduced threshold for easier closing
 
 type CustomSideBarProps = {
     conversationId: string;
@@ -245,7 +245,8 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                 animationInProgress.current = true;
 
                 if (isVisible) {
-                    if (gestureState.dx < -SWIPE_THRESHOLD || gestureState.vx < -0.5) {
+                    // More lenient closing conditions
+                    if (gestureState.dx < -SWIPE_THRESHOLD || gestureState.vx < -0.3) {
                         Animated.spring(translateX, {
                             toValue: -SIDEBAR_WIDTH,
                             useNativeDriver: false,
@@ -291,7 +292,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
         })
     ).current;
 
-    // Main visibility animation
+    // Main visibility animation - prevent auto-open on mount
     useEffect(() => {
         if (animationInProgress.current) return;
 
@@ -311,18 +312,21 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
                 });
             });
         } else {
-            animationInProgress.current = true;
-            
-            Animated.spring(translateX, {
-                toValue: -SIDEBAR_WIDTH,
-                useNativeDriver: false,
-                tension: 65,
-                friction: 11,
-                velocity: isDragging ? 0 : undefined,
-            }).start(() => {
-                setShouldRender(false);
-                animationInProgress.current = false;
-            });
+            // Only animate close if sidebar was previously rendered
+            if (shouldRender) {
+                animationInProgress.current = true;
+                
+                Animated.spring(translateX, {
+                    toValue: -SIDEBAR_WIDTH,
+                    useNativeDriver: false,
+                    tension: 65,
+                    friction: 11,
+                    velocity: isDragging ? 0 : undefined,
+                }).start(() => {
+                    setShouldRender(false);
+                    animationInProgress.current = false;
+                });
+            }
         }
     }, [isVisible]);
 
@@ -334,7 +338,7 @@ const CustomSideBar: React.FC<CustomSideBarProps> = ({
 
     return shouldRender ? (
         <View style={[StyleSheet.absoluteFillObject, styles.overlay]} pointerEvents="box-none">
-            <TouchableWithoutFeedback onPress={onClose}>
+            <TouchableWithoutFeedback onPress={onClose} disabled={!isVisible}>
                 <Animated.View 
                     style={[styles.backdrop, { opacity: backdropOpacity }]} 
                     pointerEvents={isVisible ? 'auto' : 'none'}

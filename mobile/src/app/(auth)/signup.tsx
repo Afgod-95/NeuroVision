@@ -134,11 +134,7 @@ const SignUp = () => {
         );
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
-      
-      // Error is already handled by the mutation's onError
-      // But we can add additional handling here if needed
-      
+        
       // If the mutation didn't show an error (unlikely), show a generic one
       if (!error.message && !error.response) {
         showError(
