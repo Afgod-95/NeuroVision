@@ -19,10 +19,11 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   loading: boolean;
-  isRegistrationComplete: boolean,
+  isRegistrationComplete: boolean;
   error: string | null;
-  errorCode: string | null; // Add this to track error codes
-  useBiometrics: boolean,
+  errorCode: string | null;
+  useBiometrics: boolean;
+  isAuthenticating: boolean; 
 }
 
 const initialState: AuthState = {
@@ -34,7 +35,8 @@ const initialState: AuthState = {
   isRegistrationComplete: false,
   error: null,
   errorCode: null,
-  useBiometrics: false
+  useBiometrics: false,
+  isAuthenticating: false, // Initialize as false
 };
 
 // Refresh token thunk - now uses the separate service
@@ -211,9 +213,10 @@ const authSlice = createSlice({
       state.accessToken = action.payload.accessToken;
       state.refreshToken = action.payload.refreshToken;
       state.loading = false;
-      state.isRegistrationComplete = true
+      state.isRegistrationComplete = true;
       state.error = null;
       state.errorCode = null;
+      state.isAuthenticating = false; // Clear flag
     },
     logout(state) {
       state.isAuthenticated = false;
@@ -224,6 +227,7 @@ const authSlice = createSlice({
       state.isRegistrationComplete = false;
       state.error = null;
       state.errorCode = null;
+      state.isAuthenticating = false; // Clear flag
     },
     resetState(state) {
       return initialState;
@@ -231,6 +235,7 @@ const authSlice = createSlice({
 
     completeRegistration: (state) => {
       state.isRegistrationComplete = true;
+      state.isAuthenticating = false; // Clear flag after registration
     },
 
     updateTokens(state, action) {
@@ -253,6 +258,11 @@ const authSlice = createSlice({
     setUseBiometrics(state, action) {
       state.useBiometrics = action.payload;
     },
+
+    // Add this new action
+    setAuthenticating(state, action) {
+      state.isAuthenticating = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -273,6 +283,7 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refreshToken;
         state.error = null;
         state.errorCode = null;
+        // Don't clear isAuthenticating here - let the UI handle it after showing success
       })
       .addCase(loginUser.rejected, (state, action) => {
         console.log('Login rejected - error:', action.payload);
@@ -282,8 +293,8 @@ const authSlice = createSlice({
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
+        state.isAuthenticating = false; // Clear flag on error
         
-        // ✅ FIXED: Handle the new error structure
         const payload = action.payload as { message: string; code: string } | string;
         
         if (typeof payload === 'object') {
@@ -344,14 +355,20 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string || 'Session expired';
         state.errorCode = 'TOKEN_REFRESH_FAILED';
+        state.isAuthenticating = false;
       });
   },
 });
 
 export const { 
-  login, logout, resetState, 
-  updateTokens, clearError, setUseBiometrics, 
-  completeRegistration
+  login, 
+  logout, 
+  resetState, 
+  updateTokens, 
+  clearError, 
+  setUseBiometrics, 
+  completeRegistration,
+  setAuthenticating 
 } = authSlice.actions;
 
 export default authSlice.reducer;

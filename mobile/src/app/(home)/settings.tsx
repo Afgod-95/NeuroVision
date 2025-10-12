@@ -1,4 +1,4 @@
-import React, { useCallback,  useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -91,22 +91,58 @@ const SettingsScreen: React.FC = () => {
     const { useDeleteUserAccountMutation } = useAuthMutation();
     const deleteUserAccount = useDeleteUserAccountMutation();
     const handleDeleteAccount = useCallback(() => {
-        deleteUserAccount.mutate({
-            userId: userCredentials?.id as number
-        });
-        
-        // Reset state first
-        dispatch(resetState());
-        dispatch(resetChatState());
-        
-        // Show success message
-        showSuccess('Success', 'You have successfully deleted your account.');
+        deleteUserAccount.mutate(
+            {
+                userId: userCredentials?.id as number
+            },
+            {
+                onSuccess: (data) => {
+                    // Close the bottom sheet first
+                    openAccountDeletionRef.current?.close();
+                    setOpenAccountDeletion(false);
 
-        // Navigate after showing the message
-        setTimeout(() => {
-            router.replace('/(auth)/login');
-        }, 2000);
-    }, [deleteUserAccount, dispatch, userCredentials?.id, showSuccess]);
+                    // Show success message with manual navigation
+                    showSuccess(
+                        'Account Deleted',
+                        data?.message || 'Your account has been successfully deleted.',
+                        {
+                            autoClose: false,
+                            primaryButtonText: 'Okay',
+                            onPrimaryPress: () => {
+                                // Reset state and navigate
+                                dispatch(resetState());
+                                dispatch(resetChatState());
+                                router.push('/(auth)/login');
+                            }
+                        }
+                    );
+                },
+                onError: (error: any) => {
+                    // Close the bottom sheet
+                    openAccountDeletionRef.current?.close();
+                    setOpenAccountDeletion(false);
+
+                    // Extract error message
+                    const errorMessage = error?.response?.data?.error?.message
+                        || error?.response?.data?.message
+                        || error?.message
+                        || 'Failed to delete account. Please try again.';
+
+                    console.error('Account deletion error:', error);
+
+                    // Show error message
+                    showWarning(
+                        'Deletion Failed',
+                        errorMessage,
+                        {
+                            primaryButtonText: 'Okay',
+                            showCloseButton: true
+                        }
+                    );
+                }
+            }
+        );
+    }, [deleteUserAccount, dispatch, userCredentials?.id, showSuccess, showWarning]);
 
     // Fixed logout handler using custom alert
     const handleLogout = useCallback(() => {
@@ -130,9 +166,9 @@ const SettingsScreen: React.FC = () => {
 
                     // Navigate after showing the alert
                     setTimeout(() => {
-                        router.replace('/(auth)/login');
+                        router.push('/(auth)/login');
                         setIsLoggingOut(false);
-                    }, 2000); // Wait 2 seconds to allow user to see the success message
+                    }, 2000); 
                 },
                 onSecondaryPress: () => {
                     // Just close the alert, no action needed
@@ -165,7 +201,7 @@ const SettingsScreen: React.FC = () => {
 
                     // Navigate after showing the alert
                     setTimeout(() => {
-                        router.replace('/(auth)/login');
+                        router.push('/(auth)/login');
                         setIsLoggingOut(false);
                     }, 2000); // Wait 2 seconds to allow user to see the success message
                 },
@@ -225,14 +261,14 @@ const SettingsScreen: React.FC = () => {
     };
 
     const handleClearHistory = useCallback(() => {
-        showWarning('Final Confirmation', 'Are you absolutely sure? This action cannot be undone.', {
-            primaryButtonText: 'Delete',
+        showWarning('Final Confirmation', 'Are you absolutely sure? Clearing your conversation history cannot be undone.', {
+            primaryButtonText: 'Confirm',
             onPrimaryPress: () => {
-                
+
             },
             secondaryButtonText: 'Cancel',
             onSecondaryPress: () => {
-              
+
             }
         })
     }, [showWarning]);

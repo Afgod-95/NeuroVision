@@ -55,7 +55,6 @@ const Welcome = ({ username, newChat = false, onPromptSelect, handleSendMessage 
   const [rotatingMessage, setRotatingMessage] = useState(messages[0]);
 
   useEffect(() => {
-    if (newChat) return;
     const initWelcome = async () => {
       const seen = await AsyncStorage.getItem("hasSeenWelcome");
       const storedMessageData = await AsyncStorage.getItem("lastMessageData");
@@ -63,27 +62,30 @@ const Welcome = ({ username, newChat = false, onPromptSelect, handleSendMessage 
       if (seen) {
         setIsFirstTime(false);
 
-        let lastMessageIndex = 0;
-        let lastDate = 0;
+        // Only handle message rotation if not a new chat
+        if (!newChat) {
+          let lastMessageIndex = 0;
+          let lastDate = 0;
 
-        if (storedMessageData) {
-          const parsed = JSON.parse(storedMessageData);
-          lastMessageIndex = parsed.index;
-          lastDate = parsed.date;
-        }
+          if (storedMessageData) {
+            const parsed = JSON.parse(storedMessageData);
+            lastMessageIndex = parsed.index;
+            lastDate = parsed.date;
+          }
 
-        const now = Date.now();
-        const daysPassed = (now - lastDate) / (1000 * 60 * 60 * 24);
+          const now = Date.now();
+          const daysPassed = (now - lastDate) / (1000 * 60 * 60 * 24);
 
-        if (daysPassed >= MESSAGE_ROTATION_DAYS) {
-          const nextIndex = (lastMessageIndex + 1) % messages.length;
-          setRotatingMessage(messages[nextIndex]);
-          await AsyncStorage.setItem(
-            "lastMessageData",
-            JSON.stringify({ index: nextIndex, date: now })
-          );
-        } else {
-          setRotatingMessage(messages[lastMessageIndex]);
+          if (daysPassed >= MESSAGE_ROTATION_DAYS) {
+            const nextIndex = (lastMessageIndex + 1) % messages.length;
+            setRotatingMessage(messages[nextIndex]);
+            await AsyncStorage.setItem(
+              "lastMessageData",
+              JSON.stringify({ index: nextIndex, date: now })
+            );
+          } else {
+            setRotatingMessage(messages[lastMessageIndex]);
+          }
         }
       } else {
         await AsyncStorage.setItem("hasSeenWelcome", "true");
@@ -138,7 +140,7 @@ const Welcome = ({ username, newChat = false, onPromptSelect, handleSendMessage 
             transition={{ delay: 300 }}
             style={styles.welcomeText}
           >
-            💫 Welcome back, {username}! 
+            💫 Welcome back, {username}!
           </MotiText>
           <MotiText
             from={{ opacity: 0 }}
@@ -179,7 +181,7 @@ const Welcome = ({ username, newChat = false, onPromptSelect, handleSendMessage 
         transition={{ type: "spring", damping: 15 }}
         style={styles.welcomeContainer}
       >
-        {isFirstTime ? (
+        {!isFirstTime ? (
           <>
             <MotiText style={styles.welcomeText}>
               {getGreeting()}, {username}! 👋{"\n"}

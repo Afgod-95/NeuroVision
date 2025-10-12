@@ -48,7 +48,7 @@ const AccountDeletionSheet = ({
 
   const handleDelete = () => {
     showWarning('Final Confirmation', 'Are you absolutely sure? This action cannot be undone.', {
-      primaryButtonText: 'Delete',
+      primaryButtonText: 'Confirm',
       onPrimaryPress: () => {
          bottomSheetRef.current?.close();
          onDelete?.();

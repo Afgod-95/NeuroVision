@@ -19,7 +19,7 @@ import {
   configureReanimatedLogger,
   ReanimatedLogLevel,
 } from 'react-native-reanimated';
-import { resetState } from "../redux/slices/authSlice";
+
 
 
 
@@ -92,7 +92,8 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
       rehydrated,
       user: {
         isAuthenticated: user?.isAuthenticated,
-        isRegistrationComplete: user?.isRegistrationComplete
+        isRegistrationComplete: user?.isRegistrationComplete,
+        isAuthenticating: user?.isAuthenticating
       },
       currentPathname,
       initialNavigationDone
@@ -117,23 +118,43 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
     return unsubscribe;
   }, []);
 
-
-
   // Hide splash only when BOTH fonts + redux are ready
   useEffect(() => {
     if (fontsLoaded && rehydrated) {
       const timeout = setTimeout(() => {
         console.log("Hiding splash screen");
         SplashScreen.hideAsync();
-      }, 1500); // waits 1.5s to finish animation
+      }, 1500);
       return () => clearTimeout(timeout);
     }
   }, [fontsLoaded, rehydrated]);
 
-
-  // Navigation logic - only run once after rehydration
+  // Reset initialNavigationDone when isAuthenticating becomes false
+  // This allows navigation to run after user clicks "Continue"
   useEffect(() => {
-    if (!rehydrated || !fontsLoaded || initialNavigationDone) return;
+    if (!user?.isAuthenticating && user?.isAuthenticated) {
+      console.log('Auth completed, resetting navigation flag');
+      setInitialNavigationDone(false);
+    }
+  }, [user?.isAuthenticating, user?.isAuthenticated]);
+
+  // Navigation logic
+  useEffect(() => {
+    // Skip if not ready or currently authenticating
+    if (!rehydrated || !fontsLoaded || user?.isAuthenticating) {
+      console.log('Skipping navigation - not ready or authenticating:', { 
+        rehydrated, 
+        fontsLoaded, 
+        isAuthenticating: user?.isAuthenticating 
+      });
+      return;
+    }
+
+    // Skip if we've already done initial navigation for this auth state
+    if (initialNavigationDone) {
+      console.log('Skipping navigation - already done');
+      return;
+    }
 
     const currentPath = currentPathname || "";
     console.log('Running navigation logic:', { currentPath, user });
@@ -142,28 +163,28 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
     if (user?.isAuthenticated && user?.isRegistrationComplete) {
       if (!currentPath.includes("/(home)")) {
         console.log('Redirecting to home');
+        setInitialNavigationDone(true);
         router.replace("/(home)");
       }
     }
     // Case 2: User is authenticated but registration is NOT complete -> redirect to onboarding
     else if (user?.isAuthenticated && !user?.isRegistrationComplete) { 
+      console.log('Redirecting to signup');
+      setInitialNavigationDone(true);
       router.replace("/(auth)/signup");
     }
     // Case 3: User is NOT authenticated -> redirect to login
     else if (!user?.isAuthenticated) {
       if (!currentPath.includes("/(auth)/")) {
         console.log('Redirecting to login');
+        setInitialNavigationDone(true);
         router.replace("/(auth)/login");
       }
     }
-
-    setInitialNavigationDone(true);
   }, [
     rehydrated,
     fontsLoaded,
     user,
-    user?.isAuthenticated,
-    user?.isRegistrationComplete,
     currentPathname,
     initialNavigationDone,
   ]);
@@ -188,7 +209,7 @@ function RootLayoutInner({ fontsLoaded }: { fontsLoaded: boolean }) {
   );
 
   // Only apply BiometricAuthGate for authenticated users with complete registration
-  if (user?.isAuthenticated && user?.isRegistrationComplete) {
+  if (user?.isAuthenticated && user?.isRegistrationComplete && !user?.isAuthenticating) {
     return <BiometricAuthGate>{content}</BiometricAuthGate>;
   }
 

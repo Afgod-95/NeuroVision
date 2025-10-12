@@ -32,7 +32,7 @@ export default {
       },
       edgeToEdgeEnabled: true,
       package: "com.afgod95.NeuroVision",
-
+      "softwareKeyboardLayoutMode": "pan"
     },
     web: {
       bundler: "metro",

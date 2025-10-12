@@ -6,10 +6,10 @@ import { Colors } from '@/src/constants/Colors';
 import { emailRegex } from '@/src/constants/Regex';
 import { router } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Image, Dimensions, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Dimensions, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useDispatch, useSelector } from 'react-redux';
-import { loginUser, clearError } from '@/src/redux/slices/authSlice';
+import { loginUser, clearError, setAuthenticating, resetState } from '@/src/redux/slices/authSlice';
 import type { RootState, AppDispatch } from '@/src/redux/store';
 import { useCustomAlert } from '@/src/components/alert/CustomAlert';
 import Logo from '@/src/components/logo/Logo';
@@ -23,9 +23,9 @@ interface UserProps {
 }
 
 const Index = () => {
-  const [user, setUser] = useState<UserProps>({ 
-    email: '', 
-    password: '' 
+  const [user, setUser] = useState<UserProps>({
+    email: '',
+    password: ''
   });
   const [isDisabled, setIsDisabled] = useState<boolean>(true);
 
@@ -47,6 +47,8 @@ const Index = () => {
     const isFilled = user.email.trim() !== '' && user.password.trim() !== '';
     setIsDisabled(!isFilled);
   }, [user]);
+
+
 
   const signIn = async () => {
     // Frontend validation
@@ -78,9 +80,9 @@ const Index = () => {
 
       // Dispatch login action
       const result = await dispatch(
-        loginUser({ 
-          email: user.email.trim().toLowerCase(), 
-          password: user.password 
+        loginUser({
+          email: user.email.trim().toLowerCase(),
+          password: user.password
         })
       ).unwrap();
 
@@ -91,22 +93,24 @@ const Index = () => {
         'Welcome Back!',
         `Hi ${result.user.username}, you have successfully logged in`,
         {
-          autoClose: true,
-          autoCloseDelay: 2000,
+          autoClose: false,
           primaryButtonText: 'Continue',
+          onPrimaryPress: () => {
+            // Clear authenticating flag before navigation
+            dispatch(setAuthenticating(false));
+            router.replace('/(home)');
+          }
         }
       );
 
-      // Navigate after success
-      setTimeout(() => {
-        router.replace('/(home)');
-      }, 2000);
-
     } catch (err: any) {
+      // Clear authenticating flag on error (already done in reducer, but good to be explicit)
+      dispatch(setAuthenticating(false));
+
       // Extract error code and message from the error object
       const code = err?.code || errorCode || null;
       const message = err?.message || error || 'An unexpected error occurred';
-      
+
       // Get user-friendly error details based on error code
       const errorDetails = getLoginErrorDetails(code, message, {
         email: user.email,
@@ -129,12 +133,12 @@ const Index = () => {
     }
   };
 
- 
+
   // This handles errors that might come from other parts of the app
   useEffect(() => {
     if (error && !loading) {
       console.log('Redux error detected:', { error, errorCode });
-      
+
       const errorDetails = getLoginErrorDetails(errorCode, error, {
         email: user.email,
         onRetry: () => signIn(),
@@ -142,7 +146,7 @@ const Index = () => {
         onResendVerification: () => router.push(`/(auth)/verify/${user.email}`),
         onSignUp: () => router.push('/(auth)/signup')
       });
-      
+
       showError(
         errorDetails.title,
         errorDetails.message,
@@ -160,64 +164,71 @@ const Index = () => {
 
   return (
     <ScreenWrapper>
-      <Animated.View style={styles.innerContainer}>
-        <Logo />
-        <Animated.Text
-          style={[styles.textHeader, { color: Colors.dark.txtPrimary }]}
-          entering={FadeInUp.duration(600).springify()}
-        >
-          Welcome Back
-        </Animated.Text>
+      <KeyboardAvoidingView>
+        <ScrollView>
 
-        <AnimatedTextInput
-          label="Email"
-          value={user.email}
-          onChangeText={(text) => handleTextInputChange('email', text)}
-          keyboardType="email-address"
-          placeholder="johndoe@gmail.com"
-        />
+          <Animated.View style={styles.innerContainer}>
+            <Logo />
+            <Animated.Text
+              style={[styles.textHeader, { color: Colors.dark.txtPrimary }]}
+              entering={FadeInUp.duration(600).springify()}
+            >
+              Welcome Back
+            </Animated.Text>
 
-        <AnimatedTextInput
-          label="Password"
-          value={user.password}
-          onChangeText={(text) => handleTextInputChange('password', text)}
-          secureTextEntry
-          placeholder="********"
-        />
+            <AnimatedTextInput
+              label="Email"
+              value={user.email}
+              onChangeText={(text) => handleTextInputChange('email', text)}
+              keyboardType="email-address"
+              placeholder="johndoe@gmail.com"
+            />
 
-        <TouchableOpacity
-          onPress={() => router.push('/(auth)/forgot_password')}
-          style={styles.forgotPasswordContainer}
-        >
-          <Animated.Text
-            style={styles.forgotPasswordText}
-            entering={FadeInUp.duration(600).delay(160).springify()}
-          >
-            Forgot Password?
-          </Animated.Text>
-        </TouchableOpacity>
+            <AnimatedTextInput
+              label="Password"
+              value={user.password}
+              onChangeText={(text) => handleTextInputChange('password', text)}
+              secureTextEntry
+              placeholder="********"
+            />
 
-        <Button
-          title="Login"
-          disabled={isDisabled || loading}
-          loading={loading}
-          onPress={signIn}
-        />
+            <TouchableOpacity
+              onPress={() => router.push('/(auth)/forgot_password')}
+              style={styles.forgotPasswordContainer}
+            >
+              <Animated.Text
+                style={styles.forgotPasswordText}
+                entering={FadeInUp.duration(600).delay(160).springify()}
+              >
+                Forgot Password?
+              </Animated.Text>
+            </TouchableOpacity>
 
-        <Animated.View
-          style={styles.signUpContainer}
-          entering={FadeInUp.duration(600).delay(200).springify()}
-        >
-          <Text style={styles.forgotPasswordText}>Don&apos;t have an account?</Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
-            <Text style={[styles.forgotPasswordText, { color: Colors.dark.link }]}>
-              Sign up
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+            <Button
+              title="Login"
+              disabled={isDisabled || loading}
+              loading={loading}
+              onPress={signIn}
+            />
 
-        <ContinueWithGoogle />
-      </Animated.View>
+            <Animated.View
+              style={styles.signUpContainer}
+              entering={FadeInUp.duration(600).delay(200).springify()}
+            >
+              <Text style={styles.forgotPasswordText}>Don&apos;t have an account?</Text>
+              <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
+                <Text style={[styles.forgotPasswordText, { color: Colors.dark.link }]}>
+                  Sign up
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <ContinueWithGoogle />
+          </Animated.View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+
 
       <AlertComponent />
     </ScreenWrapper>
