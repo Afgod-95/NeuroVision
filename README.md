@@ -1,3 +1,42 @@
+
+https://github.com/user-attachments/assets/2c02c8c6-f217-4fa3-9922-67bbb7bf47d2
+
+
+
+https://github.com/user-attachments/assets/17d7a62e-823e-4f97-ad53-92c008045728
+
+
+
+https://github.com/user-attachments/assets/ad03ddd7-1eae-408a-8d15-2440bb0de897
+
+
+
+https://github.com/user-attachments/assets/43d22118-1ca8-4afe-b19d-8654ecb69035
+
+
+https://github.com/user-attachments/assets/41ff11f5-bf71-4bf9-ad5c-8d9f36654ca1
+
+
+
+https://github.com/user-attachments/assets/7385b857-fcc7-43fa-9662-7dd27dbef732
+
+
+
+https://github.com/user-attachments/assets/ca3a221d-fb98-4237-bb7a-1595fe3381d5
+
+
+
+https://github.com/user-attachments/assets/2d92ba2a-e4dc-41a9-8163-e2bc5bc24250
+
+
+
+https://github.com/user-attachments/assets/7b56254c-a822-4395-84d4-664d04f923d9
+
+
+
+https://github.com/user-attachments/assets/498a37fd-ef1b-4813-8423-c0d358348d56
+
+
 NeuroVision AI Assistant
 NeuroVision is a multimodal AI assistant built with React Native and Next.js, designed to provide seamless AI-powered interactions across text, audio, and visual inputs. It combines real-time AI responses with an intuitive mobile-first interface, enabling users to interact naturally with AI for productivity, learning, and entertainment.
 
@@ -67,11 +106,6 @@ Usage
 4. AI responds in real-time; audio responses are playable directly in the app.
 5. View conversation histo
 
-https://github.com/user-attachments/assets/2c02c8c6-f217-4fa3-9922-67bbb7bf47d2
-
-
-
-https://github.com/user-attachments/assets/17d7a62e-823e-4f97-ad53-92c008045728
 
 ry and interact seamlessly.
 
@@ -83,34 +117,5 @@ NeuroVision is currently a personal project. Contributions are welcome — espec
 License
 MIT License © 2026 Afari Boadu Godwin
 
-
-https://github.com/user-attachments/assets/ad03ddd7-1eae-408a-8d15-2440bb0de897
-
-
-
-https://github.com/user-attachments/assets/43d22118-1ca8-4afe-b19d-8654ecb69035
-
-
-https://github.com/user-attachments/assets/41ff11f5-bf71-4bf9-ad5c-8d9f36654ca1
-
-
-
-https://github.com/user-attachments/assets/7385b857-fcc7-43fa-9662-7dd27dbef732
-
-
-
-https://github.com/user-attachments/assets/ca3a221d-fb98-4237-bb7a-1595fe3381d5
-
-
-
-https://github.com/user-attachments/assets/2d92ba2a-e4dc-41a9-8163-e2bc5bc24250
-
-
-
-https://github.com/user-attachments/assets/7b56254c-a822-4395-84d4-664d04f923d9
-
-
-
-https://github.com/user-attachments/assets/498a37fd-ef1b-4813-8423-c0d358348d56
 
 
